@@ -25,3 +25,10 @@ add_executable(test_arithmetic
 )
 target_link_libraries(test_arithmetic PRIVATE histo unity)
 add_test(NAME test_arithmetic COMMAND test_arithmetic)
+
+# Unit Test: Binary and JSON Serialization & Deserialization
+add_executable(test_serialization
+    test_serialization.c
+)
+target_link_libraries(test_serialization PRIVATE histo unity)
+add_test(NAME test_serialization COMMAND test_serialization)

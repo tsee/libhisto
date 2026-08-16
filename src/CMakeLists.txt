@@ -1,11 +1,16 @@
 add_library(histo
     histo.c
+    serialize.c
 )
 
 target_link_libraries(histo
     PUBLIC
         histo_compiler_flags
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(histo PUBLIC m)
+endif()
 
 target_include_directories(histo
     PUBLIC
