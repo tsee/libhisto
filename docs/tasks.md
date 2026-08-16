@@ -41,4 +41,14 @@
 - [x] **C9** Doxygen API docstrings, User Manual (`docs/manual.md`), and GitHub `README.md`
 - [x] **C10** Format migration and backward compatibility logic (`histo_migrate_binary`) & Tests
 
+---
+
+## Phase D: Advanced Analytical & Summary Capabilities
+- [ ] **D1** Higher-Order Statistical Moments (`histo_central_moment`, `histo_skewness`, `histo_kurtosis`, `histo_excess_kurtosis`) & Edge-Case Unit Tests
+- [ ] **D2** Peak, Mode & Shape Estimation (`histo_mode_bin`, `histo_mode_continuous`, `histo_fwhm`, `histo_rms`) & Sub-bin Interpolation Tests
+- [ ] **D3** Robust Non-Parametric Dispersion (`histo_iqr`, `histo_mad`, `histo_trimmed_mean`, `histo_winsorized_mean`) & Unit Tests
+- [ ] **D4** Two-Sample Statistical Distance & Hypothesis Testing (`histo_cmp_chi2`, `histo_cmp_ks`, `histo_cmp_wasserstein_1d`, `histo_cmp_kl_divergence`, `histo_cmp_bhattacharyya`) & Comparison Integration Tests
+- [ ] **D5** Update Doxygen documentation, user manual, and benchmarks for new analytical routines
+
+
 
