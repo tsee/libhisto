@@ -20,4 +20,4 @@ endif()
 add_subdirectory(unit)
 
 # Integration tests
-# add_subdirectory(integration)
+add_subdirectory(integration)
