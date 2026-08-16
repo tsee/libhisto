@@ -344,6 +344,46 @@ histo_status_t histo_kurtosis(const histo_t *h, double *out_kurtosis);
 histo_status_t histo_excess_kurtosis(const histo_t *h, double *out_exc_kurtosis);
 
 /**
+ * @brief Identifies the index of the bin with the highest accumulated weight (mode bin).
+ *
+ * If multiple bins share the maximum weight, the lowest index is returned.
+ *
+ * @param[in]  h           Histogram handle.
+ * @param[out] out_bin_idx Output pointer for mode bin index.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_mode_bin(const histo_t *h, uint32_t *out_bin_idx);
+
+/**
+ * @brief Estimates the continuous peak mode coordinate via 3-point parabolic interpolation.
+ *
+ * Uses vertex interpolation around the mode bin for uniform histograms.
+ *
+ * @param[in]  h        Histogram handle.
+ * @param[out] out_mode Output pointer for continuous mode coordinate.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_mode_continuous(const histo_t *h, double *out_mode);
+
+/**
+ * @brief Computes the Full Width at Half Maximum (FWHM) of the dominant peak.
+ *
+ * @param[in]  h        Histogram handle.
+ * @param[out] out_fwhm Output pointer for calculated FWHM.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_fwhm(const histo_t *h, double *out_fwhm);
+
+/**
+ * @brief Computes the Root Mean Square (RMS) of the distribution: sqrt(M_2 + mean^2).
+ *
+ * @param[in]  h       Histogram handle.
+ * @param[out] out_rms Output pointer for calculated RMS.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_rms(const histo_t *h, double *out_rms);
+
+/**
  * @brief Computes the quantile coordinate for probability p in [0.0, 1.0].
  *
  * Uses continuous piecewise linear inverse CDF interpolation.

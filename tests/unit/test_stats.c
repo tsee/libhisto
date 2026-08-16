@@ -258,12 +258,88 @@ void test_higher_order_moments(void) {
     TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_excess_kurtosis(NULL, &exc_kurt));
 }
 
+/* Test peak, mode, FWHM, and RMS estimation */
+void test_mode_fwhm_rms(void) {
+    /* 1. Standard symmetric Gaussian-like peak on [0, 100] (10 bins: binsize 10) */
+    /* Bin 4 [40, 50): 10, Bin 5 [50, 60): 30 (peak), Bin 6 [60, 70): 10 */
+    histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h, 4, 10.0);
+    histo_fill_bin(h, 5, 30.0);
+    histo_fill_bin(h, 6, 10.0);
+
+    uint32_t mode_idx = 0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mode_bin(h, &mode_idx));
+    TEST_ASSERT_EQUAL_UINT32(5, mode_idx);
+
+    double mode_cont = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mode_continuous(h, &mode_cont));
+    /* Symmetric neighbors (10 and 10) -> vertex is exactly bin 5 center: 55.0 */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 55.0, mode_cont);
+
+    double fwhm = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fwhm(h, &fwhm));
+    /* Peak = 30 -> Half max = 15.
+     * Left side: between bin 4 (10) and bin 5 (30): frac = (15-10)/(30-10) = 5/20 = 0.25 -> x_left = 45 + 0.25*(55-45) = 47.5
+     * Right side: between bin 5 (30) and bin 6 (10): frac = (30-15)/(30-10) = 15/20 = 0.75 -> x_right = 55 + 0.75*(65-55) = 62.5
+     * FWHM = 62.5 - 47.5 = 15.0
+     */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 15.0, fwhm);
+
+    double rms = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_rms(h, &rms));
+    TEST_ASSERT_TRUE(rms > 50.0 && rms < 60.0);
+
+    histo_destroy(h);
+
+    /* 2. Asymmetric peak: Bin 4 (20), Bin 5 (30), Bin 6 (10) */
+    /* Vertex shifted left towards bin 4 */
+    histo_t *h_asym = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h_asym, 4, 20.0);
+    histo_fill_bin(h_asym, 5, 30.0);
+    histo_fill_bin(h_asym, 6, 10.0);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mode_continuous(h_asym, &mode_cont));
+    /* y_prev=20, y_curr=30, y_next=10 -> denom = 60-20-10 = 30
+     * delta = 0.5 * (10 - 20) / 30 = -5/30 = -1/6
+     * mode_cont = 55.0 + (-1/6)*10.0 = 55.0 - 1.66666... = 53.333333333333336
+     */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 55.0 - 10.0 / 6.0, mode_cont);
+    histo_destroy(h_asym);
+
+    /* 3. Boundary mode bin (Bin 0 is peak) */
+    histo_t *h_bound = histo_create_uniform(5, 0.0, 50.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h_bound, 0, 100.0);
+    histo_fill_bin(h_bound, 1, 10.0);
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mode_bin(h_bound, &mode_idx));
+    TEST_ASSERT_EQUAL_UINT32(0, mode_idx);
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mode_continuous(h_bound, &mode_cont));
+    TEST_ASSERT_EQUAL_DOUBLE(5.0, mode_cont); /* returns bin 0 center */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fwhm(h_bound, &fwhm));
+    TEST_ASSERT_TRUE(fwhm > 0.0);
+    histo_destroy(h_bound);
+
+    /* 4. Empty and single-spike edge cases */
+    histo_t *h_empty = histo_create_uniform(5, 0.0, 10.0, HISTO_FLAG_NONE);
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_mode_bin(h_empty, &mode_idx));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_mode_continuous(h_empty, &mode_cont));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_fwhm(h_empty, &fwhm));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_rms(h_empty, &rms));
+    histo_destroy(h_empty);
+
+    /* 5. NULL pointer robustness */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_mode_bin(NULL, &mode_idx));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_mode_continuous(NULL, &mode_cont));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fwhm(NULL, &fwhm));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_rms(NULL, &rms));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_bin_queries);
     RUN_TEST(test_integral);
     RUN_TEST(test_moments);
     RUN_TEST(test_higher_order_moments);
+    RUN_TEST(test_mode_fwhm_rms);
     RUN_TEST(test_quantile_and_median);
     RUN_TEST(test_get_stats);
     return UNITY_END();

@@ -874,6 +874,150 @@ histo_status_t histo_excess_kurtosis(const histo_t *h, double *out_exc_kurtosis)
     return HISTO_OK;
 }
 
+histo_status_t histo_mode_bin(const histo_t *h, uint32_t *out_bin_idx) {
+    if (!h || !out_bin_idx) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    uint32_t max_idx = 0;
+    double max_weight = h->bins[0];
+
+    for (uint32_t i = 1; i < h->nbins; ++i) {
+        if (h->bins[i] > max_weight) {
+            max_weight = h->bins[i];
+            max_idx = i;
+        }
+    }
+
+    if (max_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    *out_bin_idx = max_idx;
+    return HISTO_OK;
+}
+
+histo_status_t histo_mode_continuous(const histo_t *h, double *out_mode) {
+    if (!h || !out_mode) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    uint32_t mode_idx = 0;
+    histo_status_t st = histo_mode_bin(h, &mode_idx);
+    if (st != HISTO_OK) {
+        return st;
+    }
+
+    /* Boundary bins or variable binning -> return bin center */
+    if (mode_idx == 0 || mode_idx == h->nbins - 1 || h->bin_type == HISTO_BIN_VARIABLE) {
+        return histo_bin_center(h, mode_idx, out_mode);
+    }
+
+    double y_prev = h->bins[mode_idx - 1];
+    double y_curr = h->bins[mode_idx];
+    double y_next = h->bins[mode_idx + 1];
+
+    double denom = 2.0 * y_curr - y_prev - y_next;
+    if (denom <= 0.0) {
+        return histo_bin_center(h, mode_idx, out_mode);
+    }
+
+    double delta = 0.5 * (y_next - y_prev) / denom;
+    if (delta < -0.5) delta = -0.5;
+    if (delta > 0.5) delta = 0.5;
+
+    double center = 0.0;
+    histo_bin_center(h, mode_idx, &center);
+    *out_mode = center + delta * h->binsize;
+    return HISTO_OK;
+}
+
+histo_status_t histo_fwhm(const histo_t *h, double *out_fwhm) {
+    if (!h || !out_fwhm) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    uint32_t mode_idx = 0;
+    histo_status_t st = histo_mode_bin(h, &mode_idx);
+    if (st != HISTO_OK) {
+        return st;
+    }
+
+    double peak_val = h->bins[mode_idx];
+    double half_max = peak_val / 2.0;
+    if (half_max <= 0.0) {
+        *out_fwhm = 0.0;
+        return HISTO_OK;
+    }
+
+    /* Left half-maximum crossing */
+    double x_left = 0.0;
+    bool found_left = false;
+    for (int64_t i = (int64_t)mode_idx - 1; i >= 0; --i) {
+        if (h->bins[i] < half_max) {
+            double c_low = 0.0, c_high = 0.0;
+            histo_bin_center(h, (uint32_t)i, &c_low);
+            histo_bin_center(h, (uint32_t)(i + 1), &c_high);
+            double y_low = h->bins[i];
+            double y_high = h->bins[i + 1];
+            double frac = (y_high > y_low) ? ((half_max - y_low) / (y_high - y_low)) : 0.5;
+            x_left = c_low + frac * (c_high - c_low);
+            found_left = true;
+            break;
+        }
+    }
+    if (!found_left) {
+        double low = 0.0, high = 0.0;
+        histo_bin_bounds(h, 0, &low, &high);
+        x_left = low;
+    }
+
+    /* Right half-maximum crossing */
+    double x_right = 0.0;
+    bool found_right = false;
+    for (uint32_t i = mode_idx + 1; i < h->nbins; ++i) {
+        if (h->bins[i] < half_max) {
+            double c_low = 0.0, c_high = 0.0;
+            histo_bin_center(h, i - 1, &c_low);
+            histo_bin_center(h, i, &c_high);
+            double y_high = h->bins[i - 1];
+            double y_low = h->bins[i];
+            double frac = (y_high > y_low) ? ((y_high - half_max) / (y_high - y_low)) : 0.5;
+            x_right = c_low + frac * (c_high - c_low);
+            found_right = true;
+            break;
+        }
+    }
+    if (!found_right) {
+        double low = 0.0, high = 0.0;
+        histo_bin_bounds(h, h->nbins - 1, &low, &high);
+        x_right = high;
+    }
+
+    *out_fwhm = (x_right > x_left) ? (x_right - x_left) : 0.0;
+    return HISTO_OK;
+}
+
+histo_status_t histo_rms(const histo_t *h, double *out_rms) {
+    if (!h || !out_rms) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    double mean_val = 0.0, var_val = 0.0;
+    histo_status_t st = histo_mean(h, &mean_val);
+    if (st != HISTO_OK) return st;
+
+    st = histo_variance(h, &var_val);
+    if (st != HISTO_OK) return st;
+
+    *out_rms = sqrt(var_val + mean_val * mean_val);
+    return HISTO_OK;
+}
+
 histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile) {
     if (!h || !out_quantile) {
         return HISTO_ERR_INVALID_ARG;
