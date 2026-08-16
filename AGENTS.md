@@ -9,7 +9,11 @@ This document defines the operational workflow, engineering standards, and commu
 - **Productive Brevity**: Keep all responses concise, direct, and actionable.
 - **Strictly Factual**: Never use unnecessary compliments, flattery, or conversational filler. State facts, technical trade-offs, results, and recommendations clearly.
 - **Phase Discipline**: Strictly adhere to the project phases (**Phase A**: Research & Goals, **Phase B**: Design & Docs, **Phase C**: Implementation). **Never proceed to the next phase without explicit user confirmation.**
-- **Documentation Enforcement**: Documentation (Doxygen docstrings, user guides, algorithm complexity tables) MUST ALWAYS be updated whenever code changes are made.
+- **Documentation & Change Propagation**: For ALL code changes, agents MUST actively consider and implement respective updates to:
+  - **Documentation**: Both inline Doxygen docstrings (`include/histo/*.h`, `src/`) and user documentation in [`docs/`](docs/) (including algorithmic complexity tables, manuals) and [`README.md`](README.md).
+  - **Tests**: Unit tests, integration test suites, boundary edge cases, and concurrency tests.
+  - **Benchmarks**: Micro-benchmarks and aggregate function benchmarks in [`bench/`](bench/) to ensure performance regressions are prevented.
+  - **Serialization Logic**: **Most importantly**, any modification to data structures, histogram fields, metadata, accumulators, statistical moments, or feature flags MUST be evaluated for respective updates to the serialization and deserialization wire format ([`src/serialize.c`](src/serialize.c), [`docs/serialization_format.md`](docs/serialization_format.md), and binary roundtrip tests).
 - **Progress Tracking**: Keep [`docs/tasks.md`](docs/tasks.md) updated as tasks start (`[~]`) and complete (`[x]`).
 
 ---
