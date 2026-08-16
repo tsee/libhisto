@@ -1102,6 +1102,176 @@ histo_status_t histo_median(const histo_t *h, double *out_median) {
     return histo_quantile(h, 0.5, out_median);
 }
 
+histo_status_t histo_iqr(const histo_t *h, double *out_iqr) {
+    if (!h || !out_iqr) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    double q25 = 0.0, q75 = 0.0;
+    histo_status_t st = histo_quantile(h, 0.25, &q25);
+    if (st != HISTO_OK) return st;
+
+    st = histo_quantile(h, 0.75, &q75);
+    if (st != HISTO_OK) return st;
+
+    *out_iqr = (q75 >= q25) ? (q75 - q25) : 0.0;
+    return HISTO_OK;
+}
+
+typedef struct {
+    double dev;
+    double weight;
+} histo_dev_pair_t;
+
+static int histo_dev_pair_cmp(const void *a, const void *b) {
+    const histo_dev_pair_t *pa = (const histo_dev_pair_t *)a;
+    const histo_dev_pair_t *pb = (const histo_dev_pair_t *)b;
+    if (pa->dev < pb->dev) return -1;
+    if (pa->dev > pb->dev) return 1;
+    return 0;
+}
+
+histo_status_t histo_mad(const histo_t *h, double *out_mad) {
+    if (!h || !out_mad) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    double med = 0.0;
+    histo_status_t st = histo_median(h, &med);
+    if (st != HISTO_OK) return st;
+
+    histo_dev_pair_t stack_buf[256];
+    histo_dev_pair_t *pairs = stack_buf;
+    if (h->nbins > 256) {
+        pairs = (histo_dev_pair_t *)malloc((size_t)h->nbins * sizeof(histo_dev_pair_t));
+        if (!pairs) {
+            return HISTO_ERR_NOMEM;
+        }
+    }
+
+    size_t count = 0;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double w = h->bins[i];
+        if (w <= 0.0) continue;
+        double center = 0.0;
+        histo_bin_center(h, i, &center);
+        pairs[count].dev = fabs(center - med);
+        pairs[count].weight = w;
+        count++;
+    }
+
+    if (count == 0) {
+        if (pairs != stack_buf) free(pairs);
+        return HISTO_ERR_EMPTY;
+    }
+
+    qsort(pairs, count, sizeof(histo_dev_pair_t), histo_dev_pair_cmp);
+
+    double target = 0.5 * h->total_weight;
+    double cum = 0.0;
+    double result = pairs[count - 1].dev;
+
+    for (size_t i = 0; i < count; ++i) {
+        cum += pairs[i].weight;
+        if (cum >= target) {
+            result = pairs[i].dev;
+            break;
+        }
+    }
+
+    if (pairs != stack_buf) {
+        free(pairs);
+    }
+
+    *out_mad = result;
+    return HISTO_OK;
+}
+
+histo_status_t histo_trimmed_mean(const histo_t *h, double lower_p, double upper_p, double *out_mean) {
+    if (!h || !out_mean) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+    if (!isfinite(lower_p) || !isfinite(upper_p) || lower_p < 0.0 || upper_p > 1.0 || lower_p >= upper_p) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+
+    double t_low = lower_p * h->total_weight;
+    double t_high = upper_p * h->total_weight;
+
+    double cum_w = 0.0;
+    double sum_wx = 0.0;
+    double eff_weight = 0.0;
+
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double w = h->bins[i];
+        if (w <= 0.0) continue;
+
+        double b_start = cum_w;
+        double b_end = cum_w + w;
+        cum_w = b_end;
+
+        double overlap_start = (b_start > t_low) ? b_start : t_low;
+        double overlap_end = (b_end < t_high) ? b_end : t_high;
+
+        if (overlap_end > overlap_start) {
+            double w_eff = overlap_end - overlap_start;
+            double center = 0.0;
+            histo_bin_center(h, i, &center);
+            sum_wx += w_eff * center;
+            eff_weight += w_eff;
+        }
+    }
+
+    if (eff_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    *out_mean = sum_wx / eff_weight;
+    return HISTO_OK;
+}
+
+histo_status_t histo_winsorized_mean(const histo_t *h, double lower_p, double upper_p, double *out_mean) {
+    if (!h || !out_mean) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+    if (!isfinite(lower_p) || !isfinite(upper_p) || lower_p < 0.0 || upper_p > 1.0 || lower_p >= upper_p) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+
+    double x_low = 0.0, x_high = 0.0;
+    histo_status_t st = histo_quantile(h, lower_p, &x_low);
+    if (st != HISTO_OK) return st;
+
+    st = histo_quantile(h, upper_p, &x_high);
+    if (st != HISTO_OK) return st;
+
+    double sum_wx = 0.0;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double w = h->bins[i];
+        if (w <= 0.0) continue;
+
+        double center = 0.0;
+        histo_bin_center(h, i, &center);
+
+        double clamped = center;
+        if (clamped < x_low) clamped = x_low;
+        if (clamped > x_high) clamped = x_high;
+
+        sum_wx += w * clamped;
+    }
+
+    *out_mean = sum_wx / h->total_weight;
+    return HISTO_OK;
+}
+
 histo_status_t histo_get_stats(const histo_t *h, histo_stats_t *out_stats) {
     if (!h || !out_stats) {
         return HISTO_ERR_INVALID_ARG;

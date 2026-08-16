@@ -405,6 +405,46 @@ histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile);
 histo_status_t histo_median(const histo_t *h, double *out_median);
 
 /**
+ * @brief Computes the Interquartile Range (IQR = Q75 - Q25).
+ *
+ * @param[in]  h       Histogram handle.
+ * @param[out] out_iqr Output pointer for calculated IQR.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_iqr(const histo_t *h, double *out_iqr);
+
+/**
+ * @brief Computes the Median Absolute Deviation (MAD = median(|x - median|)).
+ *
+ * @param[in]  h       Histogram handle.
+ * @param[out] out_mad Output pointer for calculated MAD.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_mad(const histo_t *h, double *out_mad);
+
+/**
+ * @brief Computes the trimmed mean excluding tails below lower_p and above upper_p.
+ *
+ * @param[in]  h        Histogram handle.
+ * @param[in]  lower_p  Lower percentile bound in [0.0, 1.0).
+ * @param[in]  upper_p  Upper percentile bound in (lower_p, 1.0].
+ * @param[out] out_mean Output pointer for calculated trimmed mean.
+ * @return HISTO_OK on success, HISTO_ERR_OUT_OF_RANGE if bounds are invalid, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_trimmed_mean(const histo_t *h, double lower_p, double upper_p, double *out_mean);
+
+/**
+ * @brief Computes the Winsorized mean replacing tails with quantile threshold values.
+ *
+ * @param[in]  h        Histogram handle.
+ * @param[in]  lower_p  Lower percentile bound in [0.0, 1.0).
+ * @param[in]  upper_p  Upper percentile bound in (lower_p, 1.0].
+ * @param[out] out_mean Output pointer for calculated Winsorized mean.
+ * @return HISTO_OK on success, HISTO_ERR_OUT_OF_RANGE if bounds are invalid, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_winsorized_mean(const histo_t *h, double lower_p, double upper_p, double *out_mean);
+
+/**
  * @brief Computes the integral (sum of bin contents) over bin range [start_bin, end_bin].
  *
  * @param[in]  h            Histogram handle.

@@ -333,6 +333,79 @@ void test_mode_fwhm_rms(void) {
     TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_rms(NULL, &rms));
 }
 
+/* Test robust dispersion: IQR, MAD, trimmed mean, Winsorized mean */
+void test_robust_dispersion(void) {
+    /* 1. Uniform histogram on [0, 100] (4 bins: [0,25), [25,50), [50,75), [75,100), width=25) */
+    /* Equal weight 10.0 in each bin -> Q25 = 25.0, Q75 = 75.0, Median = 50.0, Mean = 50.0 */
+    histo_t *h = histo_create_uniform(4, 0.0, 100.0, HISTO_FLAG_NONE);
+    for (uint32_t i = 0; i < 4; ++i) {
+        histo_fill_bin(h, i, 10.0);
+    }
+
+    double iqr = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_iqr(h, &iqr));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 50.0, iqr); /* 75 - 25 = 50 */
+
+    double mad = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mad(h, &mad));
+    /* Centers: 12.5, 37.5, 62.5, 87.5. Distances from 50: 37.5, 12.5, 12.5, 37.5. Sorted: 12.5, 12.5, 37.5, 37.5.
+     * Median of distances = 12.5 or 37.5 -> 12.5 reached at cumulative weight 20 (>= target 20)
+     */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 12.5, mad);
+
+    double t_mean = 0.0;
+    /* Trim outer 25% on both sides -> only middle 50% retained (bins 1 and 2: [25, 75)) */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_trimmed_mean(h, 0.25, 0.75, &t_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 50.0, t_mean);
+
+    double w_mean = 0.0;
+    /* Winsorized mean at 25% and 75% -> clamps to [25, 75] */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_winsorized_mean(h, 0.25, 0.75, &w_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 50.0, w_mean);
+
+    histo_destroy(h);
+
+    /* 2. Asymmetric distribution with heavy outlier */
+    histo_t *h_outlier = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_NONE);
+    /* Ingest 90 items in bin 0 ([0, 10)), 10 items in bin 9 ([90, 100)) */
+    histo_fill_bin(h_outlier, 0, 90.0);
+    histo_fill_bin(h_outlier, 9, 10.0);
+
+    double raw_mean = 0.0;
+    histo_mean(h_outlier, &raw_mean);
+    /* raw mean = (90*5 + 10*95)/100 = (450 + 950)/100 = 14.0 */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 14.0, raw_mean);
+
+    /* Trim upper 10% (p in [0.0, 0.90]) -> cuts off bin 9 completely, trimmed mean = 5.0 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_trimmed_mean(h_outlier, 0.0, 0.90, &t_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 5.0, t_mean);
+
+    histo_destroy(h_outlier);
+
+    /* 3. Parameter bounds & Edge cases */
+    histo_t *h_empty = histo_create_uniform(4, 0.0, 10.0, HISTO_FLAG_NONE);
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_iqr(h_empty, &iqr));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_mad(h_empty, &mad));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_trimmed_mean(h_empty, 0.1, 0.9, &t_mean));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_winsorized_mean(h_empty, 0.1, 0.9, &w_mean));
+
+    /* Inverted or out-of-range percentiles */
+    histo_t *h_valid = histo_create_uniform(4, 0.0, 10.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h_valid, 0, 1.0);
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo_trimmed_mean(h_valid, 0.8, 0.2, &t_mean));
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo_trimmed_mean(h_valid, -0.1, 0.5, &t_mean));
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo_trimmed_mean(h_valid, 0.2, 1.5, &t_mean));
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo_winsorized_mean(h_valid, 0.7, 0.3, &w_mean));
+    histo_destroy(h_valid);
+    histo_destroy(h_empty);
+
+    /* 4. NULL pointers */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_iqr(NULL, &iqr));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_mad(NULL, &mad));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_trimmed_mean(NULL, 0.1, 0.9, &t_mean));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_winsorized_mean(NULL, 0.1, 0.9, &w_mean));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_bin_queries);
@@ -340,6 +413,7 @@ int main(void) {
     RUN_TEST(test_moments);
     RUN_TEST(test_higher_order_moments);
     RUN_TEST(test_mode_fwhm_rms);
+    RUN_TEST(test_robust_dispersion);
     RUN_TEST(test_quantile_and_median);
     RUN_TEST(test_get_stats);
     return UNITY_END();
