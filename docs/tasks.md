@@ -10,9 +10,9 @@
 ## Phase A: Research & High-Level Goals
 - [x] **A1** Write `AGENTS.md` and coding standards documentation
 - [x] **A2** Settle on license to use (MIT)
-
-- [ ] **A3** Analyze existing prior art software (only software with compatible license) and distill requirements and techniques
+- [x] **A3** Analyze existing prior art software and distill requirements and techniques
 - [x] **A4** Settle on build system and project structure (Modern CMake)
+
 
 
 ---
