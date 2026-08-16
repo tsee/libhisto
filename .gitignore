@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+bin/
+lib/
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+compile_commands.json
+
+# Sanitizer / profiling outputs
+*.dSYM/
+*.gcda
+*.gcno
+*.gcov
+callgrind.out.*
+vgcore.*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
