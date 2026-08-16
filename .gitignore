@@ -1,5 +1,6 @@
 # Build artifacts
 build/
+build-*/
 docs/html/
 docs/latex/
 bin/
