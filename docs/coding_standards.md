@@ -51,10 +51,14 @@ This document specifies the technical coding standards for `libhisto`.
 ## 5. Numerical Robustness & Endian Handling
 
 - **Floating-Point Types**: Default to `double` for sample values, weights, and statistical accumulators.
+- **Compiler Flags**: `-ffast-math` is strictly **forbidden**. It breaks `isnan()`, `isinf()`, subnormals, and IEEE-754 compliance.
 - **IEEE-754 Edge Cases**:
   - Values of `NaN`, `+Inf`, and `-Inf` must not cause undefined behavior or memory out-of-bounds.
   - Non-finite inputs must be directed to designated overflow/underflow or error accumulators per design specification.
+- **Testing & Floating-Point Equality**:
+  - Use epsilon-based (`TEST_ASSERT_DOUBLE_WITHIN`) or Units in Last Place (ULP) comparisons for statistical validation across different CPU architectures.
 - **Serialization Byte-Order**:
+
   - Binary serialization formats must define an explicit byte order (fixed canonical Little-Endian representation with endian conversion helpers on read/write).
 
 ---

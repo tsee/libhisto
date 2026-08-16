@@ -68,10 +68,20 @@ histo_status_t histo_fill(histo_t *h, double x);
 histo_status_t histo_fill_w(histo_t *h, double x, double weight);
 
 /**
- * Batch fills N values into the histogram with an optional weights array.
+ * Batch fills N contiguous values into the histogram with an optional weights array.
  * If weights is NULL, unit weights (1.0) are used for all samples.
+ * Returns HISTO_WARN_NON_FINITE if any NaN or non-finite values were skipped.
  */
 histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double *weights);
+
+/**
+ * Strided batch fill for Array-of-Structs (AoS) data layouts.
+ * Pass x_stride_bytes = sizeof(struct) and w_stride_bytes = sizeof(struct).
+ * If weights is NULL, unit weights (1.0) are used for all samples.
+ */
+histo_status_t histo_fill_strided(histo_t *h, size_t n,
+                                  const double *x, size_t x_stride_bytes,
+                                  const double *weights, size_t w_stride_bytes);
 
 /**
  * Directly fills weight into a specific bin index.
@@ -98,7 +108,7 @@ histo_bin_type_t histo_bin_type(const histo_t *h);
 histo_status_t histo_range(const histo_t *h, double *out_min, double *out_max);
 
 /**
- * Locates the bin index for coordinate x.
+ * Locates the bin index for coordinate x using boundary-guarded lookup.
  * Sets *out_bin to index in [0, nbins - 1], or -1 for underflow, or (int64_t)nbins for overflow.
  */
 histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin);
@@ -169,6 +179,7 @@ histo_status_t histo_std_dev(const histo_t *h, double *out_std_dev);
 
 /**
  * Estimates the quantile value corresponding to cumulative probability p in [0.0, 1.0].
+ * Uses continuous linear interpolation bracketed strictly on non-empty bins.
  */
 histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile);
 
@@ -202,7 +213,7 @@ histo_status_t histo_add(histo_t *target, const histo_t *other);
 histo_status_t histo_subtract(histo_t *target, const histo_t *other);
 
 /**
- * Performs element-wise multiplication: target *= other.
+ * Performs element-wise multiplication: target *= other (using division-free error propagation).
  */
 histo_status_t histo_multiply(histo_t *target, const histo_t *other);
 
@@ -244,7 +255,17 @@ histo_t* histo_cdf(const histo_t *src, double prenormalization);
 /* ========================================================================= */
 
 /**
- * Serializes the histogram into a portable, canonical Little-Endian binary byte buffer.
+ * Calculates the exact byte size required to serialize the histogram in binary format.
+ */
+size_t histo_serialize_binary_size(const histo_t *h);
+
+/**
+ * Serializes the histogram into a caller-provided binary buffer of given capacity.
+ */
+histo_status_t histo_serialize_binary_into(const histo_t *h, void *buf, size_t capacity);
+
+/**
+ * Serializes the histogram into a newly allocated binary byte buffer.
  * Caller must free *out_buf using histo_free_buffer().
  */
 histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *out_size);
@@ -255,7 +276,17 @@ histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h);
 
 /**
- * Serializes the histogram into a JSON string.
+ * Calculates the maximum buffer size required to serialize the histogram into JSON.
+ */
+size_t histo_serialize_json_size(const histo_t *h);
+
+/**
+ * Serializes the histogram into a caller-provided JSON string buffer of given capacity.
+ */
+histo_status_t histo_serialize_json_into(const histo_t *h, char *buf, size_t capacity);
+
+/**
+ * Serializes the histogram into a newly allocated JSON string.
  * Caller must free *out_json_str using histo_free_buffer().
  */
 histo_status_t histo_serialize_json(const histo_t *h, char **out_json_str);

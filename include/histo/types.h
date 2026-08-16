@@ -9,11 +9,15 @@
 extern "C" {
 #endif
 
+/* Maximum allowable bins to guard against integer overflow */
+#define HISTO_MAX_NBINS 100000000u
+
 /* Opaque histogram handle */
 typedef struct histo histo_t;
 
-/* Status and error codes */
+/* Status and warning/error codes */
 typedef enum histo_status {
+    HISTO_WARN_NON_FINITE     =  1,  /* Operation succeeded, but non-finite sample(s) were skipped */
     HISTO_OK                  =  0,  /* Operation succeeded */
     HISTO_ERR_INVALID_ARG     = -1,  /* NULL pointer or invalid parameter */
     HISTO_ERR_NOMEM           = -2,  /* Out of memory */
@@ -22,7 +26,7 @@ typedef enum histo_status {
     HISTO_ERR_NON_FINITE      = -5,  /* Non-finite (NaN or Inf) input rejected */
     HISTO_ERR_EMPTY           = -6,  /* Histogram has zero entries / weight */
     HISTO_ERR_DIV_BY_ZERO     = -7,  /* Division by zero */
-    HISTO_ERR_SERIALIZATION   = -8,  /* Serialization encoding failed */
+    HISTO_ERR_SERIALIZATION   = -8,  /* Serialization encoding failed / buffer too small */
     HISTO_ERR_DESERIALIZATION = -9   /* Deserialization format corrupted or unsupported */
 } histo_status_t;
 

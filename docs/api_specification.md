@@ -18,6 +18,7 @@ All public headers include `extern "C"` wrappers for seamless C++ integration.
 
 ```c
 typedef enum histo_status {
+    HISTO_WARN_NON_FINITE       =  1,  /* Operation succeeded, but non-finite sample(s) were skipped */
     HISTO_OK                    =  0,  /* Success */
     HISTO_ERR_INVALID_ARG       = -1,  /* NULL pointer or invalid argument passed */
     HISTO_ERR_NOMEM             = -2,  /* Memory allocation failed */
@@ -26,7 +27,7 @@ typedef enum histo_status {
     HISTO_ERR_NON_FINITE        = -5,  /* Unexpected NaN or Infinity */
     HISTO_ERR_EMPTY             = -6,  /* Operation requires at least one entry/non-zero weight */
     HISTO_ERR_DIV_BY_ZERO       = -7,  /* Division by zero encountered */
-    HISTO_ERR_SERIALIZATION     = -8,  /* Serialization encoding error */
+    HISTO_ERR_SERIALIZATION     = -8,  /* Serialization encoding error / buffer capacity too small */
     HISTO_ERR_DESERIALIZATION   = -9   /* Corrupted or invalid serialized data */
 } histo_status_t;
 
@@ -64,8 +65,13 @@ histo_status_t histo_fill(histo_t *h, double x);
 /* Fill a single sample with explicit weight. */
 histo_status_t histo_fill_w(histo_t *h, double x, double weight);
 
-/* Bulk fill N samples with optional weights array (pass weights=NULL for unit weights). */
+/* Bulk fill N contiguous samples with optional weights array. */
 histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double *weights);
+
+/* Strided batch fill for Array-of-Structs (AoS) datasets. */
+histo_status_t histo_fill_strided(histo_t *h, size_t n,
+                                  const double *x, size_t x_stride_bytes,
+                                  const double *weights, size_t w_stride_bytes);
 
 /* Direct fill into a specific bin index with explicit weight. */
 histo_status_t histo_fill_bin(histo_t *h, uint32_t bin_index, double weight);
@@ -160,18 +166,30 @@ histo_t* histo_cdf(const histo_t *src, double prenormalization);
 
 ### 3.6 Serialization & Deserialization
 ```c
-/* Serialize to canonical Little-Endian binary byte buffer. */
+/* Determine required binary buffer size */
+size_t histo_serialize_binary_size(const histo_t *h);
+
+/* Serialize into caller-provided binary buffer */
+histo_status_t histo_serialize_binary_into(const histo_t *h, void *buf, size_t capacity);
+
+/* Serialize to newly allocated binary buffer (caller frees via histo_free_buffer) */
 histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *out_size);
 
-/* Deserialize from binary byte buffer. */
+/* Deserialize from binary buffer */
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h);
 
-/* Serialize to human-readable JSON string. */
+/* Determine maximum JSON buffer size */
+size_t histo_serialize_json_size(const histo_t *h);
+
+/* Serialize into caller-provided JSON buffer */
+histo_status_t histo_serialize_json_into(const histo_t *h, char *buf, size_t capacity);
+
+/* Serialize to newly allocated JSON string (caller frees via histo_free_buffer) */
 histo_status_t histo_serialize_json(const histo_t *h, char **out_json_str);
 
-/* Deserialize from JSON string. */
+/* Deserialize from JSON string */
 histo_status_t histo_deserialize_json(const char *json_str, histo_t **out_h);
 
-/* Free buffers returned by serialization functions. */
+/* Free library-allocated serialization buffers. Safe on NULL. */
 void histo_free_buffer(void *buf);
 ```
