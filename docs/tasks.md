@@ -18,8 +18,9 @@
 ---
 
 ## Phase B: Design & Documentation
-- [ ] **B1** Core Data Structures & Types Specification
+- [x] **B1** Core Data Structures & Types Specification
 - [ ] **B2** Public C API Specification
+
 - [ ] **B3** Numerical Behavior & Error Handling Strategy
 - [ ] **B4** Serialization & Wire Formats Specification
 - [ ] **B5** Statistical & Analytical Formulae Specification
