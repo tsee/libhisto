@@ -282,7 +282,7 @@ histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin) {
     if (!h || !out_bin) {
         return HISTO_ERR_INVALID_ARG;
     }
-    if (!isfinite(x)) {
+    if (isnan(x)) {
         *out_bin = -1;
         return HISTO_ERR_NON_FINITE;
     }
@@ -351,7 +351,7 @@ histo_status_t histo_fill_w(histo_t *h, double x, double weight) {
     if (!h) {
         return HISTO_ERR_INVALID_ARG;
     }
-    if (!isfinite(x) || !isfinite(weight)) {
+    if (isnan(x) || !isfinite(weight)) {
         h->n_nan++;
         return HISTO_ERR_NON_FINITE;
     }
@@ -448,8 +448,14 @@ histo_status_t histo_fill_strided(histo_t *h, size_t n,
             memcpy(&w, w_ptr + i * w_stride_bytes, sizeof(double));
         }
 
+        if (isnan(val) || !isfinite(w)) {
+            h->n_nan++;
+            had_non_finite = true;
+            continue;
+        }
+
         histo_status_t st = histo_fill_w(h, val, w);
-        if (st == HISTO_ERR_NON_FINITE) {
+        if (st == HISTO_ERR_NON_FINITE || st == HISTO_WARN_NON_FINITE) {
             had_non_finite = true;
         }
     }
@@ -469,7 +475,7 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
         if (!weights && !exact) {
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
-                if (!isfinite(val)) {
+                if (isnan(val)) {
                     h->n_nan++;
                     had_non_finite = true;
                     continue;
@@ -488,7 +494,7 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
                 double w = weights[i];
-                if (!isfinite(val) || !isfinite(w)) {
+                if (isnan(val) || !isfinite(w)) {
                     h->n_nan++;
                     had_non_finite = true;
                     continue;
@@ -509,7 +515,7 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
                 double w = weights ? weights[i] : 1.0;
-                if (!isfinite(val) || !isfinite(w)) {
+                if (isnan(val) || !isfinite(w)) {
                     h->n_nan++;
                     had_non_finite = true;
                     continue;
@@ -532,7 +538,7 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
         for (size_t i = 0; i < n; ++i) {
             double val = x[i];
             double w = weights ? weights[i] : 1.0;
-            if (!isfinite(val) || !isfinite(w)) {
+            if (isnan(val) || !isfinite(w)) {
                 h->n_nan++;
                 had_non_finite = true;
                 continue;
@@ -546,25 +552,17 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
                 if (has_w2) h->overflow_sum_w2 += w * w;
                 h->n_overflow++;
             } else {
-                uint32_t low = 0;
-                uint32_t high = h->nbins;
-                while (low < high) {
-                    uint32_t mid = low + (high - low) / 2;
-                    if (val >= h->bin_edges[mid + 1]) {
-                        low = mid + 1;
-                    } else {
-                        high = mid;
-                    }
-                }
-                uint32_t idx = low;
-                
-                h->bins[idx] += w;
-                h->total_weight += w;
-                h->n_fills++;
+                int64_t bin_idx = 0;
+                histo_find_bin(h, val, &bin_idx);
+                h->bins[bin_idx] += w;
                 if (has_w2) {
-                    h->sum_w2[idx] += w * w;
+                    h->sum_w2[bin_idx] += w * w;
+                }
+                h->total_weight += w;
+                if (has_w2) {
                     h->total_sum_w2 += w * w;
                 }
+                h->n_fills++;
                 if (exact) {
                     histo_update_welford(h, val, w);
                 }
