@@ -282,7 +282,7 @@ histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin) {
     if (!h || !out_bin) {
         return HISTO_ERR_INVALID_ARG;
     }
-    if (isnan(x)) {
+    if (!isfinite(x)) {
         *out_bin = -1;
         return HISTO_ERR_NON_FINITE;
     }
@@ -351,7 +351,7 @@ histo_status_t histo_fill_w(histo_t *h, double x, double weight) {
     if (!h) {
         return HISTO_ERR_INVALID_ARG;
     }
-    if (isnan(x) || !isfinite(weight)) {
+    if (!isfinite(x) || !isfinite(weight)) {
         h->n_nan++;
         return HISTO_ERR_NON_FINITE;
     }
@@ -457,7 +457,7 @@ histo_status_t histo_fill_strided(histo_t *h, size_t n,
     return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
 }
 
-histo_status_t histo_fill_n(histo_t * restrict h, size_t n, const double * restrict x, const double * restrict weights) {
+histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double *weights) {
     if (!h || (!x && n > 0)) return HISTO_ERR_INVALID_ARG;
     if (n == 0) return HISTO_OK;
 
@@ -469,7 +469,7 @@ histo_status_t histo_fill_n(histo_t * restrict h, size_t n, const double * restr
         if (!weights && !exact) {
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
-                if (isnan(val)) {
+                if (!isfinite(val)) {
                     h->n_nan++;
                     had_non_finite = true;
                     continue;
@@ -488,7 +488,7 @@ histo_status_t histo_fill_n(histo_t * restrict h, size_t n, const double * restr
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
                 double w = weights[i];
-                if (isnan(val) || !isfinite(w)) {
+                if (!isfinite(val) || !isfinite(w)) {
                     h->n_nan++;
                     had_non_finite = true;
                     continue;
@@ -509,7 +509,7 @@ histo_status_t histo_fill_n(histo_t * restrict h, size_t n, const double * restr
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
                 double w = weights ? weights[i] : 1.0;
-                if (isnan(val) || !isfinite(w)) {
+                if (!isfinite(val) || !isfinite(w)) {
                     h->n_nan++;
                     had_non_finite = true;
                     continue;
@@ -532,7 +532,7 @@ histo_status_t histo_fill_n(histo_t * restrict h, size_t n, const double * restr
         for (size_t i = 0; i < n; ++i) {
             double val = x[i];
             double w = weights ? weights[i] : 1.0;
-            if (isnan(val) || !isfinite(w)) {
+            if (!isfinite(val) || !isfinite(w)) {
                 h->n_nan++;
                 had_non_finite = true;
                 continue;
@@ -785,7 +785,7 @@ histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile) 
     if (h->total_weight <= 0.0) {
         return HISTO_ERR_EMPTY;
     }
-    if (isnan(p) || p < 0.0 || p > 1.0) {
+    if (!isfinite(p) || p < 0.0 || p > 1.0) {
         return HISTO_ERR_OUT_OF_RANGE;
     }
 
