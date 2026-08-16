@@ -35,5 +35,6 @@
 - [x] **C4** Histogram arithmetic & transformations (`histo_add`, `histo_subtract`, `histo_multiply`, `histo_divide`, `histo_scale`, `histo_normalize`, `histo_rebin`, `histo_slice`, `histo_cdf`) & Unit Tests
 - [x] **C5** Binary and JSON serialization & deserialization (`histo_serialize_*`, `histo_deserialize_*`) & roundtrip Integration Tests
 - [x] **C6** End-to-end integration tests, sanitizer runs (ASan/UBSan), and cynical edge-case audit
-- [ ] **C7** Benchmarks & example applications
+- [x] **C7** Benchmarks & example applications
+
 
