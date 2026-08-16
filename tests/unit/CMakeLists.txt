@@ -32,3 +32,18 @@ add_executable(test_serialization
 )
 target_link_libraries(test_serialization PRIVATE histo unity)
 add_test(NAME test_serialization COMMAND test_serialization)
+
+# Unit Test: Audit Moments and Statistics
+add_executable(test_audit_moments
+    test_audit_moments.c
+)
+target_link_libraries(test_audit_moments PRIVATE histo unity)
+add_test(NAME test_audit_moments COMMAND test_audit_moments)
+
+# Unit Test: Boundary Mathematics, Ingestion, and Arithmetic Flaw Audit
+add_executable(test_audit_boundaries
+    test_audit_boundaries.c
+)
+target_link_libraries(test_audit_boundaries PRIVATE histo unity)
+add_test(NAME test_audit_boundaries COMMAND test_audit_boundaries)
+

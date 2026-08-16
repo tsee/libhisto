@@ -58,7 +58,8 @@ histo_t* histo_create_uniform(uint32_t nbins, double min, double max, uint32_t f
     h->max = max;
     h->width = max - min;
     h->binsize = h->width / (double)nbins;
-    h->inv_binsize = (double)nbins / h->width;
+    double inv = (double)nbins / h->width;
+    h->inv_binsize = isfinite(inv) ? inv : 0.0;
     h->bin_edges = NULL;
 
     h->bins = (double *)calloc(nbins, sizeof(double));
@@ -237,7 +238,7 @@ histo_status_t histo_reset(histo_t *h) {
 /* ========================================================================= */
 
 static inline void histo_update_welford(histo_t *h, double x, double w) {
-    if (w <= 0.0) {
+    if (w == 0.0 || h->total_weight <= 0.0) {
         return;
     }
     if (x < h->stats_min) h->stats_min = x;
@@ -269,13 +270,19 @@ histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin) {
     }
 
     if (h->bin_type == HISTO_BIN_UNIFORM) {
-        int64_t idx = (int64_t)((x - h->min) * h->inv_binsize);
+        int64_t idx = 0;
+        if (h->inv_binsize > 0.0) {
+            idx = (int64_t)((x - h->min) * h->inv_binsize);
+        } else if (h->binsize > 0.0) {
+            idx = (int64_t)((x - h->min) / h->binsize);
+        }
 
         if (idx < 0) {
             idx = 0;
         } else if ((uint32_t)idx >= h->nbins) {
             idx = (int64_t)h->nbins - 1;
         }
+
 
         /* Boundary Guard 1: Verify against upper neighboring bin boundary */
         if (idx + 1 < (int64_t)h->nbins) {
@@ -403,8 +410,12 @@ histo_status_t histo_fill_strided(histo_t *h, size_t n,
     const uint8_t *w_ptr = (const uint8_t *)weights;
 
     for (size_t i = 0; i < n; ++i) {
-        double val = *(const double *)(const void *)(x_ptr + i * x_stride_bytes);
-        double w = weights ? *(const double *)(const void *)(w_ptr + i * w_stride_bytes) : 1.0;
+        double val = 0.0;
+        memcpy(&val, x_ptr + i * x_stride_bytes, sizeof(double));
+        double w = 1.0;
+        if (weights) {
+            memcpy(&w, w_ptr + i * w_stride_bytes, sizeof(double));
+        }
 
         histo_status_t st = histo_fill_w(h, val, w);
         if (st == HISTO_ERR_NON_FINITE) {
@@ -467,9 +478,10 @@ histo_status_t histo_bin_center(const histo_t *h, uint32_t bin_index, double *ou
     if (st != HISTO_OK) {
         return st;
     }
-    *out_center = 0.5 * (lower + upper);
+    *out_center = lower + 0.5 * (upper - lower);
     return HISTO_OK;
 }
+
 
 histo_status_t histo_bin_content(const histo_t *h, uint32_t bin_index, double *out_content) {
     if (!h || !out_content) {
@@ -820,8 +832,47 @@ histo_status_t histo_subtract(histo_t *target, const histo_t *other) {
     target->n_overflow += other->n_overflow;
     target->n_nan += other->n_nan;
 
+    /* Recalculate exact moments after subtraction */
+    if ((target->flags & HISTO_FLAG_EXACT_MOMENTS) && (other->flags & HISTO_FLAG_EXACT_MOMENTS)) {
+        double w1 = target->total_weight + other->total_weight; /* previous total weight of target */
+        double w2 = other->total_weight;
+        double w_new = target->total_weight;
+        if (w_new > 0.0 && w1 > 0.0) {
+            double delta = other->stats_mean - target->stats_mean;
+            target->stats_mean -= (w2 / w_new) * delta;
+            target->stats_M2 -= other->stats_M2 + (w1 * w2 / w_new) * (delta * delta);
+            if (target->stats_M2 < 0.0) target->stats_M2 = 0.0;
+        } else {
+            target->stats_mean = 0.0;
+            target->stats_M2 = 0.0;
+        }
+    } else if (target->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        if (target->total_weight > 0.0) {
+            double sum = 0.0;
+            for (uint32_t i = 0; i < target->nbins; ++i) {
+                double c = 0.0;
+                histo_bin_center(target, i, &c);
+                sum += target->bins[i] * c;
+            }
+            target->stats_mean = sum / target->total_weight;
+            double m2 = 0.0;
+            for (uint32_t i = 0; i < target->nbins; ++i) {
+                double c = 0.0;
+                histo_bin_center(target, i, &c);
+                double diff = c - target->stats_mean;
+                m2 += target->bins[i] * diff * diff;
+            }
+            target->stats_M2 = (m2 > 0.0) ? m2 : 0.0;
+        } else {
+            target->stats_mean = 0.0;
+            target->stats_M2 = 0.0;
+        }
+    }
+
     return HISTO_OK;
 }
+
+
 
 histo_status_t histo_multiply(histo_t *target, const histo_t *other) {
     if (!target || !other) {

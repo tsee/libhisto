@@ -9,3 +9,9 @@ add_executable(test_adversarial
 )
 target_link_libraries(test_adversarial PRIVATE histo unity)
 add_test(NAME test_adversarial COMMAND test_adversarial)
+
+add_executable(test_audit_security
+    test_audit_security.c
+)
+target_link_libraries(test_audit_security PRIVATE histo unity)
+add_test(NAME test_audit_security COMMAND test_audit_security)
