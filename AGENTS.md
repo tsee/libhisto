@@ -25,7 +25,12 @@ This document defines the operational workflow, engineering standards, and commu
 
 ## 3. Testing & Verification Standards
 
-- **High Test Coverage**: Every feature, error branch, and boundary condition must be covered.
+- **Exhaustive Correctness Testing**: Every feature, error branch, numerical routine, and boundary condition must be covered by thorough, deterministic tests.
+- **Edge-Case Vigilance**: Actively design, identify, and test edge cases at every step of development. This includes:
+  - IEEE-754 specials: `NaN` (quiet/signaling), `+Inf`, `-Inf`, `-0.0`, subnormals/denormals, near-overflow extremes ($10^{308}$, $-10^{308}$).
+  - Boundary transitions: exact lower/upper edges ($x = x_{\min}$, $x = x_{\max}$, $x = x_i \pm \epsilon$), non-power-of-two divisions (e.g. $N=3, 7$).
+  - Storage extremes: zero-weight histograms, single-entry histograms, identical sample streams (testing variance floor), negative weights, sparse bins with plateaus.
+  - Parameter bounds: `nbins = 0`, `nbins > HISTO_MAX_NBINS`, inverted ranges (`min >= max`), non-monotonic variable edges, duplicate edges.
 - **Clear Separation**: Maintain a strict distinction between:
   - **Unit Tests**: Isolated testing of internal helper functions, individual bin lookup math, edge cases.
   - **Integration & API Tests**: End-to-end testing of public APIs, multi-step workflows, serialization roundtrips.
@@ -33,6 +38,7 @@ This document defines the operational workflow, engineering standards, and commu
   - Before committing code, evaluate whether tests cover all newly introduced logic and edge cases.
   - If coverage or edge case behavior is in doubt, invoke a subagent as a cynical testing expert to rigorously audit test coverage and propose adversarial edge cases.
 - **Sanitizers**: Code must pass AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan) with zero warnings or leaks.
+
 
 ---
 

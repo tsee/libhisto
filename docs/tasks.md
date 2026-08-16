@@ -29,4 +29,11 @@
 ---
 
 ## Phase C: Implementation
-*(To be populated upon completion of Phase B)*
+- [ ] **C1** Internal memory & lifecycle routines (`histo_create_uniform`, `histo_create_variable`, `histo_destroy`, `histo_clone`, `histo_reset`) & Unit Tests
+- [ ] **C2** Boundary-guarded bin lookup & ingestion routines (`histo_find_bin`, `histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`, `histo_fill_bin`) & IEEE-754 edge-case Unit Tests
+- [ ] **C3** Bin querying & statistical analysis routines (`histo_bin_*`, `histo_mean`, `histo_variance`, `histo_std_dev`, `histo_quantile`, `histo_median`, `histo_integral`, `histo_get_stats`) & Unit Tests
+- [ ] **C4** Histogram arithmetic & transformations (`histo_add`, `histo_subtract`, `histo_multiply`, `histo_divide`, `histo_scale`, `histo_normalize`, `histo_rebin`, `histo_slice`, `histo_cdf`) & Unit Tests
+- [ ] **C5** Binary and JSON serialization & deserialization (`histo_serialize_*`, `histo_deserialize_*`) & roundtrip Integration Tests
+- [ ] **C6** End-to-end integration tests, sanitizer runs (ASan/UBSan), and cynical edge-case audit
+- [ ] **C7** Benchmarks & example applications
+
