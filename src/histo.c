@@ -776,6 +776,104 @@ histo_status_t histo_std_dev(const histo_t *h, double *out_std_dev) {
     return HISTO_OK;
 }
 
+histo_status_t histo_central_moment(const histo_t *h, uint32_t k, double *out_moment) {
+    if (!h || !out_moment) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+    if (k == 0) {
+        *out_moment = 1.0;
+        return HISTO_OK;
+    }
+    if (k == 1) {
+        *out_moment = 0.0;
+        return HISTO_OK;
+    }
+    if (k == 2) {
+        return histo_variance(h, out_moment);
+    }
+
+    double mean_val = 0.0;
+    histo_status_t st = histo_mean(h, &mean_val);
+    if (st != HISTO_OK) {
+        return st;
+    }
+
+    double sum_k = 0.0;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double w = h->bins[i];
+        if (w == 0.0) continue;
+        double center = 0.0;
+        histo_bin_center(h, i, &center);
+        double diff = center - mean_val;
+        sum_k += w * pow(diff, (double)k);
+    }
+
+    *out_moment = sum_k / h->total_weight;
+    return HISTO_OK;
+}
+
+histo_status_t histo_skewness(const histo_t *h, double *out_skewness) {
+    if (!h || !out_skewness) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    double var = 0.0;
+    histo_status_t st = histo_variance(h, &var);
+    if (st != HISTO_OK) {
+        return st;
+    }
+    if (var <= 0.0) {
+        return HISTO_ERR_DIV_BY_ZERO;
+    }
+
+    double m3 = 0.0;
+    st = histo_central_moment(h, 3, &m3);
+    if (st != HISTO_OK) {
+        return st;
+    }
+
+    *out_skewness = m3 / (var * sqrt(var));
+    return HISTO_OK;
+}
+
+histo_status_t histo_kurtosis(const histo_t *h, double *out_kurtosis) {
+    if (!h || !out_kurtosis) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    double var = 0.0;
+    histo_status_t st = histo_variance(h, &var);
+    if (st != HISTO_OK) {
+        return st;
+    }
+    if (var <= 0.0) {
+        return HISTO_ERR_DIV_BY_ZERO;
+    }
+
+    double m4 = 0.0;
+    st = histo_central_moment(h, 4, &m4);
+    if (st != HISTO_OK) {
+        return st;
+    }
+
+    *out_kurtosis = m4 / (var * var);
+    return HISTO_OK;
+}
+
+histo_status_t histo_excess_kurtosis(const histo_t *h, double *out_exc_kurtosis) {
+    if (!h || !out_exc_kurtosis) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    double kurt = 0.0;
+    histo_status_t st = histo_kurtosis(h, &kurt);
+    if (st != HISTO_OK) {
+        return st;
+    }
+    *out_exc_kurtosis = kurt - 3.0;
+    return HISTO_OK;
+}
+
 histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile) {
     if (!h || !out_quantile) {
         return HISTO_ERR_INVALID_ARG;

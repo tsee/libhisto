@@ -175,11 +175,95 @@ void test_get_stats(void) {
 }
 
 
+/* Test higher-order moments: central moments, skewness, kurtosis, excess kurtosis */
+void test_higher_order_moments(void) {
+    /* 1. Symmetric uniform distribution on [-10, 10] (10 bins) */
+    histo_t *h_sym = histo_create_uniform(10, -10.0, 10.0, HISTO_FLAG_NONE);
+    for (uint32_t i = 0; i < 10; ++i) {
+        histo_fill_bin(h_sym, i, 5.0); /* equal weights */
+    }
+
+    double m0 = 0.0, m1 = 0.0, m2 = 0.0, m3 = 0.0, m4 = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h_sym, 0, &m0));
+    TEST_ASSERT_EQUAL_DOUBLE(1.0, m0);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h_sym, 1, &m1));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, m1);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h_sym, 2, &m2));
+    double var = 0.0;
+    histo_variance(h_sym, &var);
+    TEST_ASSERT_EQUAL_DOUBLE(var, m2);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h_sym, 3, &m3));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, m3); /* symmetric -> M3 = 0 */
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h_sym, 4, &m4));
+    TEST_ASSERT_TRUE(m4 > 0.0);
+
+    double skew = 0.0, kurt = 0.0, exc_kurt = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_skewness(h_sym, &skew));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, skew);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_kurtosis(h_sym, &kurt));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_excess_kurtosis(h_sym, &exc_kurt));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, kurt - 3.0, exc_kurt);
+
+    histo_destroy(h_sym);
+
+    /* 2. Asymmetric (right-skewed) distribution */
+    histo_t *h_skew_right = histo_create_uniform(5, 0.0, 50.0, HISTO_FLAG_NONE);
+    /* Bins: [0,10): 50, [10,20): 25, [20,30): 10, [30,40): 5, [40,50): 1 */
+    histo_fill_bin(h_skew_right, 0, 50.0);
+    histo_fill_bin(h_skew_right, 1, 25.0);
+    histo_fill_bin(h_skew_right, 2, 10.0);
+    histo_fill_bin(h_skew_right, 3, 5.0);
+    histo_fill_bin(h_skew_right, 4, 1.0);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_skewness(h_skew_right, &skew));
+    TEST_ASSERT_TRUE(skew > 0.0); /* Right-tailed -> positive skewness */
+    histo_destroy(h_skew_right);
+
+    /* 3. Left-skewed distribution */
+    histo_t *h_skew_left = histo_create_uniform(5, 0.0, 50.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h_skew_left, 0, 1.0);
+    histo_fill_bin(h_skew_left, 1, 5.0);
+    histo_fill_bin(h_skew_left, 2, 10.0);
+    histo_fill_bin(h_skew_left, 3, 25.0);
+    histo_fill_bin(h_skew_left, 4, 50.0);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_skewness(h_skew_left, &skew));
+    TEST_ASSERT_TRUE(skew < 0.0); /* Left-tailed -> negative skewness */
+    histo_destroy(h_skew_left);
+
+    /* 4. Edge cases: Empty histogram and zero variance single spike */
+    histo_t *h_empty = histo_create_uniform(5, 0.0, 10.0, HISTO_FLAG_NONE);
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_central_moment(h_empty, 3, &m3));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_skewness(h_empty, &skew));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_kurtosis(h_empty, &kurt));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_excess_kurtosis(h_empty, &exc_kurt));
+    histo_destroy(h_empty);
+
+    histo_t *h_spike = histo_create_uniform(5, 0.0, 10.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h_spike, 2, 10.0); /* All weight in one bin -> variance = 0 */
+    TEST_ASSERT_EQUAL(HISTO_ERR_DIV_BY_ZERO, histo_skewness(h_spike, &skew));
+    TEST_ASSERT_EQUAL(HISTO_ERR_DIV_BY_ZERO, histo_kurtosis(h_spike, &kurt));
+    TEST_ASSERT_EQUAL(HISTO_ERR_DIV_BY_ZERO, histo_excess_kurtosis(h_spike, &exc_kurt));
+    histo_destroy(h_spike);
+
+    /* 5. NULL pointer robustness */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_central_moment(NULL, 2, &m2));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_skewness(NULL, &skew));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kurtosis(NULL, &kurt));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_excess_kurtosis(NULL, &exc_kurt));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_bin_queries);
     RUN_TEST(test_integral);
     RUN_TEST(test_moments);
+    RUN_TEST(test_higher_order_moments);
     RUN_TEST(test_quantile_and_median);
     RUN_TEST(test_get_stats);
     return UNITY_END();

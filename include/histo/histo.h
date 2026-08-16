@@ -305,6 +305,45 @@ histo_status_t histo_variance(const histo_t *h, double *out_variance);
 histo_status_t histo_std_dev(const histo_t *h, double *out_std_dev);
 
 /**
+ * @brief Computes the k-th central statistical moment M_k = sum(w_i * (x_i - mean)^k) / total_weight.
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[in]  k          Order of the central moment (k >= 0).
+ * @param[out] out_moment Output pointer for calculated moment.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
+ */
+histo_status_t histo_central_moment(const histo_t *h, uint32_t k, double *out_moment);
+
+/**
+ * @brief Computes the distribution skewness (gamma_1 = M_3 / M_2^(3/2)).
+ *
+ * @param[in]  h            Histogram handle.
+ * @param[out] out_skewness Output pointer for skewness.
+ * @return HISTO_OK on success, HISTO_ERR_DIV_BY_ZERO if variance is zero, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_skewness(const histo_t *h, double *out_skewness);
+
+/**
+ * @brief Computes the distribution kurtosis (beta_2 = M_4 / M_2^2).
+ *
+ * @param[in]  h            Histogram handle.
+ * @param[out] out_kurtosis Output pointer for kurtosis.
+ * @return HISTO_OK on success, HISTO_ERR_DIV_BY_ZERO if variance is zero, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_kurtosis(const histo_t *h, double *out_kurtosis);
+
+/**
+ * @brief Computes the distribution excess kurtosis (gamma_2 = beta_2 - 3.0).
+ *
+ * For a normal distribution, excess kurtosis is 0.
+ *
+ * @param[in]  h                Histogram handle.
+ * @param[out] out_exc_kurtosis Output pointer for excess kurtosis.
+ * @return HISTO_OK on success, HISTO_ERR_DIV_BY_ZERO if variance is zero, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_excess_kurtosis(const histo_t *h, double *out_exc_kurtosis);
+
+/**
  * @brief Computes the quantile coordinate for probability p in [0.0, 1.0].
  *
  * Uses continuous piecewise linear inverse CDF interpolation.
