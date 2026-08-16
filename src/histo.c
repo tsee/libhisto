@@ -1301,7 +1301,7 @@ histo_status_t histo_get_stats(const histo_t *h, histo_stats_t *out_stats) {
 }
 
 /* ========================================================================= */
-/* Arithmetic & Transformations                                              */
+/* Two-Histogram Comparison & Distance Metrics                              */
 /* ========================================================================= */
 
 static bool histo_are_compatible(const histo_t *a, const histo_t *b) {
@@ -1316,6 +1316,134 @@ static bool histo_are_compatible(const histo_t *a, const histo_t *b) {
     }
     return true;
 }
+
+histo_status_t histo_cmp_chi2(const histo_t *h1, const histo_t *h2, double *out_chi2, uint32_t *out_ndf) {
+    if (!h1 || !h2 || !out_chi2 || !out_ndf) return HISTO_ERR_INVALID_ARG;
+    if (!histo_are_compatible(h1, h2)) return HISTO_ERR_INCOMPATIBLE;
+    if (h1->total_weight <= 0.0 || h2->total_weight <= 0.0) return HISTO_ERR_EMPTY;
+
+    double chi2_sum = 0.0;
+    uint32_t ndf = 0;
+
+    for (uint32_t i = 0; i < h1->nbins; ++i) {
+        double w1 = h1->bins[i];
+        double w2 = h2->bins[i];
+        double err1_sq = (h1->sum_w2 != NULL) ? h1->sum_w2[i] : (w1 > 0.0 ? w1 : 0.0);
+        double err2_sq = (h2->sum_w2 != NULL) ? h2->sum_w2[i] : (w2 > 0.0 ? w2 : 0.0);
+        double var_tot = err1_sq + err2_sq;
+        if (var_tot > 0.0) {
+            double diff = w1 - w2;
+            chi2_sum += (diff * diff) / var_tot;
+            ndf++;
+        }
+    }
+
+    *out_chi2 = chi2_sum;
+    *out_ndf = ndf;
+    return HISTO_OK;
+}
+
+histo_status_t histo_cmp_ks(const histo_t *h1, const histo_t *h2, double *out_ks_stat) {
+    if (!h1 || !h2 || !out_ks_stat) return HISTO_ERR_INVALID_ARG;
+    if (!histo_are_compatible(h1, h2)) return HISTO_ERR_INCOMPATIBLE;
+    if (h1->total_weight <= 0.0 || h2->total_weight <= 0.0) return HISTO_ERR_EMPTY;
+
+    double s1 = 1.0 / h1->total_weight;
+    double s2 = 1.0 / h2->total_weight;
+    double cdf1 = 0.0, cdf2 = 0.0;
+    double max_diff = 0.0;
+
+    for (uint32_t i = 0; i < h1->nbins; ++i) {
+        cdf1 += h1->bins[i] * s1;
+        cdf2 += h2->bins[i] * s2;
+        double diff = fabs(cdf1 - cdf2);
+        if (diff > max_diff) {
+            max_diff = diff;
+        }
+    }
+
+    *out_ks_stat = max_diff;
+    return HISTO_OK;
+}
+
+histo_status_t histo_cmp_wasserstein_1d(const histo_t *h1, const histo_t *h2, double *out_distance) {
+    if (!h1 || !h2 || !out_distance) return HISTO_ERR_INVALID_ARG;
+    if (!histo_are_compatible(h1, h2)) return HISTO_ERR_INCOMPATIBLE;
+    if (h1->total_weight <= 0.0 || h2->total_weight <= 0.0) return HISTO_ERR_EMPTY;
+
+    double s1 = 1.0 / h1->total_weight;
+    double s2 = 1.0 / h2->total_weight;
+    double cdf1 = 0.0, cdf2 = 0.0;
+    double dist = 0.0;
+
+    for (uint32_t i = 0; i < h1->nbins; ++i) {
+        cdf1 += h1->bins[i] * s1;
+        cdf2 += h2->bins[i] * s2;
+        double dx = 0.0;
+        if (h1->bin_type == HISTO_BIN_UNIFORM) {
+            dx = h1->binsize;
+        } else {
+            dx = h1->bin_edges[i + 1] - h1->bin_edges[i];
+        }
+        dist += fabs(cdf1 - cdf2) * dx;
+    }
+
+    *out_distance = dist;
+    return HISTO_OK;
+}
+
+histo_status_t histo_cmp_kl_divergence(const histo_t *h1, const histo_t *h2, double *out_divergence) {
+    if (!h1 || !h2 || !out_divergence) return HISTO_ERR_INVALID_ARG;
+    if (!histo_are_compatible(h1, h2)) return HISTO_ERR_INCOMPATIBLE;
+    if (h1->total_weight <= 0.0 || h2->total_weight <= 0.0) return HISTO_ERR_EMPTY;
+
+    double s1 = 1.0 / h1->total_weight;
+    double s2 = 1.0 / h2->total_weight;
+    const double eps = 1e-12;
+    double div = 0.0;
+
+    for (uint32_t i = 0; i < h1->nbins; ++i) {
+        double p = h1->bins[i] * s1;
+        if (p <= 0.0) continue;
+        double q = h2->bins[i] * s2;
+        if (q <= 0.0) q = eps;
+        div += p * log(p / q);
+    }
+
+    *out_divergence = (div >= 0.0) ? div : 0.0;
+    return HISTO_OK;
+}
+
+histo_status_t histo_cmp_bhattacharyya(const histo_t *h1, const histo_t *h2, double *out_distance) {
+    if (!h1 || !h2 || !out_distance) return HISTO_ERR_INVALID_ARG;
+    if (!histo_are_compatible(h1, h2)) return HISTO_ERR_INCOMPATIBLE;
+    if (h1->total_weight <= 0.0 || h2->total_weight <= 0.0) return HISTO_ERR_EMPTY;
+
+    double s1 = 1.0 / h1->total_weight;
+    double s2 = 1.0 / h2->total_weight;
+    double bc = 0.0;
+
+    for (uint32_t i = 0; i < h1->nbins; ++i) {
+        double p = h1->bins[i] * s1;
+        double q = h2->bins[i] * s2;
+        if (p > 0.0 && q > 0.0) {
+            bc += sqrt(p * q);
+        }
+    }
+
+    if (bc <= 0.0) {
+        *out_distance = INFINITY;
+    } else if (bc >= 1.0) {
+        *out_distance = 0.0;
+    } else {
+        *out_distance = -log(bc);
+    }
+    return HISTO_OK;
+}
+
+/* ========================================================================= */
+/* Arithmetic & Transformations                                              */
+/* ========================================================================= */
 
 histo_status_t histo_add(histo_t *target, const histo_t *other) {
     if (!target || !other) {

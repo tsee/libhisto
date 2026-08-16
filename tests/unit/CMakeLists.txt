@@ -47,3 +47,10 @@ add_executable(test_audit_boundaries
 target_link_libraries(test_audit_boundaries PRIVATE histo unity)
 add_test(NAME test_audit_boundaries COMMAND test_audit_boundaries)
 
+# Unit Test: Two-Histogram Comparison & Distance Metrics
+add_executable(test_comparison
+    test_comparison.c
+)
+target_link_libraries(test_comparison PRIVATE histo unity)
+add_test(NAME test_comparison COMMAND test_comparison)
+

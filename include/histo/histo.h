@@ -465,6 +465,63 @@ histo_status_t histo_integral(const histo_t *h, uint32_t start_bin, uint32_t end
 histo_status_t histo_get_stats(const histo_t *h, histo_stats_t *out_stats);
 
 /* ========================================================================= */
+/* Two-Histogram Comparison & Distance Metrics                              */
+/* ========================================================================= */
+
+/**
+ * @brief Computes the Chi-Square (chi^2) test of compatibility between two histograms.
+ *
+ * @param[in]  h1       First histogram.
+ * @param[in]  h2       Second histogram (must have identical binning geometry).
+ * @param[out] out_chi2 Output pointer for calculated chi-square sum.
+ * @param[out] out_ndf  Output pointer for degrees of freedom (number of non-empty bins).
+ * @return HISTO_OK on success, HISTO_ERR_INCOMPATIBLE if geometries mismatch, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_cmp_chi2(const histo_t *h1, const histo_t *h2, double *out_chi2, uint32_t *out_ndf);
+
+/**
+ * @brief Computes the Kolmogorov-Smirnov (KS) test statistic D between two histograms.
+ *
+ * Returns the maximum vertical distance between the two normalized empirical CDFs.
+ *
+ * @param[in]  h1          First histogram.
+ * @param[in]  h2          Second histogram.
+ * @param[out] out_ks_stat Output pointer for calculated KS statistic D in [0.0, 1.0].
+ * @return HISTO_OK on success, HISTO_ERR_INCOMPATIBLE if geometries mismatch, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_cmp_ks(const histo_t *h1, const histo_t *h2, double *out_ks_stat);
+
+/**
+ * @brief Computes the 1D Wasserstein distance (Earth Mover's Distance) between two histograms.
+ *
+ * @param[in]  h1           First histogram.
+ * @param[in]  h2           Second histogram.
+ * @param[out] out_distance Output pointer for 1D Wasserstein distance.
+ * @return HISTO_OK on success, HISTO_ERR_INCOMPATIBLE if geometries mismatch, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_cmp_wasserstein_1d(const histo_t *h1, const histo_t *h2, double *out_distance);
+
+/**
+ * @brief Computes the Kullback-Leibler (KL) divergence D_KL(h1 || h2).
+ *
+ * @param[in]  h1             First histogram (reference distribution P).
+ * @param[in]  h2             Second histogram (approximate distribution Q).
+ * @param[out] out_divergence Output pointer for calculated KL divergence in nats.
+ * @return HISTO_OK on success, HISTO_ERR_INCOMPATIBLE if geometries mismatch, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_cmp_kl_divergence(const histo_t *h1, const histo_t *h2, double *out_divergence);
+
+/**
+ * @brief Computes the Bhattacharyya distance -ln(sum(sqrt(P_i * Q_i))) between two histograms.
+ *
+ * @param[in]  h1           First histogram.
+ * @param[in]  h2           Second histogram.
+ * @param[out] out_distance Output pointer for Bhattacharyya distance (>= 0.0).
+ * @return HISTO_OK on success, HISTO_ERR_INCOMPATIBLE if geometries mismatch, or HISTO_ERR_EMPTY.
+ */
+histo_status_t histo_cmp_bhattacharyya(const histo_t *h1, const histo_t *h2, double *out_distance);
+
+/* ========================================================================= */
 /* Arithmetic Operations & Transformations                                   */
 /* ========================================================================= */
 
