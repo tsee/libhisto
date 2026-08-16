@@ -11,7 +11,11 @@ This directory contains design artifacts, high-level goals, and documentation fo
 - [Design: Core Data Structures & Memory Layout](design_data_structures.md)
 - [Design: Public C API Specification](api_specification.md)
 - [Design: Numerical Behavior, Precision & Error Handling](numerical_behavior.md)
+- [Design: Serialization & Wire Formats](serialization_format.md)
+- [Design: Statistical & Analytical Formulae](statistical_formulae.md)
 - [Agent Guidelines & Operational Rules](../AGENTS.md)
+
+
 
 
 
