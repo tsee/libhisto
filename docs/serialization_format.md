@@ -4,16 +4,18 @@ This document defines the canonical binary wire format and JSON schema for `libh
 
 ---
 
-## 1. Canonical Binary Wire Format (`libhisto` Binary v1)
+## 1. Canonical Binary Wire Format (`libhisto` Binary v1 & v2)
 
 All multi-byte numeric fields are encoded in **Canonical Little-Endian** byte order. Machines running in Big-Endian mode perform byte-swapping during serialization and deserialization.
+
+The current library serialization version is **Version 2**. 
 
 ### 1.1 Header Structure (256 Bytes Fixed, 8-Byte Aligned)
 
 | Offset (Bytes) | Field Name | Data Type | Description |
 | :--- | :--- | :--- | :--- |
 | `0x00 - 0x07` | `magic` | `uint8_t[8]` | Unambiguous signature: `\x89 L H I S T \n \0` (`0x89, 0x4C, 0x48, 0x49, 0x53, 0x54, 0x0A, 0x00`) |
-| `0x08 - 0x09` | `version` | `uint16_t` | File format version (`0x0001`) |
+| `0x08 - 0x09` | `version` | `uint16_t` | File format version (`0x0001` for v1, `0x0002` for v2) |
 | `0x0A - 0x0B` | `header_size` | `uint16_t` | Header byte length (`256` / `0x0100`) |
 | `0x0C - 0x0F` | `flags` | `uint32_t` | Bitflags: `0x01`=Variable Bins, `0x02`=Has $\sum w^2$, `0x04`=Has Exact Moments |
 | `0x10 - 0x13` | `nbins` | `uint32_t` | Number of in-range bins ($N \ge 1$) |
@@ -34,7 +36,7 @@ All multi-byte numeric fields are encoded in **Canonical Little-Endian** byte or
 | `0x80 - 0x87` | `stats_M2` | `double` (LE) | Exact online sum of squared differences |
 | `0x88 - 0x8F` | `stats_min` | `double` (LE) | Observed minimum sample coordinate |
 | `0x90 - 0x97` | `stats_max` | `double` (LE) | Observed maximum sample coordinate |
-| `0x98 - 0xFF` | `reserved_ext`| `uint8_t[104]`| Reserved extension area (zero-padded) |
+| `0x98 - 0xFF` | `reserved_ext`| `uint8_t[104]`| Reserved extension area (zero-padded). In v2, used for checksums / metadata in the future. |
 
 ### 1.2 Payload Arrays (Contiguous doubles, Little-Endian)
 
@@ -51,6 +53,13 @@ Payloads begin immediately at byte offset `header_size` (`0x0100` / 256):
 - Total required binary buffer size:
   $$\text{Size} = 256 + N \times 8 + (\text{is\_var} ? (N+1) \times 8 : 0) + (\text{has\_sumw2} ? N \times 8 : 0)$$
 - **Integer Overflow Protection**: Before buffer allocation, verify `nbins <= HISTO_MAX_NBINS` and perform safe multiplications checking against `SIZE_MAX`.
+
+### 1.4 Version Migration and Backward Compatibility
+
+`libhisto` automatically migrates older format versions when deserializing. The migration logic implements a chainable pipeline ($V_i \to V_{i+1} \dots \to V_{current}$).
+
+- **V1 to V2 Migration**: A v1 blob is structurally upgraded to v2 by setting the version field to 2 and explicitly zero-padding the `reserved_ext` area (`0x98 - 0xFF`).
+- Explicit migration is available via the public API `histo_migrate_binary(const void *in_buf, size_t in_size, void **out_buf, size_t *out_size)`.
 
 ---
 

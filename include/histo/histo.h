@@ -483,6 +483,20 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
  */
 void histo_free_buffer(void *buf);
 
+/**
+ * @brief Migrates a binary serialized histogram to the current format version.
+ *
+ * If the input buffer is already at the current format version, it allocates
+ * an exact copy. The returned buffer must be freed with histo_free_buffer().
+ *
+ * @param[in]  in_buf   Pointer to serialized binary buffer.
+ * @param[in]  in_size  Byte length of input buffer.
+ * @param[out] out_buf  Pointer receiving address of newly allocated migrated buffer.
+ * @param[out] out_size Pointer receiving byte length of migrated buffer.
+ * @return HISTO_OK on success, or appropriate error code.
+ */
+histo_status_t histo_migrate_binary(const void *in_buf, size_t in_size, void **out_buf, size_t *out_size);
+
 #ifdef __cplusplus
 }
 #endif

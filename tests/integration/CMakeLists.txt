@@ -20,3 +20,7 @@ find_package(Threads REQUIRED)
 add_executable(test_thread_safety test_thread_safety.c)
 target_link_libraries(test_thread_safety PRIVATE histo unity Threads::Threads)
 add_test(NAME test_thread_safety COMMAND test_thread_safety)
+
+add_executable(test_migration test_migration.c)
+target_link_libraries(test_migration PRIVATE histo)
+add_test(NAME test_migration COMMAND test_migration)

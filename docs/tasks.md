@@ -39,5 +39,6 @@
 - [x] **C7** Benchmarks & example applications
 - [x] **C8** Multithreaded concurrency tests & dynamic analysis tooling (ASan, TSan, MSan, Valgrind Memcheck)
 - [x] **C9** Doxygen API docstrings, User Manual (`docs/manual.md`), and GitHub `README.md`
+- [x] **C10** Format migration and backward compatibility logic (`histo_migrate_binary`) & Tests
 
 

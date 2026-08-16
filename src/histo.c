@@ -656,6 +656,20 @@ histo_status_t histo_bin_error(const histo_t *h, uint32_t bin_index, double *out
     return HISTO_OK;
 }
 
+histo_status_t histo_bin_sum_w2(const histo_t *h, uint32_t bin_index, double *out_sum_w2) {
+    if (!h || !out_sum_w2) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (bin_index >= h->nbins) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+    if (!h->sum_w2) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    *out_sum_w2 = h->sum_w2[bin_index];
+    return HISTO_OK;
+}
+
 double histo_underflow(const histo_t *h) {
     return h ? h->underflow_weight : 0.0;
 }

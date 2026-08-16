@@ -4,8 +4,12 @@
 
 #define HISTO_MAGIC_LEN 8
 static const uint8_t HISTO_MAGIC[HISTO_MAGIC_LEN] = {0x89, 'L', 'H', 'I', 'S', 'T', 0x0A, 0x00};
-#define HISTO_FORMAT_VERSION 1
+#define HISTO_FORMAT_V1 1
+#define HISTO_FORMAT_V2 2
+#define HISTO_FORMAT_VERSION HISTO_FORMAT_V2
 #define HISTO_HEADER_SIZE 256
+
+typedef histo_status_t (*histo_migration_step_fn)(const uint8_t *in_buf, size_t in_size, uint8_t **out_buf, size_t *out_size);
 
 /* ========================================================================= */
 /* Binary Serialization & Deserialization                                    */
@@ -184,6 +188,92 @@ histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *
     return HISTO_OK;
 }
 
+static histo_status_t histo_migrate_v1_to_v2(const uint8_t *in_buf, size_t in_size, uint8_t **out_buf, size_t *out_size) {
+    if (in_size < HISTO_HEADER_SIZE) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+    /* V2 is same structure as V1 but sets a v2 flag or metadata. Let's just copy and set version to 2. */
+    uint8_t *buf = malloc(in_size);
+    if (!buf) {
+        return HISTO_ERR_NOMEM;
+    }
+    memcpy(buf, in_buf, in_size);
+    uint16_t version_le = histo_htole16(HISTO_FORMAT_V2);
+    memcpy(buf + 0x08, &version_le, sizeof(uint16_t));
+    /* V2 uses 0x98 for checksum / metadata. Zero it out to be safe. */
+    memset(buf + 0x98, 0, 104);
+
+    *out_buf = buf;
+    *out_size = in_size;
+    return HISTO_OK;
+}
+
+histo_status_t histo_migrate_binary(const void *in_buf, size_t in_size, void **out_buf, size_t *out_size) {
+    if (!in_buf || !out_buf || !out_size) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (in_size < HISTO_HEADER_SIZE) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    const uint8_t *p = (const uint8_t *)in_buf;
+    if (memcmp(p, HISTO_MAGIC, HISTO_MAGIC_LEN) != 0) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    uint16_t version_raw;
+    memcpy(&version_raw, p + 0x08, sizeof(uint16_t));
+    uint16_t version = histo_le16toh(version_raw);
+
+    if (version > HISTO_FORMAT_VERSION || version == 0) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    uint8_t *current_buf = NULL;
+    size_t current_size = 0;
+
+    if (version == HISTO_FORMAT_VERSION) {
+        current_buf = malloc(in_size);
+        if (!current_buf) return HISTO_ERR_NOMEM;
+        memcpy(current_buf, in_buf, in_size);
+        current_size = in_size;
+    } else {
+        const uint8_t *iter_buf = p;
+        size_t iter_size = in_size;
+        uint16_t curr_v = version;
+
+        while (curr_v < HISTO_FORMAT_VERSION) {
+            uint8_t *next_buf = NULL;
+            size_t next_size = 0;
+            histo_status_t st = HISTO_OK;
+
+            if (curr_v == HISTO_FORMAT_V1) {
+                st = histo_migrate_v1_to_v2(iter_buf, iter_size, &next_buf, &next_size);
+            } else {
+                st = HISTO_ERR_DESERIALIZATION; /* Unknown migration step */
+            }
+
+            if (iter_buf != p) {
+                free((void*)iter_buf);
+            }
+
+            if (st != HISTO_OK) {
+                return st;
+            }
+
+            iter_buf = next_buf;
+            iter_size = next_size;
+            curr_v++;
+        }
+        current_buf = (uint8_t *)iter_buf;
+        current_size = iter_size;
+    }
+
+    *out_buf = current_buf;
+    *out_size = current_size;
+    return HISTO_OK;
+}
+
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h) {
     if (!buf || !out_h) {
         return HISTO_ERR_INVALID_ARG;
@@ -199,11 +289,23 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
         return HISTO_ERR_DESERIALIZATION;
     }
 
-    /* 2. Version check */
+    /* 2. Version check & Migration */
     uint16_t version_raw;
     memcpy(&version_raw, p + 0x08, sizeof(uint16_t));
     uint16_t version = histo_le16toh(version_raw);
-    if (version != HISTO_FORMAT_VERSION) {
+    
+    void *migrated_buf = NULL;
+    size_t migrated_size = 0;
+    
+    if (version < HISTO_FORMAT_VERSION) {
+        histo_status_t st = histo_migrate_binary(buf, size, &migrated_buf, &migrated_size);
+        if (st != HISTO_OK) {
+            return st;
+        }
+        p = (const uint8_t *)migrated_buf;
+        size = migrated_size;
+        version = HISTO_FORMAT_VERSION;
+    } else if (version > HISTO_FORMAT_VERSION) {
         return HISTO_ERR_DESERIALIZATION;
     }
 
@@ -212,6 +314,7 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
     memcpy(&header_size_raw, p + 0x0A, sizeof(uint16_t));
     uint16_t header_size = histo_le16toh(header_size_raw);
     if (header_size < HISTO_HEADER_SIZE || (size_t)header_size > size) {
+        if (migrated_buf) free(migrated_buf);
         return HISTO_ERR_DESERIALIZATION;
     }
 
@@ -223,6 +326,7 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
     uint32_t nbins = histo_le32toh(nbins_raw);
 
     if (nbins == 0 || nbins > HISTO_MAX_NBINS) {
+        if (migrated_buf) free(migrated_buf);
         return HISTO_ERR_DESERIALIZATION;
     }
 
@@ -242,6 +346,7 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
 
 
     if (size < (size_t)header_size + payload_bytes) {
+        if (migrated_buf) free(migrated_buf);
         return HISTO_ERR_DESERIALIZATION;
     }
 
@@ -253,6 +358,7 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
     double max_val = histo_letoh_d(max_raw);
 
     if (!isfinite(min_val) || !isfinite(max_val) || min_val >= max_val) {
+        if (migrated_buf) free(migrated_buf);
         return HISTO_ERR_DESERIALIZATION;
     }
 
@@ -265,7 +371,10 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
 
     if (is_variable) {
         double *edges = (double *)malloc((nbins + 1) * sizeof(double));
-        if (!edges) return HISTO_ERR_NOMEM;
+        if (!edges) {
+            if (migrated_buf) free(migrated_buf);
+            return HISTO_ERR_NOMEM;
+        }
 
         for (uint32_t i = 0; i <= nbins; ++i) {
             double edge_raw;
@@ -281,6 +390,7 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
     }
 
     if (!h) {
+        if (migrated_buf) free(migrated_buf);
         return HISTO_ERR_DESERIALIZATION;
     }
 
@@ -320,6 +430,10 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
     memcpy(&d_val, p + 0x80, sizeof(double)); h->stats_M2 = histo_letoh_d(d_val);
     memcpy(&d_val, p + 0x88, sizeof(double)); h->stats_min = histo_letoh_d(d_val);
     memcpy(&d_val, p + 0x90, sizeof(double)); h->stats_max = histo_letoh_d(d_val);
+
+    if (migrated_buf) {
+        free(migrated_buf);
+    }
 
     *out_h = h;
     return HISTO_OK;
