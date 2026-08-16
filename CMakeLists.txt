@@ -18,9 +18,33 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(LIBHISTO_BUILD_TESTS "Build test suite" ON)
 option(LIBHISTO_BUILD_BENCHMARKS "Build benchmark suite" ON)
 option(LIBHISTO_BUILD_EXAMPLES "Build example programs" ON)
-option(LIBHISTO_ENABLE_SANITIZERS "Enable ASan and UBSan" OFF)
+option(LIBHISTO_ENABLE_SANITIZERS "Enable ASan and UBSan (Alias for LIBHISTO_ENABLE_ASAN)" OFF)
+option(LIBHISTO_ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(LIBHISTO_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(LIBHISTO_ENABLE_MSAN "Enable MemorySanitizer (Clang only)" OFF)
 option(LIBHISTO_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(LIBHISTO_BUILD_DOCS "Build Doxygen documentation" OFF)
+
+# Alias handling
+if(LIBHISTO_ENABLE_SANITIZERS)
+    set(LIBHISTO_ENABLE_ASAN ON)
+endif()
+
+# Exclusivity check
+set(_sanitizer_count 0)
+if(LIBHISTO_ENABLE_ASAN)
+    math(EXPR _sanitizer_count "${_sanitizer_count} + 1")
+endif()
+if(LIBHISTO_ENABLE_TSAN)
+    math(EXPR _sanitizer_count "${_sanitizer_count} + 1")
+endif()
+if(LIBHISTO_ENABLE_MSAN)
+    math(EXPR _sanitizer_count "${_sanitizer_count} + 1")
+endif()
+
+if(_sanitizer_count GREATER 1)
+    message(FATAL_ERROR "Only one sanitizer (ASAN, TSAN, or MSAN) can be enabled at a time.")
+endif()
 
 # Standard Doxygen integration
 find_package(Doxygen)
@@ -43,9 +67,26 @@ else()
 endif()
 
 # Sanitizers configuration
-if(LIBHISTO_ENABLE_SANITIZERS AND NOT MSVC)
-    target_compile_options(histo_compiler_flags INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(histo_compiler_flags INTERFACE -fsanitize=address,undefined)
+if(NOT MSVC)
+    if(LIBHISTO_ENABLE_ASAN)
+        target_compile_options(histo_compiler_flags INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(histo_compiler_flags INTERFACE -fsanitize=address,undefined)
+    elseif(LIBHISTO_ENABLE_TSAN)
+        target_compile_options(histo_compiler_flags INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
+        target_link_options(histo_compiler_flags INTERFACE -fsanitize=thread)
+    elseif(LIBHISTO_ENABLE_MSAN)
+        target_compile_options(histo_compiler_flags INTERFACE -fsanitize=memory -fno-omit-frame-pointer)
+        target_link_options(histo_compiler_flags INTERFACE -fsanitize=memory)
+    endif()
+endif()
+
+# Valgrind integration
+find_program(VALGRIND_EXECUTABLE valgrind)
+if(VALGRIND_EXECUTABLE)
+    set(MEMORYCHECK_COMMAND ${VALGRIND_EXECUTABLE})
+    set(MEMORYCHECK_COMMAND_OPTIONS "--leak-check=full --error-exitcode=1")
+    set(CTEST_MEMORYCHECK_COMMAND ${VALGRIND_EXECUTABLE})
+    set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "--leak-check=full --error-exitcode=1")
 endif()
 
 # Core library target
@@ -53,8 +94,15 @@ add_subdirectory(src)
 
 # Testing
 if(LIBHISTO_BUILD_TESTS)
+    include(CTest)
     enable_testing()
     add_subdirectory(tests)
+    if(VALGRIND_EXECUTABLE)
+        add_custom_target(memcheck
+            COMMAND ${CMAKE_CTEST_COMMAND} -T memcheck --output-on-failure
+            COMMENT "Running tests under Valgrind"
+        )
+    endif()
 endif()
 
 # Benchmarks

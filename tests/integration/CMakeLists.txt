@@ -15,3 +15,8 @@ add_executable(test_audit_security
 )
 target_link_libraries(test_audit_security PRIVATE histo unity)
 add_test(NAME test_audit_security COMMAND test_audit_security)
+
+find_package(Threads REQUIRED)
+add_executable(test_thread_safety test_thread_safety.c)
+target_link_libraries(test_thread_safety PRIVATE histo unity Threads::Threads)
+add_test(NAME test_thread_safety COMMAND test_thread_safety)

@@ -16,7 +16,7 @@ lib/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
+!/Makefile
 CTestTestfile.cmake
 compile_commands.json
 

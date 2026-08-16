@@ -1,8 +1,10 @@
 # libhisto User Manual & Architecture Reference {#mainpage}
 
-## 1. Overview & Architectural Design
+Welcome to **libhisto**! This guide will help you understand the core concepts, start building applications quickly, and dive into the advanced numerical algorithms that power the library.
 
-`libhisto` is a high-performance, portable, memory-safe 1D histogramming library implemented in ISO C99. It is designed for high-throughput scientific analysis, physical simulations, telemetry ingestion, and general statistical computing.
+## 1. Introduction
+
+`libhisto` is a high-performance, portable, memory-safe 1D histogramming library implemented in ISO C99. Whether you're working on high-throughput scientific analysis, physical simulations, telemetry ingestion, or general statistical computing, `libhisto` is built to provide reliable, exact results at incredible speeds.
 
 ### Key Architectural Pillars
 - **Zero-Allocation Ingestion**: Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`) perform zero heap allocations, achieving >30 Million fills/second.
@@ -12,27 +14,55 @@
 
 ---
 
-## 2. Quickstart & Usage Guide
+## 2. Core Concepts: Binning Visualized
+
+Understanding how `libhisto` organizes data is crucial. We support two primary binning strategies:
+
+### Uniform Binning
+Uniform bins divide a range into equally sized intervals. This allows for blazing-fast O(1) mathematical lookups.
+
+```text
+       [ Bin 0 )   [ Bin 1 )   [ Bin 2 )   [ Bin 3 )
+     |-----------|-----------|-----------|-----------|
+   0.0          2.5         5.0         7.5        10.0
+```
+
+### Variable Binning
+Variable bins allow you to define custom boundaries. This is useful when you need higher resolution in specific regions. Lookups use an optimized O(log N) binary search.
+
+```text
+       [ B0 ) [B1)       [   Bin 2   )  [  Bin 3  )
+     |------|----|-------------------|------------|
+   0.0     3.0  5.0                15.0         20.0
+```
+
+---
+
+## 3. Quickstart Walkthrough
+
+Here is a comprehensive 5-minute quickstart demonstrating the lifecycle of a histogram, from creation to teardown.
 
 ```c
 #include <stdio.h>
 #include <histo/histo.h>
 
 int main(void) {
-    // 1. Create a uniform histogram: 100 bins from 0.0 to 100.0 with sum_w2 tracking
-    histo_t *h = histo_create_uniform(100, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+    // 1. Create a uniform histogram: 100 bins from 0.0 to 100.0
+    // We enable sum_w2 tracking for statistical errors and exact online Welford moments.
+    histo_t *h = histo_create_uniform(100, 0.0, 100.0, 
+                                      HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
     if (!h) {
         fprintf(stderr, "Failed to create histogram\n");
         return 1;
     }
 
-    // 2. Ingest samples (unit weight and weighted)
+    // 2. Ingest individual samples (unit weight and weighted)
     histo_fill(h, 25.4);
-    histo_fill_w(h, 50.0, 2.5);
+    histo_fill_w(h, 50.0, 2.5); // Fill value 50.0 with weight 2.5
 
     // 3. Batch ingestion from array
     double samples[3] = {12.0, 45.0, 88.0};
-    histo_fill_n(h, 3, samples, NULL);
+    histo_fill_n(h, 3, samples, NULL); // NULL weights implies unit weights
 
     // 4. Query statistics
     double mean = 0.0, std_dev = 0.0, median = 0.0;
@@ -42,17 +72,91 @@ int main(void) {
 
     printf("Mean: %.3f, Std Dev: %.3f, Median: %.3f\n", mean, std_dev, median);
 
-    // 5. Clean teardown
+    // 5. Binary serialization roundtrip
+    void *buffer = NULL;
+    size_t size = 0;
+    histo_serialize_binary(h, &buffer, &size);
+    histo_t *h_loaded = histo_deserialize_binary(buffer, size);
+    
+    // 6. Clean teardown
+    histo_free_buffer(buffer);
+    histo_destroy(h_loaded);
     histo_destroy(h);
+
     return 0;
 }
 ```
 
 ---
 
-## 3. Numerical Algorithms & Statistical Formulations
+## 4. Common Recipes
 
-### 3.1 Boundary-Guarded Uniform Bin Lookup (O(1))
+### 4.1 Weighted Monte Carlo Events
+When processing Monte Carlo simulations, events often come with statistical weights. `libhisto` tracks the squared weights (`sum_w2`) to accurately report statistical errors.
+
+```c
+// Creating histogram with error tracking enabled
+histo_t *mc_hist = histo_create_uniform(50, -5.0, 5.0, HISTO_FLAG_TRACK_SUMW2);
+
+// Simulating loop over events
+for (size_t i = 0; i < num_events; ++i) {
+    double value = get_event_value(i);
+    double weight = get_event_weight(i);
+    histo_fill_w(mc_hist, value, weight);
+}
+
+// Extracting bin 10 content and statistical error
+double content = 0.0, error = 0.0;
+histo_bin_content(mc_hist, 10, &content);
+histo_bin_error(mc_hist, 10, &error);
+printf("Bin 10: %.3f +/- %.3f\n", content, error);
+```
+
+### 4.2 High-Throughput Batch Array Ingestion
+For maximum performance, ingest data in batches rather than calling `histo_fill` individually.
+
+```c
+double values[1000];
+double weights[1000];
+// ... populate values and weights ...
+
+// Ingest 1000 weighted samples simultaneously
+histo_fill_n(h, 1000, values, weights);
+```
+
+### 4.3 Binary Save and Load
+You can serialize histograms to disk for later analysis. `libhisto` guarantees cross-platform compatibility.
+
+```c
+// Save to file
+void *buffer = NULL;
+size_t size = 0;
+histo_serialize_binary(h, &buffer, &size);
+
+FILE *f = fopen("histogram.dat", "wb");
+fwrite(buffer, 1, size, f);
+fclose(f);
+histo_free_buffer(buffer);
+
+// Load from file
+f = fopen("histogram.dat", "rb");
+fseek(f, 0, SEEK_END);
+size_t file_size = ftell(f);
+fseek(f, 0, SEEK_SET);
+
+void *load_buf = malloc(file_size);
+fread(load_buf, 1, file_size, f);
+fclose(f);
+
+histo_t *loaded_hist = histo_deserialize_binary(load_buf, file_size);
+free(load_buf);
+```
+
+---
+
+## 5. Numerical Algorithms & Statistical Formulations
+
+### 5.1 Boundary-Guarded Uniform Bin Lookup (O(1))
 For uniform binning over [min, max), naive floating-point division `(x - min) / width` is susceptible to floating-point truncation errors at exact bin boundaries. `libhisto` computes the provisional index via reciprocal multiplication:
 \f[
 i_{\text{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
@@ -62,12 +166,12 @@ Followed by dual neighbor verification against machine-precision boundary limits
 - **Lower Guard**: If \f$ x < x_{\min} + i_{\text{prov}} \Delta \f$, \f$ i = i_{\text{prov}} - 1 \f$.
 If \f$ \Delta^{-1} \f$ overflows to infinity on subnormal ranges, lookup falls back cleanly to division.
 
-### 3.2 Variable-Width Bisection Binary Search (O(log N))
+### 5.2 Variable-Width Bisection Binary Search (O(log N))
 For variable binning defined by monotonic edges \f$ e_0 < e_1 < \dots < e_N \f$, bin lookup uses bisection search on \f$ [0, N) \f$:
 - Invariant: \f$ x \in [e_i, e_{i+1}) \f$ with exact matching at \f$ e_0 = x_{\min} \f$ and \f$ e_N = x_{\max} \f$.
 - Guaranteed \f$ O(\log N) \f$ time and \f$ O(1) \f$ auxiliary space.
 
-### 3.3 Online Weighted Welford Statistics (O(1))
+### 5.3 Online Weighted Welford Statistics (O(1))
 When `HISTO_FLAG_EXACT_MOMENTS` is enabled, running moments are accumulated without storing historical samples:
 \f[
 W_{\text{new}} = W_{\text{old}} + w_i
@@ -83,7 +187,7 @@ M_{2, \text{new}} = M_{2, \text{old}} + w_i \delta (x_i - \mu_{\text{new}})
 \f]
 Variance is extracted as \f$ \sigma^2 = M_2 / W \f$. The algorithm natively supports negative event weights and avoids variance underflow via \f$ M_2 \ge 0 \f$ clamping.
 
-### 3.4 Non-Empty Support Linear Quantile Interpolation (O(N))
+### 5.4 Non-Empty Support Linear Quantile Interpolation (O(N))
 Quantile coordinates \f$ Q(p) = F^{-1}(p) \f$ for \f$ p \in [0.0, 1.0] \f$ are evaluated using continuous inverse CDF interpolation:
 - Targets cumulative mass \f$ T = p \cdot W_{\text{total}} \f$.
 - Locates bin \f$ i \f$ where \f$ \sum_{j=0}^{i-1} w_j < T \le \sum_{j=0}^i w_j \f$.
@@ -92,7 +196,7 @@ Quantile coordinates \f$ Q(p) = F^{-1}(p) \f$ for \f$ p \in [0.0, 1.0] \f$ are e
 Q(p) = \text{low}_i + \frac{T - \sum_{j=0}^{i-1} w_j}{w_i} (\text{high}_i - \text{low}_i)
 \f]
 
-### 3.5 Division-Free Error Propagation (O(N))
+### 5.5 Division-Free Error Propagation (O(N))
 When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division (\f$ H = A / B \f$), statistical uncertainties are propagated without intermediate divisions:
 - **Product Uncertainty**:
 \f[
@@ -105,7 +209,7 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 
 ---
 
-## 4. Algorithmic Complexity Reference Table
+## 6. Algorithmic Complexity Reference Table
 
 | Function | Time Complexity | Space Complexity | Description |
 | :--- | :--- | :--- | :--- |
