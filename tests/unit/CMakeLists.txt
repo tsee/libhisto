@@ -18,3 +18,10 @@ add_executable(test_stats
 )
 target_link_libraries(test_stats PRIVATE histo unity)
 add_test(NAME test_stats COMMAND test_stats)
+
+# Unit Test: Arithmetic, Transformations, Rebinning & CDF
+add_executable(test_arithmetic
+    test_arithmetic.c
+)
+target_link_libraries(test_arithmetic PRIVATE histo unity)
+add_test(NAME test_arithmetic COMMAND test_arithmetic)

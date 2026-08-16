@@ -719,9 +719,382 @@ histo_status_t histo_get_stats(const histo_t *h, histo_stats_t *out_stats) {
     return HISTO_OK;
 }
 
+/* ========================================================================= */
+/* Arithmetic & Transformations                                              */
+/* ========================================================================= */
+
+static bool histo_are_compatible(const histo_t *a, const histo_t *b) {
+    if (!a || !b) return false;
+    if (a->bin_type != b->bin_type || a->nbins != b->nbins) return false;
+    if (fabs(a->min - b->min) > 1e-12 || fabs(a->max - b->max) > 1e-12) return false;
+
+    if (a->bin_type == HISTO_BIN_VARIABLE) {
+        for (uint32_t i = 0; i <= a->nbins; ++i) {
+            if (fabs(a->bin_edges[i] - b->bin_edges[i]) > 1e-12) return false;
+        }
+    }
+    return true;
+}
+
+histo_status_t histo_add(histo_t *target, const histo_t *other) {
+    if (!target || !other) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (!histo_are_compatible(target, other)) {
+        return HISTO_ERR_INCOMPATIBLE;
+    }
+
+    uint32_t n = target->nbins;
+    for (uint32_t i = 0; i < n; ++i) {
+        target->bins[i] += other->bins[i];
+        if (target->sum_w2 && other->sum_w2) {
+            target->sum_w2[i] += other->sum_w2[i];
+        }
+    }
+
+    target->total_weight += other->total_weight;
+    if (target->sum_w2 && other->sum_w2) {
+        target->total_sum_w2 += other->total_sum_w2;
+    }
+    target->underflow_weight += other->underflow_weight;
+    target->overflow_weight += other->overflow_weight;
+    if (target->sum_w2 && other->sum_w2) {
+        target->underflow_sum_w2 += other->underflow_sum_w2;
+        target->overflow_sum_w2 += other->overflow_sum_w2;
+    }
+    target->n_fills += other->n_fills;
+    target->n_underflow += other->n_underflow;
+    target->n_overflow += other->n_overflow;
+    target->n_nan += other->n_nan;
+
+    /* Merge exact moments if both histograms track them */
+    if ((target->flags & HISTO_FLAG_EXACT_MOMENTS) && (other->flags & HISTO_FLAG_EXACT_MOMENTS)) {
+        if (other->total_weight > 0.0) {
+            double w1 = target->total_weight - other->total_weight;
+            double w2 = other->total_weight;
+            if (w1 > 0.0) {
+                double delta = other->stats_mean - target->stats_mean;
+                target->stats_mean += (w2 / target->total_weight) * delta;
+                target->stats_M2 += other->stats_M2 + (w1 * w2 / target->total_weight) * (delta * delta);
+                if (target->stats_M2 < 0.0) target->stats_M2 = 0.0;
+            } else {
+                target->stats_mean = other->stats_mean;
+                target->stats_M2 = other->stats_M2;
+            }
+            if (other->stats_min < target->stats_min) target->stats_min = other->stats_min;
+            if (other->stats_max > target->stats_max) target->stats_max = other->stats_max;
+        }
+    }
+
+    return HISTO_OK;
+}
+
+histo_status_t histo_subtract(histo_t *target, const histo_t *other) {
+    if (!target || !other) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (!histo_are_compatible(target, other)) {
+        return HISTO_ERR_INCOMPATIBLE;
+    }
+
+    uint32_t n = target->nbins;
+    for (uint32_t i = 0; i < n; ++i) {
+        target->bins[i] -= other->bins[i];
+        if (target->sum_w2 && other->sum_w2) {
+            target->sum_w2[i] += other->sum_w2[i]; /* Errors add in quadrature */
+        }
+    }
+
+    target->total_weight -= other->total_weight;
+    if (target->sum_w2 && other->sum_w2) {
+        target->total_sum_w2 += other->total_sum_w2;
+    }
+    target->underflow_weight -= other->underflow_weight;
+    target->overflow_weight -= other->overflow_weight;
+    if (target->sum_w2 && other->sum_w2) {
+        target->underflow_sum_w2 += other->underflow_sum_w2;
+        target->overflow_sum_w2 += other->overflow_sum_w2;
+    }
+    target->n_fills += other->n_fills;
+    target->n_underflow += other->n_underflow;
+    target->n_overflow += other->n_overflow;
+    target->n_nan += other->n_nan;
+
+    return HISTO_OK;
+}
+
+histo_status_t histo_multiply(histo_t *target, const histo_t *other) {
+    if (!target || !other) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (!histo_are_compatible(target, other)) {
+        return HISTO_ERR_INCOMPATIBLE;
+    }
+
+    uint32_t n = target->nbins;
+    double new_total = 0.0;
+    double new_total_w2 = 0.0;
+
+    for (uint32_t i = 0; i < n; ++i) {
+        double h1 = target->bins[i];
+        double h2 = other->bins[i];
+
+        if (target->sum_w2 && other->sum_w2) {
+            double w1_sq = target->sum_w2[i];
+            double w2_sq = other->sum_w2[i];
+            /* Division-free error propagation */
+            target->sum_w2[i] = h2 * h2 * w1_sq + h1 * h1 * w2_sq;
+            new_total_w2 += target->sum_w2[i];
+        }
+
+        target->bins[i] = h1 * h2;
+        new_total += target->bins[i];
+    }
+
+    target->total_weight = new_total;
+    if (target->sum_w2) target->total_sum_w2 = new_total_w2;
+    target->underflow_weight *= other->underflow_weight;
+    target->overflow_weight *= other->overflow_weight;
+    target->n_fills += other->n_fills;
+
+    return HISTO_OK;
+}
+
+histo_status_t histo_divide(histo_t *target, const histo_t *other) {
+    if (!target || !other) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (!histo_are_compatible(target, other)) {
+        return HISTO_ERR_INCOMPATIBLE;
+    }
+
+    uint32_t n = target->nbins;
+    double new_total = 0.0;
+    double new_total_w2 = 0.0;
+
+    for (uint32_t i = 0; i < n; ++i) {
+        double h1 = target->bins[i];
+        double h2 = other->bins[i];
+
+        if (h2 == 0.0) {
+            target->bins[i] = 0.0;
+            if (target->sum_w2) target->sum_w2[i] = 0.0;
+        } else {
+            if (target->sum_w2 && other->sum_w2) {
+                double w1_sq = target->sum_w2[i];
+                double w2_sq = other->sum_w2[i];
+                double h2_sq = h2 * h2;
+                double h2_four = h2_sq * h2_sq;
+                target->sum_w2[i] = (w1_sq * h2_sq + w2_sq * (h1 * h1)) / h2_four;
+                new_total_w2 += target->sum_w2[i];
+            }
+            target->bins[i] = h1 / h2;
+            new_total += target->bins[i];
+        }
+    }
+
+    target->total_weight = new_total;
+    if (target->sum_w2) target->total_sum_w2 = new_total_w2;
+    if (other->underflow_weight != 0.0) target->underflow_weight /= other->underflow_weight;
+    else target->underflow_weight = 0.0;
+    if (other->overflow_weight != 0.0) target->overflow_weight /= other->overflow_weight;
+    else target->overflow_weight = 0.0;
+    target->n_fills += other->n_fills;
+
+    return HISTO_OK;
+}
+
+histo_status_t histo_scale(histo_t *h, double factor) {
+    if (!h) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (!isfinite(factor)) {
+        return HISTO_ERR_NON_FINITE;
+    }
+
+    double factor_sq = factor * factor;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        h->bins[i] *= factor;
+        if (h->sum_w2) {
+            h->sum_w2[i] *= factor_sq;
+        }
+    }
+
+    h->total_weight *= factor;
+    if (h->sum_w2) h->total_sum_w2 *= factor_sq;
+    h->underflow_weight *= factor;
+    h->overflow_weight *= factor;
+    if (h->sum_w2) {
+        h->underflow_sum_w2 *= factor_sq;
+        h->overflow_sum_w2 *= factor_sq;
+    }
+
+    return HISTO_OK;
+}
+
+histo_status_t histo_normalize(histo_t *h, double target_area) {
+    if (!h) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (!isfinite(target_area) || target_area <= 0.0) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    double factor = target_area / h->total_weight;
+    return histo_scale(h, factor);
+}
+
+histo_t* histo_rebin(const histo_t *src, uint32_t factor) {
+    if (!src || factor == 0 || factor > src->nbins || (src->nbins % factor != 0)) {
+        return NULL;
+    }
+
+    uint32_t nbins_out = src->nbins / factor;
+    histo_t *dst = NULL;
+
+    if (src->bin_type == HISTO_BIN_UNIFORM) {
+        dst = histo_create_uniform(nbins_out, src->min, src->max, src->flags);
+    } else {
+        double *new_edges = (double *)malloc((nbins_out + 1) * sizeof(double));
+        if (!new_edges) return NULL;
+        for (uint32_t i = 0; i <= nbins_out; ++i) {
+            new_edges[i] = src->bin_edges[i * factor];
+        }
+        dst = histo_create_variable(nbins_out, new_edges, src->flags);
+        free(new_edges);
+    }
+
+    if (!dst) return NULL;
+
+    for (uint32_t i = 0; i < nbins_out; ++i) {
+        double bin_sum = 0.0;
+        double w2_sum = 0.0;
+        uint32_t start = i * factor;
+        uint32_t end = start + factor;
+        for (uint32_t j = start; j < end; ++j) {
+            bin_sum += src->bins[j];
+            if (src->sum_w2) w2_sum += src->sum_w2[j];
+        }
+        dst->bins[i] = bin_sum;
+        if (dst->sum_w2) dst->sum_w2[i] = w2_sum;
+    }
+
+    dst->total_weight = src->total_weight;
+    dst->total_sum_w2 = src->total_sum_w2;
+    dst->underflow_weight = src->underflow_weight;
+    dst->overflow_weight = src->overflow_weight;
+    dst->underflow_sum_w2 = src->underflow_sum_w2;
+    dst->overflow_sum_w2 = src->overflow_sum_w2;
+    dst->n_fills = src->n_fills;
+    dst->n_underflow = src->n_underflow;
+    dst->n_overflow = src->n_overflow;
+    dst->n_nan = src->n_nan;
+    dst->stats_min = src->stats_min;
+    dst->stats_max = src->stats_max;
+    dst->stats_mean = src->stats_mean;
+    dst->stats_M2 = src->stats_M2;
+
+    return dst;
+}
+
+histo_t* histo_slice(const histo_t *src, uint32_t start_bin, uint32_t end_bin, bool empty) {
+    if (!src || start_bin > end_bin || end_bin >= src->nbins) {
+        return NULL;
+    }
+
+    uint32_t nbins_new = end_bin - start_bin + 1;
+    double lower_edge = 0.0, upper_edge = 0.0;
+    histo_bin_bounds(src, start_bin, &lower_edge, &upper_edge);
+    double start_min = lower_edge;
+    histo_bin_bounds(src, end_bin, &lower_edge, &upper_edge);
+    double end_max = upper_edge;
+
+    histo_t *dst = NULL;
+    if (src->bin_type == HISTO_BIN_UNIFORM) {
+        dst = histo_create_uniform(nbins_new, start_min, end_max, src->flags);
+    } else {
+        double *new_edges = (double *)malloc((nbins_new + 1) * sizeof(double));
+        if (!new_edges) return NULL;
+        for (uint32_t i = 0; i <= nbins_new; ++i) {
+            new_edges[i] = src->bin_edges[start_bin + i];
+        }
+        dst = histo_create_variable(nbins_new, new_edges, src->flags);
+        free(new_edges);
+    }
+
+    if (!dst) return NULL;
+
+    if (!empty) {
+        double slice_total = 0.0;
+        double slice_total_w2 = 0.0;
+        for (uint32_t i = 0; i < nbins_new; ++i) {
+            dst->bins[i] = src->bins[start_bin + i];
+            slice_total += dst->bins[i];
+            if (dst->sum_w2 && src->sum_w2) {
+                dst->sum_w2[i] = src->sum_w2[start_bin + i];
+                slice_total_w2 += dst->sum_w2[i];
+            }
+        }
+        dst->total_weight = slice_total;
+        if (dst->sum_w2) dst->total_sum_w2 = slice_total_w2;
+
+        /* All bins before start_bin accumulate into underflow */
+        double underflow_accum = src->underflow_weight;
+        double underflow_w2_accum = src->underflow_sum_w2;
+        for (uint32_t i = 0; i < start_bin; ++i) {
+            underflow_accum += src->bins[i];
+            if (src->sum_w2) underflow_w2_accum += src->sum_w2[i];
+        }
+        dst->underflow_weight = underflow_accum;
+        if (dst->sum_w2) dst->underflow_sum_w2 = underflow_w2_accum;
+
+        /* All bins after end_bin accumulate into overflow */
+        double overflow_accum = src->overflow_weight;
+        double overflow_w2_accum = src->overflow_sum_w2;
+        for (uint32_t i = end_bin + 1; i < src->nbins; ++i) {
+            overflow_accum += src->bins[i];
+            if (src->sum_w2) overflow_w2_accum += src->sum_w2[i];
+        }
+        dst->overflow_weight = overflow_accum;
+        if (dst->sum_w2) dst->overflow_sum_w2 = overflow_w2_accum;
+
+        dst->n_fills = src->n_fills;
+        dst->n_underflow = src->n_underflow;
+        dst->n_overflow = src->n_overflow;
+        dst->n_nan = src->n_nan;
+    }
+
+    return dst;
+}
+
+histo_t* histo_cdf(const histo_t *src, double prenormalization) {
+    if (!src || src->total_weight <= 0.0) {
+        return NULL;
+    }
+
+    histo_t *dst = histo_clone(src, true);
+    if (!dst) return NULL;
+
+    double scale = (prenormalization > 0.0) ? (prenormalization / src->total_weight) : (1.0 / src->total_weight);
+    double running_sum = 0.0;
+
+    for (uint32_t i = 0; i < src->nbins; ++i) {
+        running_sum += src->bins[i] * scale;
+        dst->bins[i] = running_sum;
+    }
+    dst->total_weight = running_sum;
+    dst->n_fills = src->n_fills;
+
+    return dst;
+}
+
 void histo_free_buffer(void *buf) {
     if (buf) {
         free(buf);
     }
 }
+
 
