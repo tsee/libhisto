@@ -231,7 +231,22 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 | `histo_mean` / `histo_variance` (Exact Moments) | O(1) | O(1) | Direct return from Welford accumulator |
 | `histo_mean` / `histo_variance` (Two-Pass) | O(N) | O(1) | Two-pass bin-center moments calculation |
 | `histo_std_dev` | O(1) or O(N) | O(1) | Square root of variance |
+| `histo_central_moment` | O(N) | O(1) | Two-pass calculation of k-th central moment |
+| `histo_skewness` / `histo_kurtosis` / `histo_excess_kurtosis` | O(N) | O(1) | Standardized higher-order central moments |
+| `histo_mode_bin` | O(N) | O(1) | Scans for maximum weight bin |
+| `histo_mode_continuous` | O(N) | O(1) | 3-point parabolic peak vertex interpolation |
+| `histo_fwhm` | O(N) | O(1) | Full Width at Half Maximum edge crossing scan |
+| `histo_rms` | O(N) or O(1) | O(1) | Root Mean Square: sqrt(variance + mean^2) |
 | `histo_quantile` / `histo_median` | O(N) | O(1) | Single-pass cumulative CDF scan |
+| `histo_iqr` | O(N) | O(1) | Interquartile Range: Q75 - Q25 |
+| `histo_mad` | O(N log N) | O(N) | Median Absolute Deviation from median |
+| `histo_trimmed_mean` | O(N) | O(1) | Truncated mean across percentile interval |
+| `histo_winsorized_mean` | O(N) | O(1) | Outlier-clamped Winsorized mean |
+| `histo_cmp_chi2` | O(N) | O(1) | Weighted Chi-Square test statistic & NDF |
+| `histo_cmp_ks` | O(N) | O(1) | Kolmogorov-Smirnov maximum vertical CDF metric |
+| `histo_cmp_wasserstein_1d` | O(N) | O(1) | 1D Earth Mover's Distance / L1 CDF integral |
+| `histo_cmp_kl_divergence` | O(N) | O(1) | Kullback-Leibler relative entropy in nats |
+| `histo_cmp_bhattacharyya` | O(N) | O(1) | Bhattacharyya distance between distributions |
 | `histo_integral` | O(M) | O(1) | Sum over M <= N bins |
 | `histo_get_stats` | O(N) | O(1) | Aggregates moments, min/max, and median |
 | `histo_add` / `histo_subtract` | O(N) | O(1) | Element-wise vector arithmetic and moment update |
@@ -245,4 +260,5 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 | `histo_serialize_binary_into` | O(N) | O(1) | Encodes Little-Endian wire format into caller buffer |
 | `histo_serialize_binary` | O(N) | O(N) | Allocates buffer and encodes wire format |
 | `histo_deserialize_binary` | O(N) | O(N) | Decodes wire format into newly allocated histogram |
+| `histo_migrate_binary` | O(N) | O(N) | Migrates older binary format buffers to current version |
 | `histo_free_buffer` | O(1) | O(1) | Deallocates serialization buffer |

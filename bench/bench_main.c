@@ -216,6 +216,66 @@ int main(void) {
                elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
     }
 
+    /* 12. Benchmark Higher-Order Moments & Shape Metrics */
+    {
+        double skew = 0.0, kurt = 0.0, mode = 0.0, fwhm = 0.0, rms = 0.0;
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_skewness(h_agg, &skew);
+            histo_kurtosis(h_agg, &kurt);
+            histo_mode_continuous(h_agg, &mode);
+            histo_fwhm(h_agg, &fwhm);
+            histo_rms(h_agg, &rms);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("12. Higher-Order Moments & Peak Analysis (Skew, Kurt, Mode, FWHM, RMS, 10k bins, 10k calls):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f k-evals/s (%.2f µs/eval)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+    }
+
+    /* 13. Benchmark Robust Dispersion (IQR & MAD) */
+    {
+        double iqr = 0.0, mad = 0.0, t_mean = 0.0, w_mean = 0.0;
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_iqr(h_agg, &iqr);
+            histo_mad(h_agg, &mad);
+            histo_trimmed_mean(h_agg, 0.1, 0.9, &t_mean);
+            histo_winsorized_mean(h_agg, 0.1, 0.9, &w_mean);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("13. Robust Dispersion & Trimming (IQR, MAD, Trimmed & Winsorized Mean, 10k bins, 10k calls):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f k-evals/s (%.2f µs/eval)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+    }
+
+    /* 14. Benchmark Two-Sample Comparison (Chi2, KS, Wasserstein, Bhattacharyya) */
+    {
+        histo_t *h_other = histo_clone(h_agg, false);
+        histo_scale(h_other, 1.05);
+        double chi2 = 0.0, ks = 0.0, wass = 0.0, bhatt = 0.0;
+        uint32_t ndf = 0;
+
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_cmp_chi2(h_agg, h_other, &chi2, &ndf);
+            histo_cmp_ks(h_agg, h_other, &ks);
+            histo_cmp_wasserstein_1d(h_agg, h_other, &wass);
+            histo_cmp_bhattacharyya(h_agg, h_other, &bhatt);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("14. Two-Sample Statistical Distances (Chi2, KS, Wasserstein, Bhattacharyya, 10k bins, 10k calls):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f k-cmps/s (%.2f µs/cmp)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+        histo_destroy(h_other);
+    }
+
     histo_destroy(h_agg);
     free(data);
     free(weights);

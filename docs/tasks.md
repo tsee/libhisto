@@ -48,7 +48,7 @@
 - [x] **D2** Peak, Mode & Shape Estimation (`histo_mode_bin`, `histo_mode_continuous`, `histo_fwhm`, `histo_rms`) & Sub-bin Interpolation Tests
 - [x] **D3** Robust Non-Parametric Dispersion (`histo_iqr`, `histo_mad`, `histo_trimmed_mean`, `histo_winsorized_mean`) & Unit Tests
 - [x] **D4** Two-Sample Statistical Distance & Hypothesis Testing (`histo_cmp_chi2`, `histo_cmp_ks`, `histo_cmp_wasserstein_1d`, `histo_cmp_kl_divergence`, `histo_cmp_bhattacharyya`) & Comparison Integration Tests
-- [ ] **D5** Update Doxygen documentation, user manual, and benchmarks for new analytical routines
+- [x] **D5** Update Doxygen documentation, user manual, and benchmarks for new analytical routines
 
 
 
