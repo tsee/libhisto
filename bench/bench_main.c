@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define NUM_SAMPLES 10000000 /* 10 Million samples */
+#define NUM_SAMPLES 10000000     /* 10 Million samples */
+#define AGG_ITERATIONS 10000     /* 10k iterations on 10k bins (100 Million bin operations) */
+#define FAST_ITERATIONS 1000000  /* 1 Million iterations for fast accessors */
 
 static inline uint32_t simple_prng(uint32_t *state) {
     *state = *state * 1664525u + 1013904223u;
@@ -12,7 +14,7 @@ static inline uint32_t simple_prng(uint32_t *state) {
 
 int main(void) {
     printf("=====================================================\n");
-    printf(" libhisto Performance Benchmark (10M Operations)\n");
+    printf(" libhisto Comprehensive Performance Benchmark\n");
     printf("=====================================================\n\n");
 
     /* Allocate test data */
@@ -39,7 +41,7 @@ int main(void) {
         clock_t end = clock();
         double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
         double mops = ((double)NUM_SAMPLES / elapsed_sec) / 1e6;
-        printf("1. Uniform Single Fill (histo_fill):\n");
+        printf("1. Uniform Single Fill (histo_fill, 10M ops):\n");
         printf("   - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
                elapsed_sec, mops, (elapsed_sec / NUM_SAMPLES) * 1e9);
         histo_destroy(h);
@@ -55,7 +57,7 @@ int main(void) {
         clock_t end = clock();
         double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
         double mops = ((double)NUM_SAMPLES / elapsed_sec) / 1e6;
-        printf("2. Uniform Weighted Fill (histo_fill_w + sum_w2):\n");
+        printf("2. Uniform Weighted Fill (histo_fill_w + sum_w2, 10M ops):\n");
         printf("   - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
                elapsed_sec, mops, (elapsed_sec / NUM_SAMPLES) * 1e9);
         histo_destroy(h);
@@ -69,7 +71,7 @@ int main(void) {
         clock_t end = clock();
         double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
         double mops = ((double)NUM_SAMPLES / elapsed_sec) / 1e6;
-        printf("3. Batch Ingestion (histo_fill_n):\n");
+        printf("3. Batch Ingestion (histo_fill_n, 10M ops):\n");
         printf("   - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
                elapsed_sec, mops, (elapsed_sec / NUM_SAMPLES) * 1e9);
         histo_destroy(h);
@@ -89,34 +91,132 @@ int main(void) {
         clock_t end = clock();
         double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
         double mops = ((double)NUM_SAMPLES / elapsed_sec) / 1e6;
-        printf("4. Variable Bin Fill (Binary Search 100 bins):\n");
+        printf("4. Variable Bin Fill (Binary Search 100 bins, 10M ops):\n");
         printf("   - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
                elapsed_sec, mops, (elapsed_sec / NUM_SAMPLES) * 1e9);
         histo_destroy(h);
     }
 
-    /* 5. Benchmark Binary Serialization */
+    /* Setup populated histogram for aggregate benchmarks (10,000 bins) */
+    histo_t *h_agg = histo_create_uniform(10000, 0.0, 10000.0, HISTO_FLAG_TRACK_SUMW2);
+    for (uint32_t i = 0; i < 10000; ++i) {
+        histo_fill_bin(h_agg, i, 1.0 + (double)(i % 50));
+    }
+
+    /* 5. Benchmark Statistical Moments (Two-Pass on 10,000 bins) */
     {
-        histo_t *h = histo_create_uniform(1000, 0.0, 1000.0, HISTO_FLAG_TRACK_SUMW2);
-        for (int i = 0; i < 1000; ++i) {
-            histo_fill_bin(h, (uint32_t)i, 5.0);
+        double mean = 0.0, var = 0.0;
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_mean(h_agg, &mean);
+            histo_variance(h_agg, &var);
         }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("5. Two-Pass Statistical Moments (Mean + Variance, 10k bins, 10k calls):\n");
+        printf("   - Time: %.3f s | Throughput: %.2f k-queries/s (%.2f µs/query)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+    }
+
+    /* 6. Benchmark Quantile and Median Evaluation */
+    {
+        double q25 = 0.0, median = 0.0, q75 = 0.0;
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_quantile(h_agg, 0.25, &q25);
+            histo_median(h_agg, &median);
+            histo_quantile(h_agg, 0.75, &q75);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("6. Quantile & Median Evaluation (Q25 + Q50 + Q75, 10k bins, 10k calls):\n");
+        printf("   - Time: %.3f s | Throughput: %.2f k-queries/s (%.2f µs/query)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+    }
+
+    /* 7. Benchmark Range Integral */
+    {
+        double integral = 0.0;
+        clock_t start = clock();
+        for (int i = 0; i < FAST_ITERATIONS; ++i) {
+            histo_integral(h_agg, 1000, 8000, &integral);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double mops = ((double)FAST_ITERATIONS / elapsed_sec) / 1e6;
+        printf("7. Range Integral (7,000-bin slice, 1M calls):\n");
+        printf("   - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
+               elapsed_sec, mops, (elapsed_sec / FAST_ITERATIONS) * 1e9);
+    }
+
+    /* 8. Benchmark Element-Wise Vector Arithmetic (histo_add) */
+    {
+        histo_t *h_dest = histo_clone(h_agg, false);
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_add(h_dest, h_agg);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("8. Vector Histogram Addition (histo_add, 10k bins, 10k calls):\n");
+        printf("   - Time: %.3f s | Throughput: %.2f k-ops/s (%.2f µs/op)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+        histo_destroy(h_dest);
+    }
+
+    /* 9. Benchmark Vector Scaling & Normalization */
+    {
+        histo_t *h_dest = histo_clone(h_agg, false);
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_scale(h_dest, 1.001);
+            histo_normalize(h_dest, 1000.0);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("9. Vector Scaling & Normalization (10k bins, 10k calls):\n");
+        printf("   - Time: %.3f s | Throughput: %.2f k-ops/s (%.2f µs/op)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+        histo_destroy(h_dest);
+    }
+
+    /* 10. Benchmark CDF Generation */
+    {
+        clock_t start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_t *cdf = histo_cdf(h_agg, 1.0);
+            histo_destroy(cdf);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("10. Cumulative Distribution Function (CDF generation, 10k bins, 10k calls):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f k-ops/s (%.2f µs/op)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+    }
+
+    /* 11. Benchmark Binary Serialization */
+    {
         void *buf = NULL;
         size_t size = 0;
         clock_t start = clock();
-        for (int i = 0; i < 100000; ++i) {
-            histo_serialize_binary(h, &buf, &size);
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_serialize_binary(h_agg, &buf, &size);
             histo_free_buffer(buf);
         }
         clock_t end = clock();
         double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
-        double mops = ((double)100000 / elapsed_sec) / 1e3;
-        printf("5. Binary Serialization (1000 bins, 100k cycles):\n");
-        printf("   - Time: %.3f s | Throughput: %.2f k-ser/s\n\n",
-               elapsed_sec, mops);
-        histo_destroy(h);
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("11. Binary Serialization (10k bins, 10k cycles):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f k-ser/s (%.2f µs/ser)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
     }
 
+    histo_destroy(h_agg);
     free(data);
     free(weights);
     printf("=====================================================\n");

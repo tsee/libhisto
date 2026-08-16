@@ -235,49 +235,43 @@ histo_status_t histo_bin_sum_w2(const histo_t *h, uint32_t bin_index, double *ou
 /**
  * @brief Retrieves total accumulated weight across all bins (excluding underflow/overflow).
  *
- * @param[in]  h          Histogram handle.
- * @param[out] out_weight Output pointer for total weight.
- * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
+ * @param[in] h Histogram handle.
+ * @return Total weight, or 0.0 if h is NULL.
  */
-histo_status_t histo_total_weight(const histo_t *h, double *out_weight);
+double histo_total_weight(const histo_t *h);
 
 /**
  * @brief Retrieves total number of fill operations performed.
  *
- * @param[in]  h       Histogram handle.
- * @param[out] out_num Output pointer for total fill count.
- * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
+ * @param[in] h Histogram handle.
+ * @return Total fill count, or 0 if h is NULL.
  */
-histo_status_t histo_n_fills(const histo_t *h, uint64_t *out_num);
+uint64_t histo_num_entries(const histo_t *h);
 
 /**
- * @brief Retrieves total underflow count and accumulated underflow weight.
+ * @brief Retrieves total accumulated underflow weight.
  *
- * @param[in]  h          Histogram handle.
- * @param[out] out_count  Output pointer for underflow event count.
- * @param[out] out_weight Output pointer for underflow weight sum.
- * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
+ * @param[in] h Histogram handle.
+ * @return Underflow weight sum, or 0.0 if h is NULL.
  */
-histo_status_t histo_underflow(const histo_t *h, uint64_t *out_count, double *out_weight);
+double histo_underflow(const histo_t *h);
 
 /**
- * @brief Retrieves total overflow count and accumulated overflow weight.
+ * @brief Retrieves total accumulated overflow weight.
  *
- * @param[in]  h          Histogram handle.
- * @param[out] out_count  Output pointer for overflow event count.
- * @param[out] out_weight Output pointer for overflow weight sum.
- * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
+ * @param[in] h Histogram handle.
+ * @return Overflow weight sum, or 0.0 if h is NULL.
  */
-histo_status_t histo_overflow(const histo_t *h, uint64_t *out_count, double *out_weight);
+double histo_overflow(const histo_t *h);
 
 /**
  * @brief Retrieves total number of non-finite (NaN / Inf) rejected samples.
  *
- * @param[in]  h         Histogram handle.
- * @param[out] out_count Output pointer for non-finite count.
- * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
+ * @param[in] h Histogram handle.
+ * @return Non-finite sample count, or 0 if h is NULL.
  */
-histo_status_t histo_nan_count(const histo_t *h, uint64_t *out_count);
+uint64_t histo_nan_count(const histo_t *h);
+
 
 /* ========================================================================= */
 /* Statistical Moments & Quantiles                                           */
