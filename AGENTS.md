@@ -9,6 +9,7 @@ This document defines the operational workflow, engineering standards, and commu
 - **Productive Brevity**: Keep all responses concise, direct, and actionable.
 - **Strictly Factual**: Never use unnecessary compliments, flattery, or conversational filler. State facts, technical trade-offs, results, and recommendations clearly.
 - **Phase Discipline**: Strictly adhere to the project phases (**Phase A**: Research & Goals, **Phase B**: Design & Docs, **Phase C**: Implementation). **Never proceed to the next phase without explicit user confirmation.**
+- **Documentation Enforcement**: Documentation (Doxygen docstrings, user guides, algorithm complexity tables) MUST ALWAYS be updated whenever code changes are made.
 - **Progress Tracking**: Keep [`docs/tasks.md`](docs/tasks.md) updated as tasks start (`[~]`) and complete (`[x]`).
 
 ---

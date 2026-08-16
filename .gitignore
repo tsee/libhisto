@@ -1,5 +1,7 @@
 # Build artifacts
 build/
+docs/html/
+docs/latex/
 bin/
 lib/
 *.o

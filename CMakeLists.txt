@@ -20,6 +20,13 @@ option(LIBHISTO_BUILD_BENCHMARKS "Build benchmark suite" ON)
 option(LIBHISTO_BUILD_EXAMPLES "Build example programs" ON)
 option(LIBHISTO_ENABLE_SANITIZERS "Enable ASan and UBSan" OFF)
 option(LIBHISTO_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+option(LIBHISTO_BUILD_DOCS "Build Doxygen documentation" OFF)
+
+# Standard Doxygen integration
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+    set(LIBHISTO_BUILD_DOCS ON CACHE BOOL "Build Doxygen documentation" FORCE)
+endif()
 
 # Configure common warning flags
 add_library(histo_compiler_flags INTERFACE)
@@ -58,4 +65,17 @@ endif()
 # Examples
 if(LIBHISTO_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+# Documentation
+if(LIBHISTO_BUILD_DOCS AND DOXYGEN_FOUND)
+    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
+    set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+    configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
+    add_custom_target(docs
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
 endif()

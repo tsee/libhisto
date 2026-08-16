@@ -1,6 +1,11 @@
 #ifndef LIBHISTO_HISTO_H
 #define LIBHISTO_HISTO_H
 
+/**
+ * @file histo.h
+ * @brief Public C API for libhisto (1D high-performance histogramming library).
+ */
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -17,7 +22,10 @@ extern "C" {
 /* ========================================================================= */
 
 /**
- * Returns a human-readable description of a status code.
+ * @brief Returns a constant human-readable description of a status code.
+ *
+ * @param[in] status Status code to convert.
+ * @return Null-terminated string description.
  */
 const char* histo_status_str(histo_status_t status);
 
@@ -26,30 +34,49 @@ const char* histo_status_str(histo_status_t status);
 /* ========================================================================= */
 
 /**
- * Creates a new uniform-bin histogram over the interval [min, max] with nbins.
- * Returns NULL on allocation failure or invalid arguments (e.g. min >= max, nbins == 0).
+ * @brief Creates a new uniform-bin histogram over the range [min, max].
+ *
+ * @param[in] nbins Number of equidistant bins (1 <= nbins <= HISTO_MAX_NBINS).
+ * @param[in] min   Lower boundary coordinate (finite, min < max).
+ * @param[in] max   Upper boundary coordinate (finite, max > min).
+ * @param[in] flags Bitwise OR of feature flags (e.g. HISTO_FLAG_TRACK_SUMW2).
+ * @return Pointer to initialized histogram handle, or NULL on error.
  */
 histo_t* histo_create_uniform(uint32_t nbins, double min, double max, uint32_t flags);
 
 /**
- * Creates a new variable-bin histogram from an array of (nbins + 1) strictly monotonic edges.
- * Returns NULL on allocation failure or invalid arguments.
+ * @brief Creates a new variable-bin histogram from an array of monotonic edges.
+ *
+ * @param[in] nbins Number of bins (1 <= nbins <= HISTO_MAX_NBINS).
+ * @param[in] edges Array of (nbins + 1) strictly increasing edge values.
+ * @param[in] flags Bitwise OR of feature flags.
+ * @return Pointer to initialized histogram handle, or NULL on error.
  */
 histo_t* histo_create_variable(uint32_t nbins, const double *edges, uint32_t flags);
 
 /**
- * Destroys a histogram and releases all underlying memory. Safe to call with NULL.
+ * @brief Destroys a histogram and releases all allocated memory.
+ *
+ * Safe to call with NULL.
+ *
+ * @param[in,out] h Histogram handle to destroy.
  */
 void histo_destroy(histo_t *h);
 
 /**
- * Clones a histogram. If 'empty' is true, the cloned histogram retains the same
- * binning structure but with all bin counts and statistics reset to zero.
+ * @brief Creates an exact clone or empty schema copy of a histogram.
+ *
+ * @param[in] src   Source histogram to clone.
+ * @param[in] empty If true, allocate same binning structure but clear all counts.
+ * @return Pointer to new cloned histogram handle, or NULL on error.
  */
 histo_t* histo_clone(const histo_t *src, bool empty);
 
 /**
- * Resets all accumulated data, weights, moments, and out-of-range counters to zero.
+ * @brief Resets all bin contents, weights, moments, and out-of-range counters to zero.
+ *
+ * @param[in,out] h Histogram handle to reset.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if h is NULL.
  */
 histo_status_t histo_reset(histo_t *h);
 
@@ -58,33 +85,57 @@ histo_status_t histo_reset(histo_t *h);
 /* ========================================================================= */
 
 /**
- * Fills a single value into the histogram with unit weight (1.0).
+ * @brief Fills a single value into the histogram with unit weight (1.0).
+ *
+ * @param[in,out] h Histogram handle.
+ * @param[in]     x Sample coordinate.
+ * @return HISTO_OK on success, or HISTO_ERR_NON_FINITE if x is NaN/Inf.
  */
 histo_status_t histo_fill(histo_t *h, double x);
 
 /**
- * Fills a single value into the histogram with a specified weight.
+ * @brief Fills a single value into the histogram with a specified weight.
+ *
+ * @param[in,out] h      Histogram handle.
+ * @param[in]     x      Sample coordinate.
+ * @param[in]     weight Real-valued event weight.
+ * @return HISTO_OK on success, or HISTO_ERR_NON_FINITE if x/weight is NaN/Inf.
  */
 histo_status_t histo_fill_w(histo_t *h, double x, double weight);
 
 /**
- * Batch fills N contiguous values into the histogram with an optional weights array.
- * If weights is NULL, unit weights (1.0) are used for all samples.
- * Returns HISTO_WARN_NON_FINITE if any NaN or non-finite values were skipped.
+ * @brief Batch fills N contiguous values with optional weights.
+ *
+ * @param[in,out] h       Histogram handle.
+ * @param[in]     n       Number of samples to ingest.
+ * @param[in]     x       Contiguous array of sample coordinates.
+ * @param[in]     weights Optional contiguous array of weights (NULL for unit weights).
+ * @return HISTO_OK on success, or HISTO_WARN_NON_FINITE if non-finite samples were skipped.
  */
 histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double *weights);
 
 /**
- * Strided batch fill for Array-of-Structs (AoS) data layouts.
- * Pass x_stride_bytes = sizeof(struct) and w_stride_bytes = sizeof(struct).
- * If weights is NULL, unit weights (1.0) are used for all samples.
+ * @brief Strided batch fill for Array-of-Structs (AoS) data layouts.
+ *
+ * @param[in,out] h               Histogram handle.
+ * @param[in]     n               Number of samples to ingest.
+ * @param[in]     x               Pointer to first sample coordinate.
+ * @param[in]     x_stride_bytes  Byte stride between consecutive sample coordinates.
+ * @param[in]     weights         Optional pointer to first sample weight (NULL for unit).
+ * @param[in]     w_stride_bytes  Byte stride between consecutive weights.
+ * @return HISTO_OK on success, or HISTO_WARN_NON_FINITE if non-finite samples were skipped.
  */
 histo_status_t histo_fill_strided(histo_t *h, size_t n,
-                                  const double *x, size_t x_stride_bytes,
-                                  const double *weights, size_t w_stride_bytes);
+                                 const double *x, size_t x_stride_bytes,
+                                 const double *weights, size_t w_stride_bytes);
 
 /**
- * Directly fills weight into a specific bin index.
+ * @brief Directly accumulates weight into a specific bin index.
+ *
+ * @param[in,out] h         Histogram handle.
+ * @param[in]     bin_index Target bin index [0, nbins - 1].
+ * @param[in]     weight    Weight to add.
+ * @return HISTO_OK on success, or HISTO_ERR_OUT_OF_RANGE if bin_index >= nbins.
  */
 histo_status_t histo_fill_bin(histo_t *h, uint32_t bin_index, double weight);
 
@@ -93,160 +144,297 @@ histo_status_t histo_fill_bin(histo_t *h, uint32_t bin_index, double weight);
 /* ========================================================================= */
 
 /**
- * Returns the number of in-range bins.
+ * @brief Returns the number of in-range active bins.
+ *
+ * @param[in] h Histogram handle.
+ * @return Number of bins, or 0 if h is NULL.
  */
 uint32_t histo_nbins(const histo_t *h);
 
 /**
- * Returns the binning model type.
+ * @brief Returns the binning model type.
+ *
+ * @param[in] h Histogram handle.
+ * @return HISTO_BIN_UNIFORM or HISTO_BIN_VARIABLE.
  */
 histo_bin_type_t histo_bin_type(const histo_t *h);
 
 /**
- * Retrieves the overall range [min, max].
+ * @brief Retrieves the overall range limits [min, max].
+ *
+ * @param[in]  h       Histogram handle.
+ * @param[out] out_min Output pointer for lower range limit.
+ * @param[out] out_max Output pointer for upper range limit.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
  */
 histo_status_t histo_range(const histo_t *h, double *out_min, double *out_max);
 
 /**
- * Locates the bin index for coordinate x using boundary-guarded lookup.
- * Sets *out_bin to index in [0, nbins - 1], or -1 for underflow, or (int64_t)nbins for overflow.
+ * @brief Locates the bin index for coordinate x using boundary-guarded lookup.
+ *
+ * @param[in]  h       Histogram handle.
+ * @param[in]  x       Coordinate to locate.
+ * @param[out] out_bin Output pointer: [0, nbins-1] on hit, -1 for underflow, nbins for overflow.
+ * @return HISTO_OK on success, or HISTO_ERR_NON_FINITE if x is NaN.
  */
 histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin);
 
 /**
- * Retrieves lower and upper boundary coordinates for bin_index.
+ * @brief Retrieves the boundary interval [lower, upper] for a specific bin.
+ *
+ * @param[in]  h         Histogram handle.
+ * @param[in]  bin_index Target bin index [0, nbins - 1].
+ * @param[out] out_lower Output pointer for lower bin boundary.
+ * @param[out] out_upper Output pointer for upper bin boundary.
+ * @return HISTO_OK on success, or HISTO_ERR_OUT_OF_RANGE if bin_index >= nbins.
  */
 histo_status_t histo_bin_bounds(const histo_t *h, uint32_t bin_index, double *out_lower, double *out_upper);
 
 /**
- * Retrieves the center coordinate of bin_index.
+ * @brief Computes the midpoint center of a specific bin.
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[in]  bin_index  Target bin index [0, nbins - 1].
+ * @param[out] out_center Output pointer for midpoint coordinate.
+ * @return HISTO_OK on success, or HISTO_ERR_OUT_OF_RANGE if bin_index >= nbins.
  */
 histo_status_t histo_bin_center(const histo_t *h, uint32_t bin_index, double *out_center);
 
 /**
- * Retrieves the accumulated content/weight of bin_index.
+ * @brief Retrieves the accumulated content (weight sum) of a bin.
+ *
+ * @param[in]  h           Histogram handle.
+ * @param[in]  bin_index   Target bin index [0, nbins - 1].
+ * @param[out] out_content Output pointer for bin content.
+ * @return HISTO_OK on success, or HISTO_ERR_OUT_OF_RANGE if bin_index >= nbins.
  */
 histo_status_t histo_bin_content(const histo_t *h, uint32_t bin_index, double *out_content);
 
 /**
- * Retrieves the statistical uncertainty of bin_index (sqrt(sum_w2) or sqrt(N)).
+ * @brief Calculates the statistical uncertainty (error) of a bin.
+ *
+ * Returns sqrt(sum_w2) if tracked, or Poisson sqrt(N) for unweighted bins.
+ *
+ * @param[in]  h         Histogram handle.
+ * @param[in]  bin_index Target bin index [0, nbins - 1].
+ * @param[out] out_error Output pointer for calculated uncertainty.
+ * @return HISTO_OK on success, or HISTO_ERR_OUT_OF_RANGE if bin_index >= nbins.
  */
 histo_status_t histo_bin_error(const histo_t *h, uint32_t bin_index, double *out_error);
 
 /**
- * Returns the accumulated underflow weight (x < min).
+ * @brief Retrieves the sum of squared weights (sum_w2) for a bin.
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[in]  bin_index  Target bin index [0, nbins - 1].
+ * @param[out] out_sum_w2 Output pointer for sum_w2.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if sum_w2 is not tracked.
  */
-double histo_underflow(const histo_t *h);
+histo_status_t histo_bin_sum_w2(const histo_t *h, uint32_t bin_index, double *out_sum_w2);
 
 /**
- * Returns the accumulated overflow weight (x >= max).
+ * @brief Retrieves total accumulated weight across all bins (excluding underflow/overflow).
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[out] out_weight Output pointer for total weight.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
  */
-double histo_overflow(const histo_t *h);
+histo_status_t histo_total_weight(const histo_t *h, double *out_weight);
 
 /**
- * Returns the number of rejected non-finite (NaN) samples.
+ * @brief Retrieves total number of fill operations performed.
+ *
+ * @param[in]  h       Histogram handle.
+ * @param[out] out_num Output pointer for total fill count.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
  */
-uint64_t histo_nan_count(const histo_t *h);
+histo_status_t histo_n_fills(const histo_t *h, uint64_t *out_num);
 
 /**
- * Returns total accumulated in-range weight.
+ * @brief Retrieves total underflow count and accumulated underflow weight.
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[out] out_count  Output pointer for underflow event count.
+ * @param[out] out_weight Output pointer for underflow weight sum.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
  */
-double histo_total_weight(const histo_t *h);
+histo_status_t histo_underflow(const histo_t *h, uint64_t *out_count, double *out_weight);
 
 /**
- * Returns total number of in-range fill operations.
+ * @brief Retrieves total overflow count and accumulated overflow weight.
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[out] out_count  Output pointer for overflow event count.
+ * @param[out] out_weight Output pointer for overflow weight sum.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
  */
-uint64_t histo_num_entries(const histo_t *h);
+histo_status_t histo_overflow(const histo_t *h, uint64_t *out_count, double *out_weight);
+
+/**
+ * @brief Retrieves total number of non-finite (NaN / Inf) rejected samples.
+ *
+ * @param[in]  h         Histogram handle.
+ * @param[out] out_count Output pointer for non-finite count.
+ * @return HISTO_OK on success, or HISTO_ERR_INVALID_ARG if any pointer is NULL.
+ */
+histo_status_t histo_nan_count(const histo_t *h, uint64_t *out_count);
 
 /* ========================================================================= */
-/* Statistical Analysis                                                      */
+/* Statistical Moments & Quantiles                                           */
 /* ========================================================================= */
 
 /**
- * Computes or retrieves the sample mean.
+ * @brief Computes the distribution mean.
+ *
+ * @param[in]  h        Histogram handle.
+ * @param[out] out_mean Output pointer for mean.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
  */
 histo_status_t histo_mean(const histo_t *h, double *out_mean);
 
 /**
- * Computes or retrieves the sample variance.
+ * @brief Computes the distribution variance.
+ *
+ * @param[in]  h            Histogram handle.
+ * @param[out] out_variance Output pointer for variance.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
  */
 histo_status_t histo_variance(const histo_t *h, double *out_variance);
 
 /**
- * Computes or retrieves the sample standard deviation.
+ * @brief Computes the distribution standard deviation.
+ *
+ * @param[in]  h           Histogram handle.
+ * @param[out] out_std_dev Output pointer for standard deviation.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
  */
 histo_status_t histo_std_dev(const histo_t *h, double *out_std_dev);
 
 /**
- * Estimates the quantile value corresponding to cumulative probability p in [0.0, 1.0].
- * Uses continuous linear interpolation bracketed strictly on non-empty bins.
+ * @brief Computes the quantile coordinate for probability p in [0.0, 1.0].
+ *
+ * Uses continuous piecewise linear inverse CDF interpolation.
+ *
+ * @param[in]  h            Histogram handle.
+ * @param[in]  p            Cumulative probability in [0.0, 1.0].
+ * @param[out] out_quantile Output pointer for calculated quantile coordinate.
+ * @return HISTO_OK on success, HISTO_ERR_OUT_OF_RANGE if p not in [0,1], or HISTO_ERR_EMPTY.
  */
 histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile);
 
 /**
- * Estimates the median (50th percentile).
+ * @brief Computes the median coordinate (50th percentile).
+ *
+ * @param[in]  h          Histogram handle.
+ * @param[out] out_median Output pointer for median coordinate.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
  */
 histo_status_t histo_median(const histo_t *h, double *out_median);
 
 /**
- * Computes the integral (sum of bin contents) across bin range [start_bin, end_bin].
+ * @brief Computes the integral (sum of bin contents) over bin range [start_bin, end_bin].
+ *
+ * @param[in]  h            Histogram handle.
+ * @param[in]  start_bin    First bin index of range.
+ * @param[in]  end_bin      Last bin index of range (inclusive).
+ * @param[out] out_integral Output pointer for integrated sum.
+ * @return HISTO_OK on success, or HISTO_ERR_OUT_OF_RANGE if end_bin >= nbins.
  */
 histo_status_t histo_integral(const histo_t *h, uint32_t start_bin, uint32_t end_bin, double *out_integral);
 
 /**
- * Computes and populates a summary statistics structure.
+ * @brief Computes complete summary statistics container in a single call.
+ *
+ * @param[in]  h         Histogram handle.
+ * @param[out] out_stats Pointer to destination statistics struct.
+ * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
  */
 histo_status_t histo_get_stats(const histo_t *h, histo_stats_t *out_stats);
 
 /* ========================================================================= */
-/* Arithmetic & Transformations                                              */
+/* Arithmetic Operations & Transformations                                   */
 /* ========================================================================= */
 
 /**
- * Performs element-wise addition: target += other. Both must have identical binning.
+ * @brief Performs element-wise addition: target += other.
+ *
+ * @param[in,out] target Destination histogram to accumulate into.
+ * @param[in]     other  Source histogram to add.
+ * @return HISTO_OK on success, or HISTO_ERR_INCOMPATIBLE if geometries mismatch.
  */
 histo_status_t histo_add(histo_t *target, const histo_t *other);
 
 /**
- * Performs element-wise subtraction: target -= other. Both must have identical binning.
+ * @brief Performs element-wise subtraction: target -= other.
+ *
+ * @param[in,out] target Destination histogram.
+ * @param[in]     other  Source histogram to subtract.
+ * @return HISTO_OK on success, or HISTO_ERR_INCOMPATIBLE if geometries mismatch.
  */
 histo_status_t histo_subtract(histo_t *target, const histo_t *other);
 
 /**
- * Performs element-wise multiplication: target *= other (using division-free error propagation).
+ * @brief Performs element-wise multiplication: target *= other.
+ *
+ * @param[in,out] target Destination histogram.
+ * @param[in]     other  Source histogram to multiply by.
+ * @return HISTO_OK on success, or HISTO_ERR_INCOMPATIBLE if geometries mismatch.
  */
 histo_status_t histo_multiply(histo_t *target, const histo_t *other);
 
 /**
- * Performs element-wise division: target /= other.
+ * @brief Performs element-wise division: target /= other.
+ *
+ * @param[in,out] target Destination histogram.
+ * @param[in]     other  Source histogram to divide by.
+ * @return HISTO_OK on success, or HISTO_ERR_INCOMPATIBLE if geometries mismatch.
  */
 histo_status_t histo_divide(histo_t *target, const histo_t *other);
 
 /**
- * Scales all bin contents and weights by a scalar factor.
+ * @brief Scales all bin contents and weights by a scalar factor.
+ *
+ * @param[in,out] h      Histogram handle to scale.
+ * @param[in]     factor Scalar multiplier (finite).
+ * @return HISTO_OK on success, or HISTO_ERR_NON_FINITE if factor is NaN/Inf.
  */
 histo_status_t histo_scale(histo_t *h, double factor);
 
 /**
- * Normalizes the total in-range weight of the histogram to target_area.
+ * @brief Normalizes the histogram such that total in-range weight equals target_area.
+ *
+ * @param[in,out] h           Histogram handle to normalize.
+ * @param[in]     target_area Desired integrated area (finite, target_area > 0.0).
+ * @return HISTO_OK on success, HISTO_ERR_EMPTY if zero weight, or HISTO_ERR_INVALID_ARG.
  */
 histo_status_t histo_normalize(histo_t *h, double target_area);
 
 /**
- * Rebins the histogram by integer factor K (nbins must be evenly divisible by factor).
- * Returns a new histogram handle, or NULL on failure.
+ * @brief Merges adjacent uniform bins by an integer rebinning factor.
+ *
+ * @param[in] src    Source uniform histogram.
+ * @param[in] factor Positive integer rebinning factor (nbins must be divisible by factor).
+ * @return Pointer to newly allocated rebinned histogram, or NULL on error.
  */
 histo_t* histo_rebin(const histo_t *src, uint32_t factor);
 
 /**
- * Slices the histogram to a sub-range of bins [start_bin, end_bin].
- * Returns a new histogram handle, or NULL on failure.
+ * @brief Extracts a subset slice of bins [start_bin, end_bin].
+ *
+ * @param[in] src       Source histogram.
+ * @param[in] start_bin First bin index to include.
+ * @param[in] end_bin   Last bin index to include (inclusive).
+ * @param[in] empty     If true, allocate new sliced structure with zero counts.
+ * @return Pointer to newly allocated sliced histogram, or NULL on error.
  */
 histo_t* histo_slice(const histo_t *src, uint32_t start_bin, uint32_t end_bin, bool empty);
 
 /**
- * Generates a cumulative distribution function (CDF) histogram.
- * Returns a new histogram handle, or NULL on failure.
+ * @brief Generates a Cumulative Distribution Function (CDF) histogram.
+ *
+ * @param[in] src             Source histogram.
+ * @param[in] prenormalization Normalization target (e.g. 1.0 or 100.0).
+ * @return Pointer to newly allocated CDF histogram, or NULL on error.
  */
 histo_t* histo_cdf(const histo_t *src, double prenormalization);
 
@@ -255,28 +443,49 @@ histo_t* histo_cdf(const histo_t *src, double prenormalization);
 /* ========================================================================= */
 
 /**
- * Calculates the exact byte size required to serialize the histogram in binary format.
+ * @brief Calculates exact byte capacity required for canonical binary serialization.
+ *
+ * @param[in] h Histogram handle.
+ * @return Total byte length required (256-byte header + Little-Endian payloads).
  */
 size_t histo_serialize_binary_size(const histo_t *h);
 
 /**
- * Serializes the histogram into a caller-provided binary buffer of given capacity.
+ * @brief Serializes histogram into a caller-allocated binary buffer.
+ *
+ * @param[in]  h        Histogram handle to serialize.
+ * @param[out] buf      Caller-allocated destination buffer.
+ * @param[in]  capacity Byte capacity of buf.
+ * @return HISTO_OK on success, or HISTO_ERR_SERIALIZATION if capacity too small.
  */
 histo_status_t histo_serialize_binary_into(const histo_t *h, void *buf, size_t capacity);
 
 /**
- * Serializes the histogram into a newly allocated binary byte buffer.
- * Caller must free *out_buf using histo_free_buffer().
+ * @brief Serializes histogram into a newly heap-allocated binary buffer.
+ *
+ * Buffer must be freed with histo_free_buffer().
+ *
+ * @param[in]  h        Histogram handle to serialize.
+ * @param[out] out_buf  Pointer receiving address of newly allocated buffer.
+ * @param[out] out_size Pointer receiving serialized byte size.
+ * @return HISTO_OK on success, or HISTO_ERR_NOMEM on allocation failure.
  */
 histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *out_size);
 
 /**
- * Deserializes a histogram from a binary buffer.
+ * @brief Deserializes a histogram from a canonical binary byte buffer.
+ *
+ * @param[in]  buf   Pointer to serialized binary buffer.
+ * @param[in]  size  Byte length of buffer.
+ * @param[out] out_h Pointer receiving address of newly deserialized histogram.
+ * @return HISTO_OK on success, or HISTO_ERR_DESERIALIZATION on format corruption.
  */
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h);
 
 /**
- * Frees buffers allocated by serialization functions. Safe to call on NULL.
+ * @brief Frees a heap buffer allocated by serialization routines. Safe with NULL.
+ *
+ * @param[in] buf Buffer pointer to free.
  */
 void histo_free_buffer(void *buf);
 
@@ -285,4 +494,3 @@ void histo_free_buffer(void *buf);
 #endif
 
 #endif /* LIBHISTO_HISTO_H */
-
