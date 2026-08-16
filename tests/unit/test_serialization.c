@@ -128,49 +128,11 @@ void test_binary_deserialization_errors(void) {
     TEST_ASSERT_EQUAL(HISTO_ERR_DESERIALIZATION, histo_deserialize_binary(fake_buf, sizeof(fake_buf), &dst));
 }
 
-/* Test JSON serialization and deserialization roundtrip */
-void test_json_roundtrip(void) {
-    histo_t *src = histo_create_uniform(4, 0.0, 40.0, HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
-    histo_fill_w(src, 5.0, 10.0);
-    histo_fill_w(src, 15.0, 20.0);
-    histo_fill_w(src, 35.0, 30.0);
-
-    /* 1. Serialize to JSON */
-    char *json_str = NULL;
-    TEST_ASSERT_EQUAL(HISTO_OK, histo_serialize_json(src, &json_str));
-    TEST_ASSERT_NOT_NULL(json_str);
-    TEST_ASSERT_NOT_NULL(strstr(json_str, "libhisto-v1"));
-
-    /* 2. Deserialize from JSON */
-    histo_t *dst = NULL;
-    TEST_ASSERT_EQUAL(HISTO_OK, histo_deserialize_json(json_str, &dst));
-    TEST_ASSERT_NOT_NULL(dst);
-
-    /* 3. Verify contents */
-    TEST_ASSERT_EQUAL_UINT32(4, histo_nbins(dst));
-    TEST_ASSERT_EQUAL_DOUBLE(60.0, histo_total_weight(dst));
-
-    double c0 = 0.0, c1 = 0.0, c2 = 0.0, c3 = 0.0;
-    histo_bin_content(dst, 0, &c0);
-    histo_bin_content(dst, 1, &c1);
-    histo_bin_content(dst, 2, &c2);
-    histo_bin_content(dst, 3, &c3);
-
-    TEST_ASSERT_EQUAL_DOUBLE(10.0, c0);
-    TEST_ASSERT_EQUAL_DOUBLE(20.0, c1);
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, c2);
-    TEST_ASSERT_EQUAL_DOUBLE(30.0, c3);
-
-    histo_free_buffer(json_str);
-    histo_destroy(src);
-    histo_destroy(dst);
-}
-
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_binary_roundtrip_uniform);
     RUN_TEST(test_binary_roundtrip_variable);
     RUN_TEST(test_binary_deserialization_errors);
-    RUN_TEST(test_json_roundtrip);
     return UNITY_END();
 }
+

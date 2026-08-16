@@ -51,16 +51,24 @@ int main(void) {
         putchar('\n');
     }
 
-    /* 5. Serialization to JSON */
-    char *json = NULL;
-    if (histo_serialize_json(h, &json) == HISTO_OK) {
-        printf("\nLossless JSON Representation (Truncated Preview):\n");
-        printf("%.200s...\n", json);
-        histo_free_buffer(json);
+    /* 5. Serialization to Binary Format */
+    void *buf = NULL;
+    size_t size = 0;
+    if (histo_serialize_binary(h, &buf, &size) == HISTO_OK) {
+        printf("\nSerialized to %zu bytes canonical Little-Endian binary format.\n", size);
+
+        /* Deserialize back */
+        histo_t *reloaded = NULL;
+        if (histo_deserialize_binary(buf, size, &reloaded) == HISTO_OK) {
+            printf("Successfully deserialized back: total weight = %.2f\n", histo_total_weight(reloaded));
+            histo_destroy(reloaded);
+        }
+        histo_free_buffer(buf);
     }
 
     /* 6. Clean up */
     histo_destroy(h);
     printf("\nDone! Clean destruction with 0 leaks.\n");
     return 0;
+
 }

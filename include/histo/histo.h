@@ -276,27 +276,6 @@ histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h);
 
 /**
- * Calculates the maximum buffer size required to serialize the histogram into JSON.
- */
-size_t histo_serialize_json_size(const histo_t *h);
-
-/**
- * Serializes the histogram into a caller-provided JSON string buffer of given capacity.
- */
-histo_status_t histo_serialize_json_into(const histo_t *h, char *buf, size_t capacity);
-
-/**
- * Serializes the histogram into a newly allocated JSON string.
- * Caller must free *out_json_str using histo_free_buffer().
- */
-histo_status_t histo_serialize_json(const histo_t *h, char **out_json_str);
-
-/**
- * Deserializes a histogram from a JSON string.
- */
-histo_status_t histo_deserialize_json(const char *json_str, histo_t **out_h);
-
-/**
  * Frees buffers allocated by serialization functions. Safe to call on NULL.
  */
 void histo_free_buffer(void *buf);
@@ -306,3 +285,4 @@ void histo_free_buffer(void *buf);
 #endif
 
 #endif /* LIBHISTO_HISTO_H */
+
