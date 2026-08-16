@@ -11,3 +11,10 @@ add_executable(test_fill
 )
 target_link_libraries(test_fill PRIVATE histo unity)
 add_test(NAME test_fill COMMAND test_fill)
+
+# Unit Test: Queries, Integrals, Moments & Quantiles
+add_executable(test_stats
+    test_stats.c
+)
+target_link_libraries(test_stats PRIVATE histo unity)
+add_test(NAME test_stats COMMAND test_stats)

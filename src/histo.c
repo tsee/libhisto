@@ -420,7 +420,7 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
 }
 
 /* ========================================================================= */
-/* Geometry & Property Queries                                               */
+/* Geometry & Bin Queries                                                    */
 /* ========================================================================= */
 
 uint32_t histo_nbins(const histo_t *h) {
@@ -437,6 +437,65 @@ histo_status_t histo_range(const histo_t *h, double *out_min, double *out_max) {
     }
     *out_min = h->min;
     *out_max = h->max;
+    return HISTO_OK;
+}
+
+histo_status_t histo_bin_bounds(const histo_t *h, uint32_t bin_index, double *out_lower, double *out_upper) {
+    if (!h || !out_lower || !out_upper) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (bin_index >= h->nbins) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+
+    if (h->bin_type == HISTO_BIN_UNIFORM) {
+        *out_lower = h->min + (double)bin_index * h->binsize;
+        *out_upper = (bin_index + 1 == h->nbins) ? h->max : (h->min + (double)(bin_index + 1) * h->binsize);
+    } else {
+        *out_lower = h->bin_edges[bin_index];
+        *out_upper = h->bin_edges[bin_index + 1];
+    }
+    return HISTO_OK;
+}
+
+histo_status_t histo_bin_center(const histo_t *h, uint32_t bin_index, double *out_center) {
+    if (!h || !out_center) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    double lower = 0.0, upper = 0.0;
+    histo_status_t st = histo_bin_bounds(h, bin_index, &lower, &upper);
+    if (st != HISTO_OK) {
+        return st;
+    }
+    *out_center = 0.5 * (lower + upper);
+    return HISTO_OK;
+}
+
+histo_status_t histo_bin_content(const histo_t *h, uint32_t bin_index, double *out_content) {
+    if (!h || !out_content) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (bin_index >= h->nbins) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+    *out_content = h->bins[bin_index];
+    return HISTO_OK;
+}
+
+histo_status_t histo_bin_error(const histo_t *h, uint32_t bin_index, double *out_error) {
+    if (!h || !out_error) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (bin_index >= h->nbins) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+
+    if (h->sum_w2) {
+        *out_error = sqrt(h->sum_w2[bin_index]);
+    } else {
+        double c = h->bins[bin_index];
+        *out_error = (c > 0.0) ? sqrt(c) : 0.0;
+    }
     return HISTO_OK;
 }
 
@@ -460,8 +519,209 @@ uint64_t histo_num_entries(const histo_t *h) {
     return h ? h->n_fills : 0;
 }
 
+/* ========================================================================= */
+/* Statistical Analysis                                                      */
+/* ========================================================================= */
+
+histo_status_t histo_integral(const histo_t *h, uint32_t start_bin, uint32_t end_bin, double *out_integral) {
+    if (!h || !out_integral) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (start_bin > end_bin || end_bin >= h->nbins) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+
+    double sum = 0.0;
+    for (uint32_t i = start_bin; i <= end_bin; ++i) {
+        sum += h->bins[i];
+    }
+    *out_integral = sum;
+    return HISTO_OK;
+}
+
+histo_status_t histo_mean(const histo_t *h, double *out_mean) {
+    if (!h || !out_mean) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    if (h->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        *out_mean = h->stats_mean;
+        return HISTO_OK;
+    }
+
+    /* Two-pass / bin-center estimator */
+    double sum = 0.0;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double center = 0.0;
+        histo_bin_center(h, i, &center);
+        sum += h->bins[i] * center;
+    }
+    *out_mean = sum / h->total_weight;
+    return HISTO_OK;
+}
+
+histo_status_t histo_variance(const histo_t *h, double *out_variance) {
+    if (!h || !out_variance) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    if (h->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        *out_variance = h->stats_M2 / h->total_weight;
+        return HISTO_OK;
+    }
+
+    /* Two-pass numerically stable bin-center variance */
+    double mean_val = 0.0;
+    histo_status_t st = histo_mean(h, &mean_val);
+    if (st != HISTO_OK) {
+        return st;
+    }
+
+    double sum_sq_diff = 0.0;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double center = 0.0;
+        histo_bin_center(h, i, &center);
+        double diff = center - mean_val;
+        sum_sq_diff += h->bins[i] * (diff * diff);
+    }
+    *out_variance = sum_sq_diff / h->total_weight;
+    return HISTO_OK;
+}
+
+histo_status_t histo_std_dev(const histo_t *h, double *out_std_dev) {
+    if (!h || !out_std_dev) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    double var = 0.0;
+    histo_status_t st = histo_variance(h, &var);
+    if (st != HISTO_OK) {
+        return st;
+    }
+    *out_std_dev = sqrt(var);
+    return HISTO_OK;
+}
+
+histo_status_t histo_quantile(const histo_t *h, double p, double *out_quantile) {
+    if (!h || !out_quantile) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+    if (isnan(p) || p < 0.0 || p > 1.0) {
+        return HISTO_ERR_OUT_OF_RANGE;
+    }
+
+    /* Find first and last non-empty bins */
+    int64_t first_non_empty = -1;
+    int64_t last_non_empty = -1;
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        if (h->bins[i] > 0.0) {
+            if (first_non_empty == -1) {
+                first_non_empty = (int64_t)i;
+            }
+            last_non_empty = (int64_t)i;
+        }
+    }
+
+    if (first_non_empty == -1) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    /* Boundary target cases */
+    if (p == 0.0) {
+        if ((h->flags & HISTO_FLAG_EXACT_MOMENTS) && isfinite(h->stats_min)) {
+            *out_quantile = h->stats_min;
+        } else {
+            double low = 0.0, high = 0.0;
+            histo_bin_bounds(h, (uint32_t)first_non_empty, &low, &high);
+            *out_quantile = low;
+        }
+        return HISTO_OK;
+    }
+
+    if (p == 1.0) {
+        if ((h->flags & HISTO_FLAG_EXACT_MOMENTS) && isfinite(h->stats_max)) {
+            *out_quantile = h->stats_max;
+        } else {
+            double low = 0.0, high = 0.0;
+            histo_bin_bounds(h, (uint32_t)last_non_empty, &low, &high);
+            *out_quantile = high;
+        }
+        return HISTO_OK;
+    }
+
+    double target = p * h->total_weight;
+    double cum_weight = 0.0;
+
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        double w = h->bins[i];
+        if (w <= 0.0) {
+            continue;
+        }
+
+        double prev_cum = cum_weight;
+        cum_weight += w;
+
+        if (target <= cum_weight || (int64_t)i == last_non_empty) {
+            double low = 0.0, high = 0.0;
+            histo_bin_bounds(h, i, &low, &high);
+            double theta = (target - prev_cum) / w;
+            if (theta < 0.0) theta = 0.0;
+            if (theta > 1.0) theta = 1.0;
+            *out_quantile = low + theta * (high - low);
+            return HISTO_OK;
+        }
+    }
+
+    /* Fallback */
+    double low = 0.0, high = 0.0;
+    histo_bin_bounds(h, (uint32_t)last_non_empty, &low, &high);
+    *out_quantile = high;
+    return HISTO_OK;
+}
+
+histo_status_t histo_median(const histo_t *h, double *out_median) {
+    return histo_quantile(h, 0.5, out_median);
+}
+
+histo_status_t histo_get_stats(const histo_t *h, histo_stats_t *out_stats) {
+    if (!h || !out_stats) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (h->total_weight <= 0.0) {
+        return HISTO_ERR_EMPTY;
+    }
+
+    out_stats->n_entries = h->n_fills;
+    out_stats->total_weight = h->total_weight;
+
+    histo_mean(h, &out_stats->mean);
+    histo_variance(h, &out_stats->variance);
+    out_stats->std_dev = sqrt(out_stats->variance);
+
+    if ((h->flags & HISTO_FLAG_EXACT_MOMENTS) && isfinite(h->stats_min) && isfinite(h->stats_max)) {
+        out_stats->min = h->stats_min;
+        out_stats->max = h->stats_max;
+    } else {
+        histo_quantile(h, 0.0, &out_stats->min);
+        histo_quantile(h, 1.0, &out_stats->max);
+    }
+
+    histo_median(h, &out_stats->median);
+
+    return HISTO_OK;
+}
+
 void histo_free_buffer(void *buf) {
     if (buf) {
         free(buf);
     }
 }
+
