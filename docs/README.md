@@ -9,7 +9,11 @@ This directory contains design artifacts, high-level goals, and documentation fo
 - [Prior Art: Boost.Histogram](prior_art_boost_histogram.md)
 - [Prior Art: GSL, ROOT, & HdrHistogram](prior_art_gsl_and_root.md)
 - [Design: Core Data Structures & Memory Layout](design_data_structures.md)
+- [Design: Public C API Specification](api_specification.md)
+- [Design: Numerical Behavior, Precision & Error Handling](numerical_behavior.md)
 - [Agent Guidelines & Operational Rules](../AGENTS.md)
+
+
 
 
 
