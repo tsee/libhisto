@@ -252,6 +252,32 @@ static inline void histo_update_welford(histo_t *h, double x, double w) {
     }
 }
 
+
+static inline void histo_fill_uniform_unchecked(histo_t *h, double x, double w, bool has_w2) {
+    int64_t idx = (int64_t)((x - h->min) * h->inv_binsize);
+    if (idx < 0) idx = 0;
+    else if ((uint32_t)idx >= h->nbins) idx = h->nbins - 1;
+
+    if (idx + 1 < (int64_t)h->nbins) {
+        if (x >= h->min + (double)(idx + 1) * h->binsize) {
+            idx++;
+        }
+    }
+    if (idx > 0) {
+        if (x < h->min + (double)idx * h->binsize) {
+            idx--;
+        }
+    }
+
+    h->bins[idx] += w;
+    h->total_weight += w;
+    h->n_fills++;
+    if (has_w2) {
+        h->sum_w2[idx] += w * w;
+        h->total_sum_w2 += w * w;
+    }
+}
+
 histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin) {
     if (!h || !out_bin) {
         return HISTO_ERR_INVALID_ARG;
@@ -392,6 +418,7 @@ histo_status_t histo_fill_bin(histo_t *h, uint32_t bin_index, double weight) {
     return HISTO_OK;
 }
 
+
 histo_status_t histo_fill_strided(histo_t *h, size_t n,
                                   const double *x, size_t x_stride_bytes,
                                   const double *weights, size_t w_stride_bytes) {
@@ -403,7 +430,11 @@ histo_status_t histo_fill_strided(histo_t *h, size_t n,
     }
 
     if (x_stride_bytes == 0) x_stride_bytes = sizeof(double);
-    if (w_stride_bytes == 0) w_stride_bytes = sizeof(double);
+    if (weights && w_stride_bytes == 0) w_stride_bytes = sizeof(double);
+
+    if (x_stride_bytes == sizeof(double) && (!weights || w_stride_bytes == sizeof(double))) {
+        return histo_fill_n(h, n, x, weights);
+    }
 
     bool had_non_finite = false;
     const uint8_t *x_ptr = (const uint8_t *)x;
@@ -426,8 +457,122 @@ histo_status_t histo_fill_strided(histo_t *h, size_t n,
     return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
 }
 
-histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double *weights) {
-    return histo_fill_strided(h, n, x, sizeof(double), weights, sizeof(double));
+histo_status_t histo_fill_n(histo_t * restrict h, size_t n, const double * restrict x, const double * restrict weights) {
+    if (!h || (!x && n > 0)) return HISTO_ERR_INVALID_ARG;
+    if (n == 0) return HISTO_OK;
+
+    bool had_non_finite = false;
+    bool has_w2 = (h->sum_w2 != NULL);
+    bool exact = (h->flags & HISTO_FLAG_EXACT_MOMENTS);
+
+    if (h->bin_type == HISTO_BIN_UNIFORM) {
+        if (!weights && !exact) {
+            for (size_t i = 0; i < n; ++i) {
+                double val = x[i];
+                if (isnan(val)) {
+                    h->n_nan++;
+                    had_non_finite = true;
+                    continue;
+                }
+                if (val < h->min) {
+                    h->underflow_weight += 1.0;
+                    h->n_underflow++;
+                } else if (val >= h->max) {
+                    h->overflow_weight += 1.0;
+                    h->n_overflow++;
+                } else {
+                    histo_fill_uniform_unchecked(h, val, 1.0, false);
+                }
+            }
+        } else if (weights && !exact) {
+            for (size_t i = 0; i < n; ++i) {
+                double val = x[i];
+                double w = weights[i];
+                if (isnan(val) || !isfinite(w)) {
+                    h->n_nan++;
+                    had_non_finite = true;
+                    continue;
+                }
+                if (val < h->min) {
+                    h->underflow_weight += w;
+                    if (has_w2) h->underflow_sum_w2 += w * w;
+                    h->n_underflow++;
+                } else if (val >= h->max) {
+                    h->overflow_weight += w;
+                    if (has_w2) h->overflow_sum_w2 += w * w;
+                    h->n_overflow++;
+                } else {
+                    histo_fill_uniform_unchecked(h, val, w, has_w2);
+                }
+            }
+        } else {
+            for (size_t i = 0; i < n; ++i) {
+                double val = x[i];
+                double w = weights ? weights[i] : 1.0;
+                if (isnan(val) || !isfinite(w)) {
+                    h->n_nan++;
+                    had_non_finite = true;
+                    continue;
+                }
+                if (val < h->min) {
+                    h->underflow_weight += w;
+                    if (has_w2) h->underflow_sum_w2 += w * w;
+                    h->n_underflow++;
+                } else if (val >= h->max) {
+                    h->overflow_weight += w;
+                    if (has_w2) h->overflow_sum_w2 += w * w;
+                    h->n_overflow++;
+                } else {
+                    histo_fill_uniform_unchecked(h, val, w, has_w2);
+                    histo_update_welford(h, val, w);
+                }
+            }
+        }
+    } else {
+        for (size_t i = 0; i < n; ++i) {
+            double val = x[i];
+            double w = weights ? weights[i] : 1.0;
+            if (isnan(val) || !isfinite(w)) {
+                h->n_nan++;
+                had_non_finite = true;
+                continue;
+            }
+            if (val < h->min) {
+                h->underflow_weight += w;
+                if (has_w2) h->underflow_sum_w2 += w * w;
+                h->n_underflow++;
+            } else if (val >= h->max) {
+                h->overflow_weight += w;
+                if (has_w2) h->overflow_sum_w2 += w * w;
+                h->n_overflow++;
+            } else {
+                uint32_t low = 0;
+                uint32_t high = h->nbins;
+                while (low < high) {
+                    uint32_t mid = low + (high - low) / 2;
+                    if (val >= h->bin_edges[mid + 1]) {
+                        low = mid + 1;
+                    } else {
+                        high = mid;
+                    }
+                }
+                uint32_t idx = low;
+                
+                h->bins[idx] += w;
+                h->total_weight += w;
+                h->n_fills++;
+                if (has_w2) {
+                    h->sum_w2[idx] += w * w;
+                    h->total_sum_w2 += w * w;
+                }
+                if (exact) {
+                    histo_update_welford(h, val, w);
+                }
+            }
+        }
+    }
+
+    return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
 }
 
 /* ========================================================================= */
