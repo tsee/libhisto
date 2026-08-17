@@ -164,6 +164,7 @@ int cmd_stats_main(int argc, char **argv) {
     const char **files = (num_files > 0) ? (const char **)(argv + file_start) : default_files;
     int nfiles = (num_files > 0) ? num_files : 1;
 
+    int status = 0;
     for (int f = 0; f < nfiles; ++f) {
         histo_t *h = NULL;
         if (cli_read_histogram_from_file(files[f], &h) == HISTO_OK) {
@@ -171,8 +172,9 @@ int cmd_stats_main(int argc, char **argv) {
             histo_destroy(h);
         } else {
             fprintf(stderr, "Error: Failed to read histogram from '%s'\n", files[f]);
+            status = 1;
         }
     }
 
-    return 0;
+    return status;
 }

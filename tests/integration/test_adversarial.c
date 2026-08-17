@@ -116,11 +116,57 @@ void test_binary_fuzz_resilience(void) {
     histo_destroy(src);
 }
 
+/* Test numerical extremes: huge ranges and zero variance */
+void test_extreme_ranges_and_variance(void) {
+    histo_t *h = histo_create_uniform(10, -1e300, 1e300, HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+    TEST_ASSERT_NOT_NULL(h);
+
+    /* Identical samples to test near-zero variance floor */
+    for (int i = 0; i < 100; ++i) {
+        histo_fill(h, 0.5e300);
+    }
+    
+    double var = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_variance(h, &var));
+    TEST_ASSERT_DOUBLE_WITHIN(1e280, 0.0, var); /* Variance should be close to 0 */
+    
+    double mean = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mean(h, &mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e285, 0.5e300, mean);
+
+    /* Underflow extreme */
+    histo_fill(h, -2e300);
+    TEST_ASSERT_EQUAL_DOUBLE(1.0, histo_underflow(h));
+
+    histo_destroy(h);
+}
+
+/* Test negative weights (e.g. background subtraction) */
+void test_negative_weights(void) {
+    histo_t *h = histo_create_uniform(5, 0.0, 10.0, HISTO_FLAG_TRACK_SUMW2);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fill_w(h, 5.0, 10.0);
+    histo_fill_w(h, 5.0, -4.0);
+
+    double content = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_content(h, 2, &content));
+    TEST_ASSERT_EQUAL_DOUBLE(6.0, content);
+
+    double err = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_error(h, 2, &err));
+    TEST_ASSERT_EQUAL_DOUBLE(sqrt(10.0 * 10.0 + (-4.0) * (-4.0)), err);
+
+    histo_destroy(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_subnormal_numbers);
     RUN_TEST(test_boundary_epsilon_oscillations);
     RUN_TEST(test_large_histogram_stress);
     RUN_TEST(test_binary_fuzz_resilience);
+    RUN_TEST(test_extreme_ranges_and_variance);
+    RUN_TEST(test_negative_weights);
     return UNITY_END();
 }

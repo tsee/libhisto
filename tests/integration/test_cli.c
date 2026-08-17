@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <getopt.h>
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -97,15 +98,22 @@ void test_json_corrupted_payload(void) {
     TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("{}", &h));
     TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("{\"nbins\": 0}", &h));
     TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("not valid json", &h));
+
+    /* Missing mandatory keys */
+    TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("{\"schema\": \"libhisto-v2\", \"nbins\": 10}", &h));
+    /* Invalid types (string instead of array/number) */
+    TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("{\"schema\": \"libhisto-v2\", \"bin_type\": 0, \"nbins\": \"10\", \"edges\": []}", &h));
+    /* Truncated JSON */
+    TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("{\"schema\": \"libhisto-v2\", \"nbins\": ", &h));
 }
 
 void test_cli_execution_pipelines(void) {
     /* Test command-line help flags */
     char *help_argv[] = {"histo", "--help"};
-    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(2, help_argv));
-    TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(2, help_argv));
-    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main(2, help_argv));
-    TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(2, help_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(2, help_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(2, help_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_stats_main(2, help_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(2, help_argv));
 
     /* Create temporary data file */
     const char *data_path = "/tmp/test_cli_data.txt";
@@ -122,15 +130,15 @@ void test_cli_execution_pipelines(void) {
         "histo-fill", "--bins=10", "--min=0", "--max=50", "-w",
         "-o", "binary", "-f", (char *)out_bin, (char *)data_path
     };
-    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(10, fill_bin_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(10, fill_bin_argv));
 
     /* Test histo-stats on binary output */
     char *stats_argv[] = {"histo-stats", "-f", "json", (char *)out_bin};
-    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main(4, stats_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_stats_main(4, stats_argv));
 
     /* Test histo-plot on binary output */
     char *plot_argv[] = {"histo-plot", "-s", "ascii", "--no-stats", (char *)out_bin};
-    TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(5, plot_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(5, plot_argv));
 
     /* Create second dataset for comparison */
     const char *out_bin2 = "/tmp/test_cli_out2.bin";
@@ -138,15 +146,24 @@ void test_cli_execution_pipelines(void) {
         "histo-fill", "--bins=10", "--min=0", "--max=50",
         "-o", "binary", "-f", (char *)out_bin2, (char *)data_path
     };
-    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(9, fill_bin_argv2));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(9, fill_bin_argv2));
 
     /* Test histo-cmp */
     char *cmp_argv[] = {"histo-cmp", "-f", "json", (char *)out_bin, (char *)out_bin2};
-    TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(5, cmp_argv));
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(5, cmp_argv));
 
     remove(data_path);
     remove(out_bin);
     remove(out_bin2);
+}
+
+void test_cli_error_handling(void) {
+    /* Invalid arguments to subcommands */
+    char *fill_err_argv[] = {"histo-fill", "--invalid-flag"};
+    optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fill_main(2, fill_err_argv));
+
+    char *stats_err_argv[] = {"histo-stats", "nonexistent_file.bin"};
+    optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_stats_main(2, stats_err_argv));
 }
 
 int main(void) {
@@ -155,5 +172,6 @@ int main(void) {
     RUN_TEST(test_json_serialization_roundtrip_variable);
     RUN_TEST(test_json_corrupted_payload);
     RUN_TEST(test_cli_execution_pipelines);
+    RUN_TEST(test_cli_error_handling);
     return UNITY_END();
 }
