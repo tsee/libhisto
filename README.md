@@ -201,7 +201,7 @@ Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919
 
 2. **`histo-plot`**:
    - Renders 1D histograms as terminal charts with automatic width adaptation.
-   - Supports Unicode 1/8th fractional blocks, shaded blocks, ASCII bars (`--style=ascii`), ANSI 24-bit TrueColor density gradients (`--color=always`), logarithmic scaling (`--log`), error whiskers ($\pm \sigma$), and live continuous watch mode (`--watch`).
+   - Supports Unicode 1/8th fractional blocks, compact single-line sparklines (`-S, --sparkline` e.g. ` ▂▃▅██▆▃▂ `), shaded blocks, ASCII bars (`--style=ascii`), ANSI 24-bit TrueColor density gradients (`--color=always`), logarithmic scaling (`--log`), error whiskers ($\pm \sigma$), and live continuous watch mode (`--watch`).
 
 3. **`histo-stats`**:
    - Computes comprehensive summary reports including exact central moments (skewness, kurtosis), robust dispersion (IQR, MAD, trimmed/Winsorized means), and sub-bin continuous peak mode. Emits human-readable tables, TSV, or machine-readable JSON (`-f json`).

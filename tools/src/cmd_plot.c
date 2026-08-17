@@ -13,7 +13,8 @@ static void print_plot_usage(void) {
     printf("Renders 1D histograms as beautiful ASCII / Unicode terminal charts.\n\n");
     printf("Display Options:\n");
     printf("  -W, --width=<COLS>       Plot width in characters (default: auto terminal width)\n");
-    printf("  -s, --style=<STYLE>      Glyph style: blocks (default), ascii, shaded\n");
+    printf("  -s, --style=<STYLE>      Glyph style: blocks (default), ascii, shaded, sparkline\n");
+    printf("  -S, --sparkline          Render compact single-line sparkline (e.g.  ▂▃▅██▆▃▂ )\n");
     printf("  -c, --color=<MODE>       Color mode: auto (default), always, never\n");
     printf("  -l, --log                Use logarithmic scale for bar lengths\n");
     printf("  -e, --errors             Display error bars (when sum_w2 is tracked)\n");
@@ -29,6 +30,15 @@ static void print_plot_usage(void) {
 /* Unicode horizontal sub-bin fractions (1/8ths) */
 static const char *const UNICODE_BLOCKS[9] = {
     " ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"
+};
+
+/* Unicode and ASCII vertical sparkline glyphs (8 levels) */
+static const char *const SPARKLINE_UNICODE[9] = {
+    " ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"
+};
+
+static const char *const SPARKLINE_ASCII[9] = {
+    " ", ".", "_", "-", "~", "=", "*", "#", "^"
 };
 
 static void get_ansi_gradient_color(double fraction, char *out_ansi, size_t max_len) {
@@ -260,6 +270,73 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
            uflow_str, tot_str, oflow_str, (unsigned long long)n_nan);
 }
 
+static void render_histogram_sparkline(const histo_t *h, const char *style, bool use_color, bool log_scale, bool show_stats) {
+    if (!h) return;
+
+    uint32_t nbins = histo_nbins(h);
+    double max_content = 0.0;
+    for (uint32_t i = 0; i < nbins; ++i) {
+        double c = 0.0;
+        histo_bin_content(h, i, &c);
+        if (c > max_content) max_content = c;
+    }
+
+    double max_scaled = (log_scale && max_content > 0.0) ? log10(max_content + 1.0) : max_content;
+    bool is_ascii = (strcmp(style, "ascii") == 0);
+
+    for (uint32_t i = 0; i < nbins; ++i) {
+        double content = 0.0;
+        histo_bin_content(h, i, &content);
+
+        if (content <= 0.0 || max_scaled <= 0.0) {
+            printf(" ");
+            continue;
+        }
+
+        double val_scaled = log_scale ? log10(content + 1.0) : content;
+        double frac = val_scaled / max_scaled;
+        int level = (int)(frac * 8.0 + 0.5);
+        if (level < 1) level = 1;
+        if (level > 8) level = 8;
+
+        if (use_color) {
+            char color_ansi[32] = "";
+            get_ansi_gradient_color(frac, color_ansi, sizeof(color_ansi));
+            printf("%s", color_ansi);
+        }
+
+        if (is_ascii) {
+            printf("%s", SPARKLINE_ASCII[level]);
+        } else {
+            printf("%s", SPARKLINE_UNICODE[level]);
+        }
+
+        if (use_color) {
+            printf("\033[0m");
+        }
+    }
+
+    if (show_stats) {
+        double mean = 0.0, sdev = 0.0, rmin = 0.0, rmax = 0.0;
+        histo_mean(h, &mean);
+        histo_std_dev(h, &sdev);
+        histo_range(h, &rmin, &rmax);
+        uint64_t entries = histo_num_entries(h);
+
+        printf("  [N=%llu, range=[%.2g, %.2g), μ=%.2g, σ=%.2g]",
+               (unsigned long long)entries, rmin, rmax, mean, sdev);
+    }
+    printf("\n");
+}
+
+static void render_histogram_dispatch(const histo_t *h, int term_width, const char *style, bool use_color, bool log_scale, bool show_errors, bool show_stats, const char *title, bool sparkline) {
+    if (sparkline) {
+        render_histogram_sparkline(h, style, use_color, log_scale, show_stats);
+    } else {
+        render_histogram_console(h, term_width, style, use_color, log_scale, show_errors, show_stats, title);
+    }
+}
+
 int cmd_plot_main(int argc, char **argv) {
     int term_width = cli_get_terminal_width(80);
     const char *style = "blocks";
@@ -267,6 +344,7 @@ int cmd_plot_main(int argc, char **argv) {
     bool log_scale = false;
     bool show_errors = false;
     bool show_stats = true;
+    bool sparkline = false;
     bool watch_mode = false;
     bool clear_screen = false;
     const char *title = NULL;
@@ -289,6 +367,8 @@ int cmd_plot_main(int argc, char **argv) {
             style = argv[++i];
         } else if (strncmp(arg, "--style=", 8) == 0) {
             style = arg + 8;
+        } else if (strcmp(arg, "-S") == 0 || strcmp(arg, "--sparkline") == 0) {
+            sparkline = true;
         } else if (strncmp(arg, "-c=", 3) == 0) {
             color_mode = arg + 3;
         } else if (strcmp(arg, "-c") == 0 && i + 1 < argc) {
@@ -316,6 +396,10 @@ int cmd_plot_main(int argc, char **argv) {
             file_start = i;
             break;
         }
+    }
+
+    if (strcmp(style, "sparkline") == 0) {
+        sparkline = true;
     }
 
     bool use_color = false;
@@ -354,13 +438,13 @@ int cmd_plot_main(int argc, char **argv) {
                     } else {
                         printf("\033[H");
                     }
-                    render_histogram_console(h, term_width, style, use_color, log_scale, show_errors, show_stats, title);
+                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
                     histo_destroy(h);
                     h = NULL;
                 }
             } else {
                 if (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
-                    render_histogram_console(h, term_width, style, use_color, log_scale, show_errors, show_stats, title);
+                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
                     histo_destroy(h);
                 } else {
                     fprintf(stderr, "Error: Failed to deserialize histogram from '%s'\n", files[f]);
@@ -401,7 +485,7 @@ int cmd_plot_main(int argc, char **argv) {
                 histo_t *h = histo_create_uniform(20, rmin, rmax, HISTO_FLAG_TRACK_SUMW2);
                 if (h) {
                     histo_fill_n(h, count, samples, NULL);
-                    render_histogram_console(h, term_width, style, use_color, log_scale, show_errors, show_stats, title);
+                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
                     histo_destroy(h);
                 }
             }

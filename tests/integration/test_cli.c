@@ -140,6 +140,13 @@ void test_cli_execution_pipelines(void) {
     char *plot_argv[] = {"histo-plot", "-s", "ascii", "--no-stats", (char *)out_bin};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(5, plot_argv));
 
+    /* Test histo-plot with sparkline mode */
+    char *sparkline_argv[] = {"histo-plot", "-S", (char *)out_bin};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(3, sparkline_argv));
+
+    char *sparkline_ascii_argv[] = {"histo-plot", "--sparkline", "-s", "ascii", "--no-stats", (char *)out_bin};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(6, sparkline_ascii_argv));
+
     /* Create second dataset for comparison */
     const char *out_bin2 = "/tmp/test_cli_out2.bin";
     char *fill_bin_argv2[] = {

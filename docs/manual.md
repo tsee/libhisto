@@ -333,6 +333,16 @@ Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919
  Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0
 ```
 
+**Inline Single-Line Sparklines (`-S, --sparkline`):**
+```bash
+python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(10000)))" | \
+    histo-fill --bins=20 --min=0 --max=100 -o binary | \
+    histo-plot -S
+```
+```text
+    ▂▃▄▆▇██▇▆▄▂▂      [N=9987, range=[0, 1e+02), μ=50, σ=15]
+```
+
 #### 4.7.3 Summary Statistics (`histo-stats`)
 Inspects exact moments, central moments, robust percentiles, and peak properties:
 

@@ -438,6 +438,10 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">[ 92.00,  96.00) │    149 │ ▋</div>
 <div class="line">[ 96.00, 100.00) │     69 │ ▎</div>
 <div class="line"> Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0</div>
+</div><!-- fragment --><p><b>Inline Single-Line Sparklines (<span class="tt">-S, --sparkline</span>):</b> </p><div class="fragment"><div class="line">python3 -c &quot;import random, sys; sys.stdout.write(&#39;&#39;.join(f&#39;{random.gauss(50, 15):.4f}\n&#39; for _ in range(10000)))&quot; | \</div>
+<div class="line">    histo-fill --bins=20 --min=0 --max=100 -o binary | \</div>
+<div class="line">    histo-plot -S</div>
+</div><!-- fragment --> <div class="fragment"><div class="line">▂▃▄▆▇██▇▆▄▂▂      [N=9987, range=[0, 1e+02), μ=50, σ=15]</div>
 </div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
 4.7.3 Summary Statistics (<span class="tt">histo-stats</span>)</h3>
 <p>Inspects exact moments, central moments, robust percentiles, and peak properties:</p>
