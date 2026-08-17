@@ -69,13 +69,14 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
     double total_w = histo_total_weight(h);
     uint64_t n_fills = histo_num_entries(h);
 
-    /* Find max bin content for scaling */
+    /* Find max bin content for scaling and compute column widths */
     double max_content = 0.0;
     int max_bounds_len = 0;
     int max_count_len = 0;
+    int max_err_len = 0;
 
     for (uint32_t i = 0; i < nbins; ++i) {
-        double lower = 0.0, upper = 0.0, content = 0.0;
+        double lower = 0.0, upper = 0.0, content = 0.0, err = 0.0;
         histo_bin_bounds(h, i, &lower, &upper);
         histo_bin_content(h, i, &content);
         if (content > max_content) max_content = content;
@@ -92,6 +93,16 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
             clen = snprintf(c_tmp, sizeof(c_tmp), "%.4g", content);
         }
         if (clen > max_count_len) max_count_len = clen;
+
+        if (show_errors) {
+            histo_bin_error(h, i, &err);
+            if (err > 0.0) {
+                char e_num[32];
+                int nlen = snprintf(e_num, sizeof(e_num), "%.2g", err);
+                int elen = (strcmp(style, "ascii") == 0) ? (nlen + 3) : (nlen + 4);
+                if (elen > max_err_len) max_err_len = elen;
+            }
+        }
     }
 
     if (max_bounds_len < 16) max_bounds_len = 16;
@@ -113,23 +124,24 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
         histo_mode_continuous(h, &mode);
 
         char s_mean[32], s_sdev[32], s_med[32], s_iqr[32], s_mode[32];
-        snprintf(s_mean, sizeof(s_mean), "Mean: %-7.4g", mean);
-        snprintf(s_sdev, sizeof(s_sdev), "StdDev: %-7.4g", sdev);
-        snprintf(s_med, sizeof(s_med), "Median: %-7.4g", med);
-        snprintf(s_iqr, sizeof(s_iqr), "IQR: %-7.4g", iqr);
-        snprintf(s_mode, sizeof(s_mode), "Mode: %-7.4g", mode);
+        snprintf(s_mean, sizeof(s_mean), "Mean: %-6.4g", mean);
+        snprintf(s_sdev, sizeof(s_sdev), "StdDev: %-5.4g", sdev);
+        snprintf(s_med, sizeof(s_med), "Median: %-5.4g", med);
+        snprintf(s_iqr, sizeof(s_iqr), "IQR: %-6.4g", iqr);
+        snprintf(s_mode, sizeof(s_mode), "Mode: %-6.4g", mode);
 
         /* Inner content visual width:
-         * 1 (space) + 13 (s_mean) + 3 (" │ ") + 15 (s_sdev) + 3 (" │ ") +
-         * 15 (s_med) + 3 (" │ ") + 12 (s_iqr) + 3 (" │ ") + 13 (s_mode) + 1 (space) = 82 */
-        int inner_width = 82;
+         * 1 (space) + 12 (s_mean) + 3 (" │ ") + 13 (s_sdev) + 3 (" │ ") +
+         * 13 (s_med) + 3 (" │ ") + 11 (s_iqr) + 3 (" │ ") + 12 (s_mode) + 1 (space) = 75
+         * Total box width = 77 cols (fits inside standard 80-col terminal) */
+        int inner_width = 75;
 
         if (strcmp(style, "ascii") == 0) {
             printf("+-- Statistics ");
             for (int k = 0; k < inner_width - 14; ++k) putchar('-');
             printf("+\n");
 
-            printf("| %-13s | %-15s | %-15s | %-12s | %-13s |\n",
+            printf("| %-12s | %-13s | %-13s | %-11s | %-12s |\n",
                    s_mean, s_sdev, s_med, s_iqr, s_mode);
 
             printf("+");
@@ -140,7 +152,7 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
             for (int k = 0; k < inner_width - 13; ++k) printf("─");
             printf("┐\n");
 
-            printf("│ %-13s │ %-15s │ %-15s │ %-12s │ %-13s │\n",
+            printf("│ %-12s │ %-13s │ %-13s │ %-11s │ %-12s │\n",
                    s_mean, s_sdev, s_med, s_iqr, s_mode);
 
             printf("└");
@@ -151,8 +163,9 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
 
     /* Calculate column widths for bounds and counts */
     int prefix_width = max_bounds_len + max_count_len + 6; /* "%-*s │ %*s │ " */
-    int bar_max_chars = term_width - prefix_width - 2;
-    if (bar_max_chars < 10) bar_max_chars = 10;
+    int suffix_width = show_errors ? max_err_len : 0;
+    int bar_max_chars = term_width - prefix_width - suffix_width - 2;
+    if (bar_max_chars < 5) bar_max_chars = 5;
 
     double max_scaled = max_content;
     if (log_scale && max_content > 0.0) {
