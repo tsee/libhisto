@@ -486,6 +486,12 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 - **KL Divergence**: \f$ D_{\text{KL}}(P \parallel Q) = \sum_{i} P_i \ln \frac{P_i}{Q_i} \f$ (with \f$ \epsilon = 10^{-12} \f$ floor for zero target bins).
 - **Bhattacharyya Distance**: \f$ D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \f$.
 
+### 5.9 DDSketch Bounded Relative-Error Quantile Sketch (\f$O(1)\f$ insertion)
+The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et al. (VLDB 2019). It guarantees a relative error bound \f$\alpha\f$ for any quantile query.
+- **Logarithmic Mapping**: \f$ k = \lceil \log_{\gamma}(|x|) \rceil \f$ where \f$\gamma = \frac{1 + \alpha}{1 - \alpha}\f$.
+- **Collapsing**: Bins are managed in a circular buffer. When the number of active bins exceeds `max_bins`, the lowest bins are merged to limit memory consumption while bounding the error for large values.
+- **Complexity**: Insertion takes \f$O(1)\f$ time on average (with occasional \f$O(B)\f$ shift amortized over many insertions where \f$B\f$ is `max_bins`). Quantile queries take \f$O(B)\f$ time.
+
 ---
 
 ## 6. Algorithmic Complexity Reference Table
@@ -541,3 +547,7 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 | `histo_deserialize_binary` | O(N) | O(N) | Decodes wire format into newly allocated histogram |
 | `histo_migrate_binary` | O(N) | O(N) | Migrates older binary format buffers to current version |
 | `histo_free_buffer` | O(1) | O(1) | Deallocates library-allocated serialization buffer |
+| `histo_sketch_create` / `destroy` | O(B) | O(B) | Sketch allocation and circular buffer initialization |
+| `histo_sketch_insert` | O(1) | O(1) | Amortized constant time logarithmic mapping & insertion |
+| `histo_sketch_quantile` | O(B) | O(1) | Single-pass cumulative weight scan over B bins |
+| `histo_sketch_merge` | O(B) | O(1) | Merges two sketches with identical alpha |

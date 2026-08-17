@@ -1,6 +1,7 @@
 add_library(histo
     histo.c
     simd.c
+    sketch.c
     serialize.c
     vendor/cJSON/cJSON.c
 )

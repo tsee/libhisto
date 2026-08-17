@@ -54,3 +54,16 @@ add_executable(test_comparison
 target_link_libraries(test_comparison PRIVATE histo unity)
 add_test(NAME test_comparison COMMAND test_comparison)
 
+# Unit Test: Sketch
+add_executable(test_sketch
+    test_sketch.c
+)
+target_link_libraries(test_sketch PRIVATE histo unity)
+add_test(NAME test_sketch COMMAND test_sketch)
+
+# Unit Test: SIMD Vector Acceleration
+add_executable(test_simd
+    test_simd.c
+)
+target_link_libraries(test_simd PRIVATE histo unity)
+add_test(NAME test_simd COMMAND test_simd)
