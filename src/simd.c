@@ -35,3 +35,13 @@ bool histo_simd_has_avx512(void) {
     return false;
 #endif
 }
+
+bool histo_simd_has_neon(void) {
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
+    return true;
+#elif defined(LIBHISTO_ENABLE_NEON)
+    return true;
+#else
+    return false;
+#endif
+}

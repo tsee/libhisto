@@ -498,6 +498,12 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
                 return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
             }
 #endif
+#ifdef LIBHISTO_ENABLE_NEON
+            if (histo_simd_has_neon() && !has_w2) {
+                had_non_finite = histo_fill_uniform_neon(h, x, n);
+                return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
+            }
+#endif
             for (size_t i = 0; i < n; ++i) {
                 double val = x[i];
                 if (isnan(val)) {
@@ -527,6 +533,12 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
 #ifdef LIBHISTO_ENABLE_AVX2
             if (histo_simd_has_avx2()) {
                 had_non_finite = histo_fill_uniform_w2_avx2(h, x, weights, n);
+                return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
+            }
+#endif
+#ifdef LIBHISTO_ENABLE_NEON
+            if (histo_simd_has_neon()) {
+                had_non_finite = histo_fill_uniform_w2_neon(h, x, weights, n);
                 return had_non_finite ? HISTO_WARN_NON_FINITE : HISTO_OK;
             }
 #endif
