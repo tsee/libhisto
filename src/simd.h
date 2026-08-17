@@ -1,0 +1,28 @@
+#ifndef HISTO_SIMD_H
+#define HISTO_SIMD_H
+
+#include "histo/histo.h"
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Runtime detection */
+bool histo_simd_has_avx2(void);
+bool histo_simd_has_avx512(void);
+
+/* Vectorized fill for uniform bins */
+bool histo_fill_uniform_avx2(histo_t *h, const double *x, size_t n);
+bool histo_fill_uniform_avx512(histo_t *h, const double *x, size_t n);
+
+/* Vectorized fill for uniform bins with weights and w2 */
+bool histo_fill_uniform_w2_avx2(histo_t *h, const double *x, const double *weights, size_t n);
+bool histo_fill_uniform_w2_avx512(histo_t *h, const double *x, const double *weights, size_t n);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* HISTO_SIMD_H */

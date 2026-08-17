@@ -1,0 +1,37 @@
+#include "simd.h"
+
+bool histo_simd_has_avx2(void) {
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_cpu_supports)
+    __builtin_cpu_init();
+    return __builtin_cpu_supports("avx2");
+#else
+    return false;
+#endif
+#else
+    __builtin_cpu_init();
+    return __builtin_cpu_supports("avx2");
+#endif
+#else
+    return false;
+#endif
+}
+
+bool histo_simd_has_avx512(void) {
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_cpu_supports)
+    __builtin_cpu_init();
+    return __builtin_cpu_supports("avx512f");
+#else
+    return false;
+#endif
+#else
+    __builtin_cpu_init();
+    return __builtin_cpu_supports("avx512f");
+#endif
+#else
+    return false;
+#endif
+}
