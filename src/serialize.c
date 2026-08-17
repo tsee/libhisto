@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "cJSON.h"
 #include <stdio.h>
 #include <ctype.h>
 
@@ -440,146 +441,142 @@ histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **
 }
 
 /* ========================================================================= */
-/* JSON Serialization & Deserialization                                      */
+/* JSON Serialization & Deserialization (cJSON)                              */
 /* ========================================================================= */
-
-typedef struct {
-    char *buf;
-    size_t len;
-    size_t cap;
-} histo_json_builder_t;
-
-static bool histo_jb_append(histo_json_builder_t *jb, const char *str) {
-    size_t slen = strlen(str);
-    while (jb->len + slen + 1 >= jb->cap) {
-        jb->cap = (jb->cap == 0) ? 1024 : jb->cap * 2;
-        char *nb = (char *)realloc(jb->buf, jb->cap);
-        if (!nb) return false;
-        jb->buf = nb;
-    }
-    memcpy(jb->buf + jb->len, str, slen);
-    jb->len += slen;
-    jb->buf[jb->len] = '\0';
-    return true;
-}
 
 histo_status_t histo_serialize_json(const histo_t *h, char **out_json) {
     if (!h || !out_json) return HISTO_ERR_INVALID_ARG;
     *out_json = NULL;
 
-    histo_json_builder_t jb = {0};
-    char tmp[256];
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return HISTO_ERR_NOMEM;
 
-    snprintf(tmp, sizeof(tmp), "{\n  \"schema\": \"libhisto-v2\",\n  \"bin_type\": \"%s\",\n  \"nbins\": %u,\n  \"min\": %.17g,\n  \"max\": %.17g,\n  \"flags\": %u,\n",
-             (h->bin_type == HISTO_BIN_VARIABLE) ? "variable" : "uniform",
-             h->nbins, h->min, h->max, h->flags);
-    if (!histo_jb_append(&jb, tmp)) goto oom;
+    cJSON_AddStringToObject(root, "schema", "libhisto-v2");
+    cJSON_AddStringToObject(root, "bin_type", (h->bin_type == HISTO_BIN_VARIABLE) ? "variable" : "uniform");
+    cJSON_AddNumberToObject(root, "nbins", (double)h->nbins);
+    cJSON_AddNumberToObject(root, "min", h->min);
+    cJSON_AddNumberToObject(root, "max", h->max);
+    cJSON_AddNumberToObject(root, "flags", (double)h->flags);
 
-    snprintf(tmp, sizeof(tmp), "  \"underflow\": {\"weight\": %.17g, \"sum_w2\": %.17g, \"entries\": %llu},\n",
-             h->underflow_weight, h->underflow_sum_w2, (unsigned long long)h->n_underflow);
-    if (!histo_jb_append(&jb, tmp)) goto oom;
+    cJSON *uf = cJSON_CreateObject();
+    if (uf) {
+        cJSON_AddNumberToObject(uf, "weight", h->underflow_weight);
+        cJSON_AddNumberToObject(uf, "sum_w2", h->underflow_sum_w2);
+        cJSON_AddNumberToObject(uf, "entries", (double)h->n_underflow);
+        cJSON_AddItemToObject(root, "underflow", uf);
+    }
 
-    snprintf(tmp, sizeof(tmp), "  \"overflow\": {\"weight\": %.17g, \"sum_w2\": %.17g, \"entries\": %llu},\n",
-             h->overflow_weight, h->overflow_sum_w2, (unsigned long long)h->n_overflow);
-    if (!histo_jb_append(&jb, tmp)) goto oom;
+    cJSON *of = cJSON_CreateObject();
+    if (of) {
+        cJSON_AddNumberToObject(of, "weight", h->overflow_weight);
+        cJSON_AddNumberToObject(of, "sum_w2", h->overflow_sum_w2);
+        cJSON_AddNumberToObject(of, "entries", (double)h->n_overflow);
+        cJSON_AddItemToObject(root, "overflow", of);
+    }
 
-    snprintf(tmp, sizeof(tmp), "  \"nan_count\": %llu,\n", (unsigned long long)h->n_nan);
-    if (!histo_jb_append(&jb, tmp)) goto oom;
+    cJSON_AddNumberToObject(root, "nan_count", (double)h->n_nan);
 
-    snprintf(tmp, sizeof(tmp), "  \"total\": {\"weight\": %.17g, \"sum_w2\": %.17g, \"entries\": %llu},\n",
-             h->total_weight, h->total_sum_w2, (unsigned long long)h->n_fills);
-    if (!histo_jb_append(&jb, tmp)) goto oom;
+    cJSON *tot = cJSON_CreateObject();
+    if (tot) {
+        cJSON_AddNumberToObject(tot, "weight", h->total_weight);
+        cJSON_AddNumberToObject(tot, "sum_w2", h->total_sum_w2);
+        cJSON_AddNumberToObject(tot, "entries", (double)h->n_fills);
+        cJSON_AddItemToObject(root, "total", tot);
+    }
 
     if (h->flags & HISTO_FLAG_EXACT_MOMENTS) {
-        snprintf(tmp, sizeof(tmp), "  \"exact_stats\": {\"mean\": %.17g, \"M2\": %.17g, \"min\": %.17g, \"max\": %.17g},\n",
-                 h->stats_mean, h->stats_M2, h->stats_min, h->stats_max);
-        if (!histo_jb_append(&jb, tmp)) goto oom;
+        cJSON *exact = cJSON_CreateObject();
+        if (exact) {
+            cJSON_AddNumberToObject(exact, "mean", h->stats_mean);
+            cJSON_AddNumberToObject(exact, "M2", h->stats_M2);
+            cJSON_AddNumberToObject(exact, "min", h->stats_min);
+            cJSON_AddNumberToObject(exact, "max", h->stats_max);
+            cJSON_AddItemToObject(root, "exact_stats", exact);
+        }
     }
 
     if (h->bin_type == HISTO_BIN_VARIABLE && h->bin_edges) {
-        if (!histo_jb_append(&jb, "  \"bin_edges\": [")) goto oom;
-        for (uint32_t i = 0; i <= h->nbins; ++i) {
-            snprintf(tmp, sizeof(tmp), "%s%.17g", (i == 0) ? "" : ", ", h->bin_edges[i]);
-            if (!histo_jb_append(&jb, tmp)) goto oom;
+        cJSON *edges_arr = cJSON_CreateDoubleArray(h->bin_edges, (int)(h->nbins + 1));
+        if (edges_arr) {
+            cJSON_AddItemToObject(root, "bin_edges", edges_arr);
         }
-        if (!histo_jb_append(&jb, "],\n")) goto oom;
     }
 
-    if (!histo_jb_append(&jb, "  \"bins\": [")) goto oom;
-    for (uint32_t i = 0; i < h->nbins; ++i) {
-        snprintf(tmp, sizeof(tmp), "%s%.17g", (i == 0) ? "" : ", ", h->bins[i]);
-        if (!histo_jb_append(&jb, tmp)) goto oom;
+    cJSON *bins_arr = cJSON_CreateDoubleArray(h->bins, (int)h->nbins);
+    if (bins_arr) {
+        cJSON_AddItemToObject(root, "bins", bins_arr);
     }
-    if (!histo_jb_append(&jb, "]")) goto oom;
 
     if (h->sum_w2) {
-        if (!histo_jb_append(&jb, ",\n  \"sum_w2\": [")) goto oom;
-        for (uint32_t i = 0; i < h->nbins; ++i) {
-            snprintf(tmp, sizeof(tmp), "%s%.17g", (i == 0) ? "" : ", ", h->sum_w2[i]);
-            if (!histo_jb_append(&jb, tmp)) goto oom;
+        cJSON *w2_arr = cJSON_CreateDoubleArray(h->sum_w2, (int)h->nbins);
+        if (w2_arr) {
+            cJSON_AddItemToObject(root, "sum_w2", w2_arr);
         }
-        if (!histo_jb_append(&jb, "]")) goto oom;
     }
 
-    if (!histo_jb_append(&jb, "\n}\n")) goto oom;
+    char *rendered = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
 
-    *out_json = jb.buf;
+    if (!rendered) {
+        return HISTO_ERR_NOMEM;
+    }
+
+    *out_json = rendered;
     return HISTO_OK;
-
-oom:
-    if (jb.buf) free(jb.buf);
-    return HISTO_ERR_NOMEM;
-}
-
-static const char *histo_json_find_key(const char *json, const char *key) {
-    char needle[128];
-    snprintf(needle, sizeof(needle), "\"%s\"", key);
-    const char *p = strstr(json, needle);
-    if (!p) return NULL;
-    p += strlen(needle);
-    while (*p && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ':')) p++;
-    return p;
 }
 
 histo_status_t histo_deserialize_json(const char *json_str, histo_t **out_h) {
     if (!json_str || !out_h) return HISTO_ERR_INVALID_ARG;
     *out_h = NULL;
 
-    const char *p_nbins = histo_json_find_key(json_str, "nbins");
-    const char *p_min = histo_json_find_key(json_str, "min");
-    const char *p_max = histo_json_find_key(json_str, "max");
-    const char *p_bins = histo_json_find_key(json_str, "bins");
-    if (!p_nbins || !p_min || !p_max || !p_bins) {
+    cJSON *root = cJSON_Parse(json_str);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
         return HISTO_ERR_DESERIALIZATION;
     }
 
-    uint32_t nbins = (uint32_t)strtoul(p_nbins, NULL, 10);
-    if (nbins == 0 || nbins > HISTO_MAX_NBINS) return HISTO_ERR_DESERIALIZATION;
+    cJSON *item_nbins = cJSON_GetObjectItemCaseSensitive(root, "nbins");
+    cJSON *item_min = cJSON_GetObjectItemCaseSensitive(root, "min");
+    cJSON *item_max = cJSON_GetObjectItemCaseSensitive(root, "max");
+    cJSON *item_bins = cJSON_GetObjectItemCaseSensitive(root, "bins");
 
-    double range_min = strtod(p_min, NULL);
-    double range_max = strtod(p_max, NULL);
-    if (range_min >= range_max && range_min != 0.0) return HISTO_ERR_DESERIALIZATION;
-
-    uint32_t flags = HISTO_FLAG_NONE;
-    const char *p_flags = histo_json_find_key(json_str, "flags");
-    if (p_flags) {
-        flags = (uint32_t)strtoul(p_flags, NULL, 10);
+    if (!cJSON_IsNumber(item_nbins) || !cJSON_IsNumber(item_min) ||
+        !cJSON_IsNumber(item_max) || !cJSON_IsArray(item_bins)) {
+        cJSON_Delete(root);
+        return HISTO_ERR_DESERIALIZATION;
     }
 
-    const char *p_edges = histo_json_find_key(json_str, "bin_edges");
+    uint32_t nbins = (uint32_t)item_nbins->valuedouble;
+    if (nbins == 0 || nbins > HISTO_MAX_NBINS || (uint32_t)cJSON_GetArraySize(item_bins) != nbins) {
+        cJSON_Delete(root);
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    double range_min = item_min->valuedouble;
+    double range_max = item_max->valuedouble;
+    if (range_min >= range_max && range_min != 0.0) {
+        cJSON_Delete(root);
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    uint32_t flags = HISTO_FLAG_NONE;
+    cJSON *item_flags = cJSON_GetObjectItemCaseSensitive(root, "flags");
+    if (cJSON_IsNumber(item_flags)) {
+        flags = (uint32_t)item_flags->valuedouble;
+    }
+
+    cJSON *item_edges = cJSON_GetObjectItemCaseSensitive(root, "bin_edges");
     histo_t *h = NULL;
 
-    if (p_edges && *p_edges == '[') {
-        p_edges++;
+    if (cJSON_IsArray(item_edges) && (uint32_t)cJSON_GetArraySize(item_edges) == nbins + 1) {
         double *edges = (double *)malloc((nbins + 1) * sizeof(double));
-        if (!edges) return HISTO_ERR_NOMEM;
+        if (!edges) {
+            cJSON_Delete(root);
+            return HISTO_ERR_NOMEM;
+        }
         for (uint32_t i = 0; i <= nbins; ++i) {
-            char *endp = NULL;
-            edges[i] = strtod(p_edges, &endp);
-            p_edges = endp;
-            while (*p_edges && (*p_edges == ' ' || *p_edges == '\t' || *p_edges == ',' || *p_edges == '\r' || *p_edges == '\n')) {
-                p_edges++;
-            }
+            cJSON *elem = cJSON_GetArrayItem(item_edges, (int)i);
+            edges[i] = cJSON_IsNumber(elem) ? elem->valuedouble : 0.0;
         }
         h = histo_create_variable(nbins, edges, flags);
         free(edges);
@@ -587,80 +584,72 @@ histo_status_t histo_deserialize_json(const char *json_str, histo_t **out_h) {
         h = histo_create_uniform(nbins, range_min, range_max, flags);
     }
 
-    if (!h) return HISTO_ERR_NOMEM;
+    if (!h) {
+        cJSON_Delete(root);
+        return HISTO_ERR_NOMEM;
+    }
 
-    /* Read bins array */
-    if (*p_bins == '[') p_bins++;
     for (uint32_t i = 0; i < nbins; ++i) {
-        char *endp = NULL;
-        h->bins[i] = strtod(p_bins, &endp);
-        p_bins = endp;
-        while (*p_bins && (*p_bins == ' ' || *p_bins == '\t' || *p_bins == ',' || *p_bins == '\r' || *p_bins == '\n')) {
-            p_bins++;
-        }
+        cJSON *elem = cJSON_GetArrayItem(item_bins, (int)i);
+        h->bins[i] = cJSON_IsNumber(elem) ? elem->valuedouble : 0.0;
     }
 
-    /* Read sum_w2 if present */
-    const char *p_w2 = histo_json_find_key(json_str, "sum_w2");
-    if (p_w2 && h->sum_w2 && *p_w2 == '[') {
-        p_w2++;
+    cJSON *item_w2 = cJSON_GetObjectItemCaseSensitive(root, "sum_w2");
+    if (cJSON_IsArray(item_w2) && h->sum_w2) {
         for (uint32_t i = 0; i < nbins; ++i) {
-            char *endp = NULL;
-            h->sum_w2[i] = strtod(p_w2, &endp);
-            p_w2 = endp;
-            while (*p_w2 && (*p_w2 == ' ' || *p_w2 == '\t' || *p_w2 == ',' || *p_w2 == '\r' || *p_w2 == '\n')) {
-                p_w2++;
-            }
+            cJSON *elem = cJSON_GetArrayItem(item_w2, (int)i);
+            h->sum_w2[i] = cJSON_IsNumber(elem) ? elem->valuedouble : 0.0;
         }
     }
 
-    /* Total and stats */
-    const char *p_total = histo_json_find_key(json_str, "total");
-    if (p_total) {
-        const char *pw = histo_json_find_key(p_total, "weight");
-        if (pw) h->total_weight = strtod(pw, NULL);
-        const char *ps = histo_json_find_key(p_total, "sum_w2");
-        if (ps) h->total_sum_w2 = strtod(ps, NULL);
-        const char *pe = histo_json_find_key(p_total, "entries");
-        if (pe) h->n_fills = (uint64_t)strtoull(pe, NULL, 10);
+    cJSON *tot = cJSON_GetObjectItemCaseSensitive(root, "total");
+    if (cJSON_IsObject(tot)) {
+        cJSON *w = cJSON_GetObjectItemCaseSensitive(tot, "weight");
+        if (cJSON_IsNumber(w)) h->total_weight = w->valuedouble;
+        cJSON *s2 = cJSON_GetObjectItemCaseSensitive(tot, "sum_w2");
+        if (cJSON_IsNumber(s2)) h->total_sum_w2 = s2->valuedouble;
+        cJSON *e = cJSON_GetObjectItemCaseSensitive(tot, "entries");
+        if (cJSON_IsNumber(e)) h->n_fills = (uint64_t)e->valuedouble;
     }
 
-    const char *p_uf = histo_json_find_key(json_str, "underflow");
-    if (p_uf) {
-        const char *pw = histo_json_find_key(p_uf, "weight");
-        if (pw) h->underflow_weight = strtod(pw, NULL);
-        const char *ps = histo_json_find_key(p_uf, "sum_w2");
-        if (ps) h->underflow_sum_w2 = strtod(ps, NULL);
-        const char *pe = histo_json_find_key(p_uf, "entries");
-        if (pe) h->n_underflow = (uint64_t)strtoull(pe, NULL, 10);
-    }
-    const char *p_of = histo_json_find_key(json_str, "overflow");
-    if (p_of) {
-        const char *pw = histo_json_find_key(p_of, "weight");
-        if (pw) h->overflow_weight = strtod(pw, NULL);
-        const char *ps = histo_json_find_key(p_of, "sum_w2");
-        if (ps) h->overflow_sum_w2 = strtod(ps, NULL);
-        const char *pe = histo_json_find_key(p_of, "entries");
-        if (pe) h->n_overflow = (uint64_t)strtoull(pe, NULL, 10);
+    cJSON *uf = cJSON_GetObjectItemCaseSensitive(root, "underflow");
+    if (cJSON_IsObject(uf)) {
+        cJSON *w = cJSON_GetObjectItemCaseSensitive(uf, "weight");
+        if (cJSON_IsNumber(w)) h->underflow_weight = w->valuedouble;
+        cJSON *s2 = cJSON_GetObjectItemCaseSensitive(uf, "sum_w2");
+        if (cJSON_IsNumber(s2)) h->underflow_sum_w2 = s2->valuedouble;
+        cJSON *e = cJSON_GetObjectItemCaseSensitive(uf, "entries");
+        if (cJSON_IsNumber(e)) h->n_underflow = (uint64_t)e->valuedouble;
     }
 
-    const char *p_nan = histo_json_find_key(json_str, "nan_count");
-    if (p_nan) {
-        h->n_nan = (uint64_t)strtoull(p_nan, NULL, 10);
+    cJSON *of = cJSON_GetObjectItemCaseSensitive(root, "overflow");
+    if (cJSON_IsObject(of)) {
+        cJSON *w = cJSON_GetObjectItemCaseSensitive(of, "weight");
+        if (cJSON_IsNumber(w)) h->overflow_weight = w->valuedouble;
+        cJSON *s2 = cJSON_GetObjectItemCaseSensitive(of, "sum_w2");
+        if (cJSON_IsNumber(s2)) h->overflow_sum_w2 = s2->valuedouble;
+        cJSON *e = cJSON_GetObjectItemCaseSensitive(of, "entries");
+        if (cJSON_IsNumber(e)) h->n_overflow = (uint64_t)e->valuedouble;
     }
 
-    const char *p_exact = histo_json_find_key(json_str, "exact_stats");
-    if (p_exact) {
-        const char *pm = histo_json_find_key(p_exact, "mean");
-        if (pm) h->stats_mean = strtod(pm, NULL);
-        const char *pv = histo_json_find_key(p_exact, "M2");
-        if (pv) h->stats_M2 = strtod(pv, NULL);
-        const char *pmin = histo_json_find_key(p_exact, "min");
-        if (pmin) h->stats_min = strtod(pmin, NULL);
-        const char *pmax = histo_json_find_key(p_exact, "max");
-        if (pmax) h->stats_max = strtod(pmax, NULL);
+    cJSON *nan_item = cJSON_GetObjectItemCaseSensitive(root, "nan_count");
+    if (cJSON_IsNumber(nan_item)) {
+        h->n_nan = (uint64_t)nan_item->valuedouble;
     }
 
+    cJSON *exact = cJSON_GetObjectItemCaseSensitive(root, "exact_stats");
+    if (cJSON_IsObject(exact)) {
+        cJSON *mean = cJSON_GetObjectItemCaseSensitive(exact, "mean");
+        if (cJSON_IsNumber(mean)) h->stats_mean = mean->valuedouble;
+        cJSON *m2 = cJSON_GetObjectItemCaseSensitive(exact, "M2");
+        if (cJSON_IsNumber(m2)) h->stats_M2 = m2->valuedouble;
+        cJSON *min_val = cJSON_GetObjectItemCaseSensitive(exact, "min");
+        if (cJSON_IsNumber(min_val)) h->stats_min = min_val->valuedouble;
+        cJSON *max_val = cJSON_GetObjectItemCaseSensitive(exact, "max");
+        if (cJSON_IsNumber(max_val)) h->stats_max = max_val->valuedouble;
+    }
+
+    cJSON_Delete(root);
     *out_h = h;
     return HISTO_OK;
 }

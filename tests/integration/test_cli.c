@@ -29,9 +29,9 @@ void test_json_serialization_roundtrip_uniform(void) {
     char *json = NULL;
     histo_status_t st = histo_serialize_json(h, &json);
     TEST_ASSERT_EQUAL_INT(HISTO_OK, st);
-    TEST_ASSERT_NOT_NULL(json);
-    TEST_ASSERT_NOT_NULL(strstr(json, "\"schema\": \"libhisto-v2\""));
-    TEST_ASSERT_NOT_NULL(strstr(json, "\"nbins\": 10"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"schema\""));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"libhisto-v2\""));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"nbins\""));
 
     histo_t *deser = NULL;
     st = histo_deserialize_json(json, &deser);

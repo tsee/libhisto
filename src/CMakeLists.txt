@@ -1,6 +1,7 @@
 add_library(histo
     histo.c
     serialize.c
+    vendor/cJSON/cJSON.c
 )
 
 target_link_libraries(histo
@@ -18,4 +19,5 @@ target_include_directories(histo
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cJSON
 )
