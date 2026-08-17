@@ -119,26 +119,34 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
         snprintf(s_iqr, sizeof(s_iqr), "IQR: %-7.4g", iqr);
         snprintf(s_mode, sizeof(s_mode), "Mode: %-7.4g", mode);
 
-        char stats_content[256];
-        snprintf(stats_content, sizeof(stats_content),
-                 " %-13s │ %-15s │ %-15s │ %-12s │ %-13s ",
-                 s_mean, s_sdev, s_med, s_iqr, s_mode);
-        int content_len = (int)strlen(stats_content);
+        /* Inner content visual width:
+         * 1 (space) + 13 (s_mean) + 3 (" │ ") + 15 (s_sdev) + 3 (" │ ") +
+         * 15 (s_med) + 3 (" │ ") + 12 (s_iqr) + 3 (" │ ") + 13 (s_mode) + 1 (space) = 82 */
+        int inner_width = 82;
 
-        printf("┌─ Statistics ");
-        int dashes_top = content_len - 14;
-        for (int k = 0; k < dashes_top; ++k) {
-            printf("─");
+        if (strcmp(style, "ascii") == 0) {
+            printf("+-- Statistics ");
+            for (int k = 0; k < inner_width - 14; ++k) putchar('-');
+            printf("+\n");
+
+            printf("| %-13s | %-15s | %-15s | %-12s | %-13s |\n",
+                   s_mean, s_sdev, s_med, s_iqr, s_mode);
+
+            printf("+");
+            for (int k = 0; k < inner_width; ++k) putchar('-');
+            printf("+\n");
+        } else {
+            printf("┌─ Statistics ");
+            for (int k = 0; k < inner_width - 13; ++k) printf("─");
+            printf("┐\n");
+
+            printf("│ %-13s │ %-15s │ %-15s │ %-12s │ %-13s │\n",
+                   s_mean, s_sdev, s_med, s_iqr, s_mode);
+
+            printf("└");
+            for (int k = 0; k < inner_width; ++k) printf("─");
+            printf("┘\n");
         }
-        printf("┐\n");
-
-        printf("│%s│\n", stats_content);
-
-        printf("└");
-        for (int k = 0; k < content_len; ++k) {
-            printf("─");
-        }
-        printf("┘\n");
     }
 
     /* Calculate column widths for bounds and counts */
