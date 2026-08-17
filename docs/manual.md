@@ -239,12 +239,163 @@ printf("Chi2/NDF: %.2f/%u | KS: %.4f | EMD: %.4f | KL: %.4f | Bhatt: %.4f\n",
 ```
 
 ### 4.7 Unix CLI Toolkit
-`libhisto` includes a high-performance Unix CLI suite (`histo`, `histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`):
 
-- **`histo-fill`**: Ingests whitespace/CSV streams or binary `double` floats into histograms and emits binary wire blobs, JSON, or TSV tables. Supports live intermediate snapshot emission (`--emit-interval=SEC` or `--emit-every=N`).
-- **`histo-plot`**: Renders histograms directly to the console using Unicode fractional sub-character blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whisker bars (\f$\pm \sigma\f$), and live streaming continuous watch mode (`--watch`).
-- **`histo-stats`**: Formats comprehensive statistical moment and non-parametric dispersion tables.
-- **`histo-cmp`**: Computes \f$\chi^2\f$, Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, and Bhattacharyya distance metrics between two histogram files.
+`libhisto` ships with a high-performance, modular Unix CLI toolkit built on the standard Unix filter philosophy (stdin \f$\to\f$ stdout). The tools can be invoked via the multi-call binary `histo <command>` or direct standalone symlinks (`histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`).
+
+```text
+               ┌────────────┐
+Data Stream ──>│ histo-fill │──> Binary Stream / JSON / TSV
+               └────────────┘        │
+             ┌───────────────────────┼───────────────────────┐
+             ▼                       ▼                       ▼
+      ┌────────────┐          ┌─────────────┐         ┌───────────┐
+      │ histo-plot │          │ histo-stats │         │ histo-cmp │
+      └────────────┘          └─────────────┘         └───────────┘
+   (Terminal Visualizer)      (Moment Report)       (A/B Comparison)
+```
+
+#### 4.7.1 Streaming Ingestion (`histo-fill`)
+Ingests whitespace-delimited numbers, CSV columns, or raw IEEE-754 Little-Endian binary `double` streams (`--binary-f64`):
+
+```bash
+# Ingest 100k numbers with automatic min/max range detection
+seq 1 100000 | awk '{print rand() * 100}' | histo-fill --bins=25 --auto-range -o binary > hist.bin
+
+# Ingest CSV file extracting coordinate from column 2 and weight from column 4
+cat physics_events.csv | histo-fill --delimiter=',' --value-col=2 --weights-col=4 --bins=50 --min=0 --max=200 -o json > hist.json
+
+# Live streaming snapshot mode (emits binary histogram snapshot every 250ms)
+tail -f access.log | grep -o 'time=[0-9.]*' | cut -d= -f2 | \
+    histo-fill --bins=30 --auto-range --emit-interval=0.25 | histo-plot --watch
+```
+
+**Common `histo-fill` Options:**
+| Option | Description |
+| :--- | :--- |
+| `-n, --bins=<N>` | Number of uniform bins (default: 50) |
+| `--min=<X>, --max=<X>` | Lower and upper boundaries |
+| `--edges=<E0,E1,...>` | Comma-separated variable bin edges |
+| `--auto-range` | Buffers input to compute min/max automatically |
+| `-w, --weights` | Ingests `value weight` pairs |
+| `--value-col=<COL>` | 1-based column for sample value (default: 1) |
+| `--weights-col=<COL>`| 1-based column for sample weight (default: 2) |
+| `--delimiter=<CHAR>` | Field delimiter (default: whitespace) |
+| `--binary-f64` | Ingests raw Little-Endian binary `double` stream |
+| `--merge` | Ingests and adds multiple serialized histograms |
+| `--rebin=<FACTOR>` | Rebins uniform histogram by integer factor |
+| `--cdf` | Converts histogram to Cumulative Distribution Function |
+| `--normalize=<AREA>` | Scales total histogram weight to target area |
+| `-o, --output=<FMT>` | Output format: `binary` (default for pipes), `json`, `tsv`, `table` |
+| `--emit-interval=<S>`| Emits snapshot every \f$S\f$ seconds |
+| `--emit-every=<N>` | Emits snapshot every \f$N\f$ samples |
+
+#### 4.7.2 Terminal Visualization (`histo-plot`)
+Renders histograms directly in terminal emulators with automatic width detection, 1/8th sub-character fractional Unicode blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whiskers (\f$\pm \sigma\f$), and continuous watch mode (`--watch`):
+
+```bash
+# Gaussian Monte Carlo piped through binary wire format into TrueColor plot
+python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(100000)))" | \
+    histo-fill --bins=25 --min=0 --max=100 -o binary | \
+    histo-plot --color=always --title="Gaussian Monte Carlo (N=100k, μ=50, σ=15)"
+```
+
+**Output:**
+```text
+Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919)
+┌─ Statistics ──────────────────────────────────────────────────────────────┐
+│ Mean: 49.97  │ StdDev: 14.96 │ Median: 49.97 │ IQR: 20.18  │ Mode: 49.91  │
+└───────────────────────────────────────────────────────────────────────────┘
+[  0.00,   4.00) │     63 │ ▎
+[  4.00,   8.00) │    151 │ ▋
+[  8.00,  12.00) │    314 │ █▍
+[ 12.00,  16.00) │    593 │ ██▊
+[ 16.00,  20.00) │   1111 │ █████▎
+[ 20.00,  24.00) │   1901 │ █████████
+[ 24.00,  28.00) │   2929 │ █████████████▉
+[ 28.00,  32.00) │   4410 │ ████████████████████▉
+[ 32.00,  36.00) │   6002 │ ████████████████████████████▍
+[ 36.00,  40.00) │   7787 │ ████████████████████████████████████▉
+[ 40.00,  44.00) │   9213 │ ███████████████████████████████████████████▋
+[ 44.00,  48.00) │  10301 │ ████████████████████████████████████████████████▊
+[ 48.00,  52.00) │  10546 │ ██████████████████████████████████████████████████
+[ 52.00,  56.00) │  10278 │ ████████████████████████████████████████████████▋
+[ 56.00,  60.00) │   9277 │ ███████████████████████████████████████████▉
+[ 60.00,  64.00) │   7656 │ ████████████████████████████████████▎
+[ 64.00,  68.00) │   6007 │ ████████████████████████████▍
+[ 68.00,  72.00) │   4313 │ ████████████████████▍
+[ 72.00,  76.00) │   2943 │ █████████████▉
+[ 76.00,  80.00) │   1892 │ ████████▉
+[ 80.00,  84.00) │   1059 │ █████
+[ 84.00,  88.00) │    655 │ ███
+[ 88.00,  92.00) │    300 │ █▍
+[ 92.00,  96.00) │    149 │ ▋
+[ 96.00, 100.00) │     69 │ ▎
+ Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0
+```
+
+#### 4.7.3 Summary Statistics (`histo-stats`)
+Inspects exact moments, central moments, robust percentiles, and peak properties:
+
+```bash
+cat telemetry.csv | histo-fill --bins=50 --auto-range -o json | histo-stats
+```
+
+**Output:**
+```text
+===============================================================
+                    HISTOGRAM SUMMARY REPORT                   
+===============================================================
+ Geometry & Counts:
+   Bins:            50           Range: [0.0254, 75.9914)
+   Entries:         100000       Total Weight: 1e+05
+   Underflow:       0            Overflow:     0
+   Non-Finite / NaN:0           
+
+ Central Moments & Shape:
+   Mean:            10.0338      Std Deviation: 7.13529
+   Variance:        50.9123      RMS:           12.3121
+   Skewness:        1.42308      Kurtosis:      6.02511
+   Excess Kurtosis: 3.02511     
+
+ Robust Non-Parametric Metrics:
+   Median (Q50):    8.42856      IQR (Q75-Q25): 8.68178
+   Q25:             4.80409      Q75:           13.4859
+   MAD:             4.51105      Trimmed Mean:  9.42926
+   Winsorized Mean: 9.77578     
+
+ Peak & Width Estimation:
+   Mode (Bin):      3            Mode (Continuous): 5.17544
+   FWHM:            11.9083     
+===============================================================
+```
+
+#### 4.7.4 Two-Distribution Comparison (`histo-cmp`)
+Compares two histograms for hypothesis testing and distribution drift detection:
+
+```bash
+histo-cmp baseline.bin canary.bin
+```
+
+**Output:**
+```text
+===============================================================
+              TWO-DISTRIBUTION COMPARISON REPORT               
+===============================================================
+ Source A: baseline.bin (Entries: 50000, Weight: 5e+04)
+ Source B: canary.bin (Entries: 49997, Weight: 5e+04)
+
+ Hypothesis Testing & Compatibility:
+   Chi-Square (chi^2):       6014.45      NDF: 24
+   chi^2 / NDF:             250.602     
+   Kolmogorov-Smirnov (D):  0.193388     (Max vertical CDF difference)
+
+ Statistical Distance Metrics:
+   1D Wasserstein (EMD):    5.06879      (L1 CDF transportation cost)
+   KL Divergence (A || B):  0.116139     nats
+   KL Divergence (B || A):  0.17478      nats
+   Bhattacharyya Distance:  0.0335182   
+===============================================================
+```
 
 ---
 

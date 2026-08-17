@@ -343,17 +343,155 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="ttc" id="ahisto_8h_html_ad1547891efa84bb2bb34be00079773c2"><div class="ttname"><a href="histo_8h.html#ad1547891efa84bb2bb34be00079773c2">histo_cmp_ks</a></div><div class="ttdeci">histo_status_t histo_cmp_ks(const histo_t *h1, const histo_t *h2, double *out_ks_stat)</div><div class="ttdoc">Computes the Kolmogorov-Smirnov (KS) test statistic D between two histograms.</div></div>
 </div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md16"></a>
 4.7 Unix CLI Toolkit</h2>
-<p><span class="tt">libhisto</span> includes a high-performance Unix CLI suite (<span class="tt">histo</span>, <span class="tt">histo-fill</span>, <span class="tt">histo-plot</span>, <span class="tt">histo-stats</span>, <span class="tt">histo-cmp</span>):</p>
-<ul>
-<li><b><span class="tt">histo-fill</span></b>: Ingests whitespace/CSV streams or binary <span class="tt">double</span> floats into histograms and emits binary wire blobs, JSON, or TSV tables. Supports live intermediate snapshot emission (<span class="tt">--emit-interval=SEC</span> or <span class="tt">--emit-every=N</span>).</li>
-<li><b><span class="tt">histo-plot</span></b>: Renders histograms directly to the console using Unicode fractional sub-character blocks (<span class="tt"> ▂▃▄▅▆▇█</span>), ANSI TrueColor density gradients, error whisker bars ( \(\pm \sigma\)), and live streaming continuous watch mode (<span class="tt">--watch</span>).</li>
-<li><b><span class="tt">histo-stats</span></b>: Formats comprehensive statistical moment and non-parametric dispersion tables.</li>
-<li><b><span class="tt">histo-cmp</span></b>: Computes \(\chi^2\), Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, and Bhattacharyya distance metrics between two histogram files.</li>
-</ul>
-<hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
+<p><span class="tt">libhisto</span> ships with a high-performance, modular Unix CLI toolkit built on the standard Unix filter philosophy (stdin \(\to\) stdout). The tools can be invoked via the multi-call binary <span class="tt">histo &lt;command&gt;</span> or direct standalone symlinks (<span class="tt">histo-fill</span>, <span class="tt">histo-plot</span>, <span class="tt">histo-stats</span>, <span class="tt">histo-cmp</span>).</p>
+<div class="fragment"><div class="line">               ┌────────────┐</div>
+<div class="line">Data Stream ──&gt;│ histo-fill │──&gt; Binary Stream / JSON / TSV</div>
+<div class="line">               └────────────┘        │</div>
+<div class="line">             ┌───────────────────────┼───────────────────────┐</div>
+<div class="line">             ▼                       ▼                       ▼</div>
+<div class="line">      ┌────────────┐          ┌─────────────┐         ┌───────────┐</div>
+<div class="line">      │ histo-plot │          │ histo-stats │         │ histo-cmp │</div>
+<div class="line">      └────────────┘          └─────────────┘         └───────────┘</div>
+<div class="line">   (Terminal Visualizer)      (Moment Report)       (A/B Comparison)</div>
+</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
+4.7.1 Streaming Ingestion (<span class="tt">histo-fill</span>)</h3>
+<p>Ingests whitespace-delimited numbers, CSV columns, or raw IEEE-754 Little-Endian binary <span class="tt">double</span> streams (<span class="tt">--binary-f64</span>):</p>
+<div class="fragment"><div class="line"># Ingest 100k numbers with automatic min/max range detection</div>
+<div class="line">seq 1 100000 | awk &#39;{print rand() * 100}&#39; | histo-fill --bins=25 --auto-range -o binary &gt; hist.bin</div>
+<div class="line"> </div>
+<div class="line"># Ingest CSV file extracting coordinate from column 2 and weight from column 4</div>
+<div class="line">cat physics_events.csv | histo-fill --delimiter=&#39;,&#39; --value-col=2 --weights-col=4 --bins=50 --min=0 --max=200 -o json &gt; hist.json</div>
+<div class="line"> </div>
+<div class="line"># Live streaming snapshot mode (emits binary histogram snapshot every 250ms)</div>
+<div class="line">tail -f access.log | grep -o &#39;time=[0-9.]*&#39; | cut -d= -f2 | \</div>
+<div class="line">    histo-fill --bins=30 --auto-range --emit-interval=0.25 | histo-plot --watch</div>
+</div><!-- fragment --><p><b>Common <span class="tt">histo-fill</span> Options:</b> </p><table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadLeft">Option  </th><th class="markdownTableHeadLeft">Description  </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">-n, --bins=&lt;N&gt;</span>  </td><td class="markdownTableBodyLeft">Number of uniform bins (default: 50)  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--min=&lt;X&gt;, --max=&lt;X&gt;</span>  </td><td class="markdownTableBodyLeft">Lower and upper boundaries  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">--edges=&lt;E0,E1,...&gt;</span>  </td><td class="markdownTableBodyLeft">Comma-separated variable bin edges  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--auto-range</span>  </td><td class="markdownTableBodyLeft">Buffers input to compute min/max automatically  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">-w, --weights</span>  </td><td class="markdownTableBodyLeft">Ingests <span class="tt">value weight</span> pairs  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--value-col=&lt;COL&gt;</span>  </td><td class="markdownTableBodyLeft">1-based column for sample value (default: 1)  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">--weights-col=&lt;COL&gt;</span>  </td><td class="markdownTableBodyLeft">1-based column for sample weight (default: 2)  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--delimiter=&lt;CHAR&gt;</span>  </td><td class="markdownTableBodyLeft">Field delimiter (default: whitespace)  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">--binary-f64</span>  </td><td class="markdownTableBodyLeft">Ingests raw Little-Endian binary <span class="tt">double</span> stream  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--merge</span>  </td><td class="markdownTableBodyLeft">Ingests and adds multiple serialized histograms  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">--rebin=&lt;FACTOR&gt;</span>  </td><td class="markdownTableBodyLeft">Rebins uniform histogram by integer factor  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--cdf</span>  </td><td class="markdownTableBodyLeft">Converts histogram to Cumulative Distribution Function  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">--normalize=&lt;AREA&gt;</span>  </td><td class="markdownTableBodyLeft">Scales total histogram weight to target area  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">-o, --output=&lt;FMT&gt;</span>  </td><td class="markdownTableBodyLeft">Output format: <span class="tt">binary</span> (default for pipes), <span class="tt">json</span>, <span class="tt">tsv</span>, <span class="tt">table</span>  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt">--emit-interval=&lt;S&gt;</span>  </td><td class="markdownTableBodyLeft">Emits snapshot every \(S\) seconds  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt">--emit-every=&lt;N&gt;</span>  </td><td class="markdownTableBodyLeft">Emits snapshot every \(N\) samples  </td></tr>
+</table>
+<h3 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
+4.7.2 Terminal Visualization (<span class="tt">histo-plot</span>)</h3>
+<p>Renders histograms directly in terminal emulators with automatic width detection, 1/8th sub-character fractional Unicode blocks (<span class="tt"> ▂▃▄▅▆▇█</span>), ANSI TrueColor density gradients, error whiskers ( \(\pm \sigma\)), and continuous watch mode (<span class="tt">--watch</span>):</p>
+<div class="fragment"><div class="line"># Gaussian Monte Carlo piped through binary wire format into TrueColor plot</div>
+<div class="line">python3 -c &quot;import random, sys; sys.stdout.write(&#39;&#39;.join(f&#39;{random.gauss(50, 15):.4f}\n&#39; for _ in range(100000)))&quot; | \</div>
+<div class="line">    histo-fill --bins=25 --min=0 --max=100 -o binary | \</div>
+<div class="line">    histo-plot --color=always --title=&quot;Gaussian Monte Carlo (N=100k, μ=50, σ=15)&quot;</div>
+</div><!-- fragment --><p><b>Output:</b> </p><div class="fragment"><div class="line">Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919)</div>
+<div class="line">┌─ Statistics ──────────────────────────────────────────────────────────────┐</div>
+<div class="line">│ Mean: 49.97  │ StdDev: 14.96 │ Median: 49.97 │ IQR: 20.18  │ Mode: 49.91  │</div>
+<div class="line">└───────────────────────────────────────────────────────────────────────────┘</div>
+<div class="line">[  0.00,   4.00) │     63 │ ▎</div>
+<div class="line">[  4.00,   8.00) │    151 │ ▋</div>
+<div class="line">[  8.00,  12.00) │    314 │ █▍</div>
+<div class="line">[ 12.00,  16.00) │    593 │ ██▊</div>
+<div class="line">[ 16.00,  20.00) │   1111 │ █████▎</div>
+<div class="line">[ 20.00,  24.00) │   1901 │ █████████</div>
+<div class="line">[ 24.00,  28.00) │   2929 │ █████████████▉</div>
+<div class="line">[ 28.00,  32.00) │   4410 │ ████████████████████▉</div>
+<div class="line">[ 32.00,  36.00) │   6002 │ ████████████████████████████▍</div>
+<div class="line">[ 36.00,  40.00) │   7787 │ ████████████████████████████████████▉</div>
+<div class="line">[ 40.00,  44.00) │   9213 │ ███████████████████████████████████████████▋</div>
+<div class="line">[ 44.00,  48.00) │  10301 │ ████████████████████████████████████████████████▊</div>
+<div class="line">[ 48.00,  52.00) │  10546 │ ██████████████████████████████████████████████████</div>
+<div class="line">[ 52.00,  56.00) │  10278 │ ████████████████████████████████████████████████▋</div>
+<div class="line">[ 56.00,  60.00) │   9277 │ ███████████████████████████████████████████▉</div>
+<div class="line">[ 60.00,  64.00) │   7656 │ ████████████████████████████████████▎</div>
+<div class="line">[ 64.00,  68.00) │   6007 │ ████████████████████████████▍</div>
+<div class="line">[ 68.00,  72.00) │   4313 │ ████████████████████▍</div>
+<div class="line">[ 72.00,  76.00) │   2943 │ █████████████▉</div>
+<div class="line">[ 76.00,  80.00) │   1892 │ ████████▉</div>
+<div class="line">[ 80.00,  84.00) │   1059 │ █████</div>
+<div class="line">[ 84.00,  88.00) │    655 │ ███</div>
+<div class="line">[ 88.00,  92.00) │    300 │ █▍</div>
+<div class="line">[ 92.00,  96.00) │    149 │ ▋</div>
+<div class="line">[ 96.00, 100.00) │     69 │ ▎</div>
+<div class="line"> Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0</div>
+</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
+4.7.3 Summary Statistics (<span class="tt">histo-stats</span>)</h3>
+<p>Inspects exact moments, central moments, robust percentiles, and peak properties:</p>
+<div class="fragment"><div class="line">cat telemetry.csv | histo-fill --bins=50 --auto-range -o json | histo-stats</div>
+</div><!-- fragment --><p><b>Output:</b> </p><div class="fragment"><div class="line">===============================================================</div>
+<div class="line">                    HISTOGRAM SUMMARY REPORT                   </div>
+<div class="line">===============================================================</div>
+<div class="line"> Geometry &amp; Counts:</div>
+<div class="line">   Bins:            50           Range: [0.0254, 75.9914)</div>
+<div class="line">   Entries:         100000       Total Weight: 1e+05</div>
+<div class="line">   Underflow:       0            Overflow:     0</div>
+<div class="line">   Non-Finite / NaN:0           </div>
+<div class="line"> </div>
+<div class="line"> Central Moments &amp; Shape:</div>
+<div class="line">   Mean:            10.0338      Std Deviation: 7.13529</div>
+<div class="line">   Variance:        50.9123      RMS:           12.3121</div>
+<div class="line">   Skewness:        1.42308      Kurtosis:      6.02511</div>
+<div class="line">   Excess Kurtosis: 3.02511     </div>
+<div class="line"> </div>
+<div class="line"> Robust Non-Parametric Metrics:</div>
+<div class="line">   Median (Q50):    8.42856      IQR (Q75-Q25): 8.68178</div>
+<div class="line">   Q25:             4.80409      Q75:           13.4859</div>
+<div class="line">   MAD:             4.51105      Trimmed Mean:  9.42926</div>
+<div class="line">   Winsorized Mean: 9.77578     </div>
+<div class="line"> </div>
+<div class="line"> Peak &amp; Width Estimation:</div>
+<div class="line">   Mode (Bin):      3            Mode (Continuous): 5.17544</div>
+<div class="line">   FWHM:            11.9083     </div>
+<div class="line">===============================================================</div>
+</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
+4.7.4 Two-Distribution Comparison (<span class="tt">histo-cmp</span>)</h3>
+<p>Compares two histograms for hypothesis testing and distribution drift detection:</p>
+<div class="fragment"><div class="line">histo-cmp baseline.bin canary.bin</div>
+</div><!-- fragment --><p><b>Output:</b> </p><div class="fragment"><div class="line">===============================================================</div>
+<div class="line">              TWO-DISTRIBUTION COMPARISON REPORT               </div>
+<div class="line">===============================================================</div>
+<div class="line"> Source A: baseline.bin (Entries: 50000, Weight: 5e+04)</div>
+<div class="line"> Source B: canary.bin (Entries: 49997, Weight: 5e+04)</div>
+<div class="line"> </div>
+<div class="line"> Hypothesis Testing &amp; Compatibility:</div>
+<div class="line">   Chi-Square (chi^2):       6014.45      NDF: 24</div>
+<div class="line">   chi^2 / NDF:             250.602     </div>
+<div class="line">   Kolmogorov-Smirnov (D):  0.193388     (Max vertical CDF difference)</div>
+<div class="line"> </div>
+<div class="line"> Statistical Distance Metrics:</div>
+<div class="line">   1D Wasserstein (EMD):    5.06879      (L1 CDF transportation cost)</div>
+<div class="line">   KL Divergence (A || B):  0.116139     nats</div>
+<div class="line">   KL Divergence (B || A):  0.17478      nats</div>
+<div class="line">   Bhattacharyya Distance:  0.0335182   </div>
+<div class="line">===============================================================</div>
+</div><!-- fragment --><hr  />
+<h1 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
 5. Numerical Algorithms &amp; Statistical Formulations</h1>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
 5.1 Boundary-Guarded Uniform Bin Lookup ( \(O(1)\))</h2>
 <p>For uniform binning over \([x_{\min}, x_{\max})\), naive floating-point division <span class="tt">(x - min) / width</span> is susceptible to floating-point truncation errors at exact bin boundaries. <span class="tt">libhisto</span> computes the candidate provisional index via reciprocal multiplication:   </p><p class="formulaDsp">
 \[i_{\text{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
@@ -363,13 +501,13 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Upper Guard</b>: If \( x \ge x_{\min} + (i_{\text{prov}} + 1) \Delta \), then \( i = i_{\text{prov}} + 1 \).</li>
 <li><b>Lower Guard</b>: If \( x &lt; x_{\min} + i_{\text{prov}} \Delta \), then \( i = i_{\text{prov}} - 1 \). If \( \Delta^{-1} \) overflows to infinity on subnormal ranges, lookup falls back cleanly to robust division.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
 5.2 Variable-Width Bisection Binary Search ( \(O(\log N)\))</h2>
 <p>For variable binning defined by monotonic edges \( e_0 &lt; e_1 &lt; \dots &lt; e_N \), bin lookup uses bisection search on \( [0, N) \):</p><ul>
 <li>Invariant: \( x \in [e_i, e_{i+1}) \) with exact matching at \( e_0 = x_{\min} \) and \( e_N = x_{\max} \).</li>
 <li>Guaranteed \( O(\log N) \) time and \( O(1) \) auxiliary space.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md21"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
 5.3 Online Weighted Welford Statistics ( \(O(1)\))</h2>
 <p>When <span class="tt"><a class="el" href="types_8h.html#aca1d24a12648936b54f70e610e3b3321ad4b2a75eb9ff0be70e632ab37cf9467d">HISTO_FLAG_EXACT_MOMENTS</a></span> is enabled, running moments are accumulated without storing historical samples:   </p><p class="formulaDsp">
 \[W_{\text{new}} = W_{\text{old}} + w_i
@@ -388,7 +526,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 \]
 </p>
 <p> Variance is extracted as \( \sigma^2 = M_2 / W \). The algorithm natively supports negative event weights and avoids variance underflow via \( M_2 = \max(0.0, M_2) \) clamping.</p>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md26"></a>
 5.4 Higher-Order Central Moments &amp; Shape Formulations ( \(O(N)\))</h2>
 <p>For orders \( k \ge 2 \), central moments are computed using a two-pass algorithm over active bin centers:   </p><p class="formulaDsp">
 \[M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
@@ -399,7 +537,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Kurtosis</b> ( \( \beta_2 \)): \( \beta_2 = \frac{M_4}{M_2^2} = \frac{M_4}{\sigma^4} \)</li>
 <li><b>Excess Kurtosis</b> ( \( \gamma_2 \)): \( \gamma_2 = \beta_2 - 3.0 \) (equals 0.0 for normal distributions).</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md27"></a>
 5.5 Continuous Parabolic Peak Mode &amp; FWHM ( \(O(N)\))</h2>
 <ul>
 <li><b>Continuous Mode</b>: Identifies mode bin \( m \) having maximum weight \( w_m \). For uniform histograms, fits a parabola through \( (x_{m-1}, w_{m-1}), (x_m, w_m), (x_{m+1}, w_{m+1}) \):   <p class="formulaDsp">
@@ -409,7 +547,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </li>
 <li><b>FWHM</b>: Scans outward from the mode bin to find the left and right crossings where \( w(x) = \frac{1}{2} w_{\text{max}} \), linearly interpolating between bin centers.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md28"></a>
 5.6 Non-Empty Support Linear Quantile &amp; Dispersion ( \(O(N)\))</h2>
 <p>Quantile coordinates \( Q(p) = F^{-1}(p) \) for \( p \in [0.0, 1.0] \) are evaluated using continuous inverse CDF interpolation:</p><ul>
 <li>Targets cumulative mass \( T = p \cdot W_{\text{total}} \).</li>
@@ -421,7 +559,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </li>
 <li><b>MAD</b>: Evaluates median deviation \( d_i = |x_{c, i} - \text{median}| \), sorts weighted pairs in \( O(N \log N) \), and finds the 50th percentile of absolute deviations.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md29"></a>
 5.7 Division-Free Error Propagation ( \(O(N)\))</h2>
 <p>When combining histograms via multiplication ( \( H = A \cdot B \)) or division ( \( H = A / B \)), statistical uncertainties are propagated without intermediate divisions:</p><ul>
 <li><b>Product Uncertainty</b>:   <p class="formulaDsp">
@@ -435,7 +573,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </p>
 </li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md26"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md30"></a>
 5.8 Two-Distribution Comparison Metrics ( \(O(N)\))</h2>
 <ul>
 <li><b>Weighted Chi-Square</b>: \( \chi^2 = \sum_{i} \frac{(w_{1,i} - w_{2,i})^2}{\sigma_{1,i}^2 + \sigma_{2,i}^2} \) with \( \text{NDF} \) matching the number of non-zero variance bins.</li>
@@ -445,7 +583,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Bhattacharyya Distance</b>: \( D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \).</li>
 </ul>
 <hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md28"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md32"></a>
 6. Algorithmic Complexity Reference Table</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">

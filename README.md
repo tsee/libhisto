@@ -134,36 +134,83 @@ Measured benchmarks on modern x86_64 architecture:
 
 ## Unix CLI Toolkit
 
-`libhisto` ships with a suite of Unix-pipe-capable CLI tools (invocable via multi-call binary `histo` or standalone symlinks `histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`):
+`libhisto` ships with a high-performance Unix CLI toolkit designed for stream processing and terminal visualization. The tools can be invoked via the multi-call dispatcher (`histo <cmd>`) or direct standalone symlinks (`histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`):
 
-### 1. Ingestion & Aggregation (`histo-fill`)
-```bash
-# Ingest 100k numbers and pipe into a terminal histogram plot
-seq 1 100000 | awk '{print rand() * 100}' | histo-fill --bins=25 --min=0 --max=100 -o binary | histo-plot
-
-# Ingest weighted data from CSV column 2 with weights from column 4
-cat telemetry.csv | histo-fill --bins=50 --auto-range -w --value-col=2 --weights-col=4 -o json > hist.json
+```text
+               ┌────────────┐
+Data Stream ──>│ histo-fill │──> Binary Stream / JSON / TSV
+               └────────────┘        │
+             ┌───────────────────────┼───────────────────────┐
+             ▼                       ▼                       ▼
+      ┌────────────┐          ┌─────────────┐         ┌───────────┐
+      │ histo-plot │          │ histo-stats │         │ histo-cmp │
+      └────────────┘          └─────────────┘         └───────────┘
+   (ASCII / Unicode Plot)     (Moment Report)       (A/B Comparison)
 ```
 
-### 2. Terminal Bar Visualization (`histo-plot`)
-Renders rich Unicode fractional blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whiskers ($\pm \sigma$), and live streaming watch mode:
-```bash
-# Render ASCII bar chart from a saved histogram
-histo-plot hist.json
+### Quick CLI Example: Streaming Monte Carlo to Terminal Plot
 
-# Live stream: refresh console plot continuously from high-speed data stream
-tail -f access.log | grep -o 'duration=[0-9.]*' | cut -d= -f2 | \
-    histo-fill --bins=30 --min=0 --max=2000 --emit-interval=0.25 | histo-plot --watch
+Generate 100,000 Gaussian random samples, pipe through the binary wire format into `histo-fill`, and render with TrueColor gradients, 1/8th sub-character Unicode blocks (` ▂▃▄▅▆▇█`), and summary statistics:
+
+```bash
+python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(100000)))" | \
+    histo-fill --bins=25 --min=0 --max=100 -o binary | \
+    histo-plot --color=always --title="Gaussian Monte Carlo (N=100k, μ=50, σ=15)"
 ```
 
-### 3. Summary & Comparison (`histo-stats` & `histo-cmp`)
-```bash
-# Print comprehensive statistical moment and robust dispersion table
-histo-stats hist.json
-
-# Compare two histograms (Chi-Square, Kolmogorov-Smirnov, 1D Wasserstein, KL Divergence)
-histo-cmp baseline.bin experiment.bin
+**Terminal Output:**
+```text
+Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919)
+┌─ Statistics ──────────────────────────────────────────────────────────────┐
+│ Mean: 49.97  │ StdDev: 14.96 │ Median: 49.97 │ IQR: 20.18  │ Mode: 49.91  │
+└───────────────────────────────────────────────────────────────────────────┘
+[  0.00,   4.00) │     63 │ ▎
+[  4.00,   8.00) │    151 │ ▋
+[  8.00,  12.00) │    314 │ █▍
+[ 12.00,  16.00) │    593 │ ██▊
+[ 16.00,  20.00) │   1111 │ █████▎
+[ 20.00,  24.00) │   1901 │ █████████
+[ 24.00,  28.00) │   2929 │ █████████████▉
+[ 28.00,  32.00) │   4410 │ ████████████████████▉
+[ 32.00,  36.00) │   6002 │ ████████████████████████████▍
+[ 36.00,  40.00) │   7787 │ ████████████████████████████████████▉
+[ 40.00,  44.00) │   9213 │ ███████████████████████████████████████████▋
+[ 44.00,  48.00) │  10301 │ ████████████████████████████████████████████████▊
+[ 48.00,  52.00) │  10546 │ ██████████████████████████████████████████████████
+[ 52.00,  56.00) │  10278 │ ████████████████████████████████████████████████▋
+[ 56.00,  60.00) │   9277 │ ███████████████████████████████████████████▉
+[ 60.00,  64.00) │   7656 │ ████████████████████████████████████▎
+[ 64.00,  68.00) │   6007 │ ████████████████████████████▍
+[ 68.00,  72.00) │   4313 │ ████████████████████▍
+[ 72.00,  76.00) │   2943 │ █████████████▉
+[ 76.00,  80.00) │   1892 │ ████████▉
+[ 80.00,  84.00) │   1059 │ █████
+[ 84.00,  88.00) │    655 │ ███
+[ 88.00,  92.00) │    300 │ █▍
+[ 92.00,  96.00) │    149 │ ▋
+[ 96.00, 100.00) │     69 │ ▎
+ Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0
 ```
+
+### CLI Tool Overview
+
+1. **`histo-fill`**:
+   - Ingests streaming text, CSV columns, or raw IEEE-754 Little-Endian binary `double` streams (`--binary-f64`).
+   - Supports auto-ranging (`--auto-range`), custom variable bin edges (`--edges=...`), weighted samples (`-w`), in-flight rebinning (`--rebin`), and cumulative CDF conversion (`--cdf`).
+   - Emits periodic intermediate snapshot blobs for live streaming pipelines (`--emit-interval=SEC` or `--emit-every=N`).
+
+2. **`histo-plot`**:
+   - Renders 1D histograms as terminal charts with automatic width adaptation.
+   - Supports Unicode 1/8th fractional blocks, shaded blocks, ASCII bars (`--style=ascii`), ANSI 24-bit TrueColor density gradients (`--color=always`), logarithmic scaling (`--log`), error whiskers ($\pm \sigma$), and live continuous watch mode (`--watch`).
+
+3. **`histo-stats`**:
+   - Computes comprehensive summary reports including exact central moments (skewness, kurtosis), robust dispersion (IQR, MAD, trimmed/Winsorized means), and sub-bin continuous peak mode. Emits human-readable tables, TSV, or machine-readable JSON (`-f json`).
+
+4. **`histo-cmp`**:
+   - Compares two distributions and reports weighted Chi-Square ($\chi^2$/NDF), Kolmogorov-Smirnov supremum distance ($D$), 1D Wasserstein Earth Mover's Distance ($W_1$), Kullback-Leibler divergence ($D_{\text{KL}}$), and Bhattacharyya distance.
+
+5. **`histo` (Multi-call Dispatcher)**:
+   - Unified entry point: `histo fill ...`, `histo plot ...`, `histo stats ...`, `histo cmp ...`.
 
 ---
 
