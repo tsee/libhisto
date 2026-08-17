@@ -1,4 +1,5 @@
 #include "histo/histo.h"
+#include "histo/sketch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -274,6 +275,37 @@ int main(void) {
         printf("    - Time: %.3f s | Throughput: %.2f k-cmps/s (%.2f µs/cmp)\n\n",
                elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
         histo_destroy(h_other);
+    }
+
+    /* 15. Benchmark DDSketch Quantile Sketch (Insertion & Queries) */
+    {
+        histo_sketch_t *sketch = histo_sketch_create(0.01, 10000);
+        clock_t start = clock();
+        for (size_t i = 0; i < NUM_SAMPLES; ++i) {
+            histo_sketch_insert(sketch, data[i]);
+        }
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double mops = ((double)NUM_SAMPLES / elapsed_sec) / 1e6;
+        printf("15a. DDSketch Insertion (alpha=0.01, 10M ops):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
+               elapsed_sec, mops, (elapsed_sec / NUM_SAMPLES) * 1e9);
+               
+        double q_val = 0.0;
+        start = clock();
+        for (int i = 0; i < AGG_ITERATIONS; ++i) {
+            histo_sketch_quantile(sketch, 0.5, &q_val);
+            histo_sketch_quantile(sketch, 0.9, &q_val);
+            histo_sketch_quantile(sketch, 0.99, &q_val);
+        }
+        end = clock();
+        elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double kops = ((double)AGG_ITERATIONS / elapsed_sec) / 1e3;
+        printf("15b. DDSketch Quantiles (P50, P90, P99, 10k calls):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f k-queries/s (%.2f µs/query)\n\n",
+               elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
+               
+        histo_sketch_destroy(sketch);
     }
 
     histo_destroy(h_agg);
