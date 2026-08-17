@@ -59,5 +59,9 @@
 - [x] **E4** Inspection & Comparison Tools `histo-stats` and `histo-cmp` (Moments, robust dispersion tables, two-sample hypothesis testing)
 - [x] **E5** CLI Integration Test Suite (`tests/integration/test_cli.c`), Sanitizer Verification (ASan/UBSan/Valgrind), and Documentation Updates
 
+---
 
-
+## Phase F: High-Performance Acceleration & Streaming Sketches
+- [x] **F1** Runtime-Detected AVX2 / AVX-512 Vector Acceleration (`histo_fill_n` SIMD kernel)
+- [x] **F2** Online Dynamic Quantile Sketches (DDSketch relative-error bounded streaming sketch in `include/histo/sketch.h` & `src/sketch.c`)
+- [x] **F3** Sparklines in Terminal Visualization Toolkit (`histo-plot -S / --sparkline`)
