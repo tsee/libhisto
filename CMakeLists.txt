@@ -15,6 +15,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Project options
+option(LIBHISTO_BUILD_TOOLS "Build CLI tools" ON)
 option(LIBHISTO_BUILD_TESTS "Build test suite" ON)
 option(LIBHISTO_BUILD_BENCHMARKS "Build benchmark suite" ON)
 option(LIBHISTO_BUILD_EXAMPLES "Build example programs" ON)
@@ -91,6 +92,11 @@ endif()
 
 # Core library target
 add_subdirectory(src)
+
+# CLI Tools
+if(LIBHISTO_BUILD_TOOLS)
+    add_subdirectory(tools)
+endif()
 
 # Testing
 if(LIBHISTO_BUILD_TESTS)

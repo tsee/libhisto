@@ -341,10 +341,19 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="ttc" id="ahisto_8h_html_a7f930257d1acde57c09099e03d4e4a9f"><div class="ttname"><a href="histo_8h.html#a7f930257d1acde57c09099e03d4e4a9f">histo_cmp_wasserstein_1d</a></div><div class="ttdeci">histo_status_t histo_cmp_wasserstein_1d(const histo_t *h1, const histo_t *h2, double *out_distance)</div><div class="ttdoc">Computes the 1D Wasserstein distance (Earth Mover&#39;s Distance) between two histograms.</div></div>
 <div class="ttc" id="ahisto_8h_html_a9cd4af31501dc5d85cbc88683ba89a8a"><div class="ttname"><a href="histo_8h.html#a9cd4af31501dc5d85cbc88683ba89a8a">histo_cmp_bhattacharyya</a></div><div class="ttdeci">histo_status_t histo_cmp_bhattacharyya(const histo_t *h1, const histo_t *h2, double *out_distance)</div><div class="ttdoc">Computes the Bhattacharyya distance -ln(sum(sqrt(P_i * Q_i))) between two histograms.</div></div>
 <div class="ttc" id="ahisto_8h_html_ad1547891efa84bb2bb34be00079773c2"><div class="ttname"><a href="histo_8h.html#ad1547891efa84bb2bb34be00079773c2">histo_cmp_ks</a></div><div class="ttdeci">histo_status_t histo_cmp_ks(const histo_t *h1, const histo_t *h2, double *out_ks_stat)</div><div class="ttdoc">Computes the Kolmogorov-Smirnov (KS) test statistic D between two histograms.</div></div>
-</div><!-- fragment --><hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md16"></a>
+4.7 Unix CLI Toolkit</h2>
+<p><span class="tt">libhisto</span> includes a high-performance Unix CLI suite (<span class="tt">histo</span>, <span class="tt">histo-fill</span>, <span class="tt">histo-plot</span>, <span class="tt">histo-stats</span>, <span class="tt">histo-cmp</span>):</p>
+<ul>
+<li><b><span class="tt">histo-fill</span></b>: Ingests whitespace/CSV streams or binary <span class="tt">double</span> floats into histograms and emits binary wire blobs, JSON, or TSV tables. Supports live intermediate snapshot emission (<span class="tt">--emit-interval=SEC</span> or <span class="tt">--emit-every=N</span>).</li>
+<li><b><span class="tt">histo-plot</span></b>: Renders histograms directly to the console using Unicode fractional sub-character blocks (<span class="tt"> ▂▃▄▅▆▇█</span>), ANSI TrueColor density gradients, error whisker bars ( \(\pm \sigma\)), and live streaming continuous watch mode (<span class="tt">--watch</span>).</li>
+<li><b><span class="tt">histo-stats</span></b>: Formats comprehensive statistical moment and non-parametric dispersion tables.</li>
+<li><b><span class="tt">histo-cmp</span></b>: Computes \(\chi^2\), Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, and Bhattacharyya distance metrics between two histogram files.</li>
+</ul>
+<hr  />
+<h1 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
 5. Numerical Algorithms &amp; Statistical Formulations</h1>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
 5.1 Boundary-Guarded Uniform Bin Lookup ( \(O(1)\))</h2>
 <p>For uniform binning over \([x_{\min}, x_{\max})\), naive floating-point division <span class="tt">(x - min) / width</span> is susceptible to floating-point truncation errors at exact bin boundaries. <span class="tt">libhisto</span> computes the candidate provisional index via reciprocal multiplication:   </p><p class="formulaDsp">
 \[i_{\text{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
@@ -354,13 +363,13 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Upper Guard</b>: If \( x \ge x_{\min} + (i_{\text{prov}} + 1) \Delta \), then \( i = i_{\text{prov}} + 1 \).</li>
 <li><b>Lower Guard</b>: If \( x &lt; x_{\min} + i_{\text{prov}} \Delta \), then \( i = i_{\text{prov}} - 1 \). If \( \Delta^{-1} \) overflows to infinity on subnormal ranges, lookup falls back cleanly to robust division.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
 5.2 Variable-Width Bisection Binary Search ( \(O(\log N)\))</h2>
 <p>For variable binning defined by monotonic edges \( e_0 &lt; e_1 &lt; \dots &lt; e_N \), bin lookup uses bisection search on \( [0, N) \):</p><ul>
 <li>Invariant: \( x \in [e_i, e_{i+1}) \) with exact matching at \( e_0 = x_{\min} \) and \( e_N = x_{\max} \).</li>
 <li>Guaranteed \( O(\log N) \) time and \( O(1) \) auxiliary space.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md21"></a>
 5.3 Online Weighted Welford Statistics ( \(O(1)\))</h2>
 <p>When <span class="tt"><a class="el" href="types_8h.html#aca1d24a12648936b54f70e610e3b3321ad4b2a75eb9ff0be70e632ab37cf9467d">HISTO_FLAG_EXACT_MOMENTS</a></span> is enabled, running moments are accumulated without storing historical samples:   </p><p class="formulaDsp">
 \[W_{\text{new}} = W_{\text{old}} + w_i
@@ -379,7 +388,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 \]
 </p>
 <p> Variance is extracted as \( \sigma^2 = M_2 / W \). The algorithm natively supports negative event weights and avoids variance underflow via \( M_2 = \max(0.0, M_2) \) clamping.</p>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md21"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
 5.4 Higher-Order Central Moments &amp; Shape Formulations ( \(O(N)\))</h2>
 <p>For orders \( k \ge 2 \), central moments are computed using a two-pass algorithm over active bin centers:   </p><p class="formulaDsp">
 \[M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
@@ -390,7 +399,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Kurtosis</b> ( \( \beta_2 \)): \( \beta_2 = \frac{M_4}{M_2^2} = \frac{M_4}{\sigma^4} \)</li>
 <li><b>Excess Kurtosis</b> ( \( \gamma_2 \)): \( \gamma_2 = \beta_2 - 3.0 \) (equals 0.0 for normal distributions).</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
 5.5 Continuous Parabolic Peak Mode &amp; FWHM ( \(O(N)\))</h2>
 <ul>
 <li><b>Continuous Mode</b>: Identifies mode bin \( m \) having maximum weight \( w_m \). For uniform histograms, fits a parabola through \( (x_{m-1}, w_{m-1}), (x_m, w_m), (x_{m+1}, w_{m+1}) \):   <p class="formulaDsp">
@@ -400,7 +409,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </li>
 <li><b>FWHM</b>: Scans outward from the mode bin to find the left and right crossings where \( w(x) = \frac{1}{2} w_{\text{max}} \), linearly interpolating between bin centers.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
 5.6 Non-Empty Support Linear Quantile &amp; Dispersion ( \(O(N)\))</h2>
 <p>Quantile coordinates \( Q(p) = F^{-1}(p) \) for \( p \in [0.0, 1.0] \) are evaluated using continuous inverse CDF interpolation:</p><ul>
 <li>Targets cumulative mass \( T = p \cdot W_{\text{total}} \).</li>
@@ -412,7 +421,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </li>
 <li><b>MAD</b>: Evaluates median deviation \( d_i = |x_{c, i} - \text{median}| \), sorts weighted pairs in \( O(N \log N) \), and finds the 50th percentile of absolute deviations.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
 5.7 Division-Free Error Propagation ( \(O(N)\))</h2>
 <p>When combining histograms via multiplication ( \( H = A \cdot B \)) or division ( \( H = A / B \)), statistical uncertainties are propagated without intermediate divisions:</p><ul>
 <li><b>Product Uncertainty</b>:   <p class="formulaDsp">
@@ -426,7 +435,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </p>
 </li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md26"></a>
 5.8 Two-Distribution Comparison Metrics ( \(O(N)\))</h2>
 <ul>
 <li><b>Weighted Chi-Square</b>: \( \chi^2 = \sum_{i} \frac{(w_{1,i} - w_{2,i})^2}{\sigma_{1,i}^2 + \sigma_{2,i}^2} \) with \( \text{NDF} \) matching the number of non-zero variance bins.</li>
@@ -436,7 +445,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Bhattacharyya Distance</b>: \( D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \).</li>
 </ul>
 <hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md27"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md28"></a>
 6. Algorithmic Complexity Reference Table</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">

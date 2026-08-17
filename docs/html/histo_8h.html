@@ -257,6 +257,10 @@ Functions</h2></td></tr>
 <tr class="memdesc:a2885e29188161f9698a8ae0c8b016a9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Serializes histogram into a newly heap-allocated binary buffer.  <br /></td></tr>
 <tr class="memitem:a805356fff3e1cca97c8df5797d26faca" id="r_a805356fff3e1cca97c8df5797d26faca"><td class="memItemLeft" align="right" valign="top"><a class="el" href="types_8h.html#a936f5506a79211ad40ad51e927a48dab">histo_status_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a805356fff3e1cca97c8df5797d26faca">histo_deserialize_binary</a> (const void *buf, size_t size, <a class="el" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> **out_h)</td></tr>
 <tr class="memdesc:a805356fff3e1cca97c8df5797d26faca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deserializes a histogram from a canonical binary byte buffer.  <br /></td></tr>
+<tr class="memitem:a92510ddf78bb2eecb6d89d743114a06a" id="r_a92510ddf78bb2eecb6d89d743114a06a"><td class="memItemLeft" align="right" valign="top"><a class="el" href="types_8h.html#a936f5506a79211ad40ad51e927a48dab">histo_status_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a92510ddf78bb2eecb6d89d743114a06a">histo_serialize_json</a> (const <a class="el" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> *h, char **out_json)</td></tr>
+<tr class="memdesc:a92510ddf78bb2eecb6d89d743114a06a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Serializes a histogram into a newly allocated JSON string.  <br /></td></tr>
+<tr class="memitem:ae04e44523bb4d3dec2f2f50f524b8af7" id="r_ae04e44523bb4d3dec2f2f50f524b8af7"><td class="memItemLeft" align="right" valign="top"><a class="el" href="types_8h.html#a936f5506a79211ad40ad51e927a48dab">histo_status_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae04e44523bb4d3dec2f2f50f524b8af7">histo_deserialize_json</a> (const char *json_str, <a class="el" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> **out_h)</td></tr>
+<tr class="memdesc:ae04e44523bb4d3dec2f2f50f524b8af7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deserializes a histogram from a JSON string.  <br /></td></tr>
 <tr class="memitem:ab189ee9fb6f38041cfdd65fd57a86878" id="r_ab189ee9fb6f38041cfdd65fd57a86878"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab189ee9fb6f38041cfdd65fd57a86878">histo_free_buffer</a> (void *buf)</td></tr>
 <tr class="memdesc:ab189ee9fb6f38041cfdd65fd57a86878"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees a heap buffer allocated by serialization routines. Safe with NULL.  <br /></td></tr>
 <tr class="memitem:ae46f3534888e638a5e8890770789eca9" id="r_ae46f3534888e638a5e8890770789eca9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="types_8h.html#a936f5506a79211ad40ad51e927a48dab">histo_status_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae46f3534888e638a5e8890770789eca9">histo_migrate_binary</a> (const void *in_buf, size_t in_size, void **out_buf, size_t *out_size)</td></tr>
@@ -914,6 +918,37 @@ Functions</h2></td></tr>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">buf</td><td>Pointer to serialized binary buffer. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Byte length of buffer. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_h</td><td>Pointer receiving address of newly deserialized histogram. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>HISTO_OK on success, or HISTO_ERR_DESERIALIZATION on format corruption. </dd></dl>
+
+</div>
+</div>
+<a id="ae04e44523bb4d3dec2f2f50f524b8af7" name="ae04e44523bb4d3dec2f2f50f524b8af7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae04e44523bb4d3dec2f2f50f524b8af7">&#9670;&#160;</a></span>histo_deserialize_json()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#a936f5506a79211ad40ad51e927a48dab">histo_status_t</a> histo_deserialize_json </td>
+          <td>(</td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>json_str</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> **</td>          <td class="paramname"><span class="paramname"><em>out_h</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Deserializes a histogram from a JSON string. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">json_str</td><td>Null-terminated JSON string. </td></tr>
     <tr><td class="paramdir">[out]</td><td class="paramname">out_h</td><td>Pointer receiving address of newly deserialized histogram. </td></tr>
   </table>
   </dd>
@@ -2102,6 +2137,38 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Total byte length required (256-byte header + Little-Endian payloads). </dd></dl>
+
+</div>
+</div>
+<a id="a92510ddf78bb2eecb6d89d743114a06a" name="a92510ddf78bb2eecb6d89d743114a06a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92510ddf78bb2eecb6d89d743114a06a">&#9670;&#160;</a></span>histo_serialize_json()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#a936f5506a79211ad40ad51e927a48dab">histo_status_t</a> histo_serialize_json </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> *</td>          <td class="paramname"><span class="paramname"><em>h</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">char **</td>          <td class="paramname"><span class="paramname"><em>out_json</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Serializes a histogram into a newly allocated JSON string. </p>
+<p>Buffer must be freed with <a class="el" href="#ab189ee9fb6f38041cfdd65fd57a86878" title="Frees a heap buffer allocated by serialization routines. Safe with NULL.">histo_free_buffer()</a>.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">h</td><td>Histogram handle to serialize. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_json</td><td>Pointer receiving address of newly allocated null-terminated JSON string. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>HISTO_OK on success, or appropriate error code. </dd></dl>
 
 </div>
 </div>

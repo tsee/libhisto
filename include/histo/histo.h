@@ -653,6 +653,26 @@ histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h);
 
 /**
+ * @brief Serializes a histogram into a newly allocated JSON string.
+ *
+ * Buffer must be freed with histo_free_buffer().
+ *
+ * @param[in]  h        Histogram handle to serialize.
+ * @param[out] out_json Pointer receiving address of newly allocated null-terminated JSON string.
+ * @return HISTO_OK on success, or appropriate error code.
+ */
+histo_status_t histo_serialize_json(const histo_t *h, char **out_json);
+
+/**
+ * @brief Deserializes a histogram from a JSON string.
+ *
+ * @param[in]  json_str Null-terminated JSON string.
+ * @param[out] out_h    Pointer receiving address of newly deserialized histogram.
+ * @return HISTO_OK on success, or HISTO_ERR_DESERIALIZATION on format corruption.
+ */
+histo_status_t histo_deserialize_json(const char *json_str, histo_t **out_h);
+
+/**
  * @brief Frees a heap buffer allocated by serialization routines. Safe with NULL.
  *
  * @param[in] buf Buffer pointer to free.

@@ -238,6 +238,14 @@ printf("Chi2/NDF: %.2f/%u | KS: %.4f | EMD: %.4f | KL: %.4f | Bhatt: %.4f\n",
        chi2, ndf, ks_stat, emd, kl_div, bhatt_dist);
 ```
 
+### 4.7 Unix CLI Toolkit
+`libhisto` includes a high-performance Unix CLI suite (`histo`, `histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`):
+
+- **`histo-fill`**: Ingests whitespace/CSV streams or binary `double` floats into histograms and emits binary wire blobs, JSON, or TSV tables. Supports live intermediate snapshot emission (`--emit-interval=SEC` or `--emit-every=N`).
+- **`histo-plot`**: Renders histograms directly to the console using Unicode fractional sub-character blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whisker bars (\f$\pm \sigma\f$), and live streaming continuous watch mode (`--watch`).
+- **`histo-stats`**: Formats comprehensive statistical moment and non-parametric dispersion tables.
+- **`histo-cmp`**: Computes \f$\chi^2\f$, Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, and Bhattacharyya distance metrics between two histogram files.
+
 ---
 
 ## 5. Numerical Algorithms & Statistical Formulations

@@ -132,6 +132,41 @@ Measured benchmarks on modern x86_64 architecture:
 
 ---
 
+## Unix CLI Toolkit
+
+`libhisto` ships with a suite of Unix-pipe-capable CLI tools (invocable via multi-call binary `histo` or standalone symlinks `histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`):
+
+### 1. Ingestion & Aggregation (`histo-fill`)
+```bash
+# Ingest 100k numbers and pipe into a terminal histogram plot
+seq 1 100000 | awk '{print rand() * 100}' | histo-fill --bins=25 --min=0 --max=100 -o binary | histo-plot
+
+# Ingest weighted data from CSV column 2 with weights from column 4
+cat telemetry.csv | histo-fill --bins=50 --auto-range -w --value-col=2 --weights-col=4 -o json > hist.json
+```
+
+### 2. Terminal Bar Visualization (`histo-plot`)
+Renders rich Unicode fractional blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whiskers ($\pm \sigma$), and live streaming watch mode:
+```bash
+# Render ASCII bar chart from a saved histogram
+histo-plot hist.json
+
+# Live stream: refresh console plot continuously from high-speed data stream
+tail -f access.log | grep -o 'duration=[0-9.]*' | cut -d= -f2 | \
+    histo-fill --bins=30 --min=0 --max=2000 --emit-interval=0.25 | histo-plot --watch
+```
+
+### 3. Summary & Comparison (`histo-stats` & `histo-cmp`)
+```bash
+# Print comprehensive statistical moment and robust dispersion table
+histo-stats hist.json
+
+# Compare two histograms (Chi-Square, Kolmogorov-Smirnov, 1D Wasserstein, KL Divergence)
+histo-cmp baseline.bin experiment.bin
+```
+
+---
+
 ## Dependencies & Requirements
 
 - **Core Library:** Zero external dependencies (strict ISO C99 standard library only: `math.h`, `stdint.h`, `stdbool.h`, `stdlib.h`, `string.h`).

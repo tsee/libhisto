@@ -50,5 +50,14 @@
 - [x] **D4** Two-Sample Statistical Distance & Hypothesis Testing (`histo_cmp_chi2`, `histo_cmp_ks`, `histo_cmp_wasserstein_1d`, `histo_cmp_kl_divergence`, `histo_cmp_bhattacharyya`) & Comparison Integration Tests
 - [x] **D5** Update Doxygen documentation, user manual, and benchmarks for new analytical routines
 
+---
+
+## Phase E: Unix CLI Toolkit
+- [x] **E1** Build Target & CLI Dispatcher Framework (`tools/`, `histo` multi-call binary, option parsing & stream utilities)
+- [x] **E2** Streaming Ingestion Tool `histo-fill` (Text/CSV/binary streams, auto-ranging, variable edges, snapshot streaming, JSON/binary emission)
+- [x] **E3** Terminal Visualization Tool `histo-plot` (ASCII & Unicode blocks, ANSI color gradients, error whiskers, live `--watch` mode)
+- [x] **E4** Inspection & Comparison Tools `histo-stats` and `histo-cmp` (Moments, robust dispersion tables, two-sample hypothesis testing)
+- [x] **E5** CLI Integration Test Suite (`tests/integration/test_cli.c`), Sanitizer Verification (ASan/UBSan/Valgrind), and Documentation Updates
+
 
 
