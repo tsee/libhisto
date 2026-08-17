@@ -71,15 +71,37 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
 
     /* Find max bin content for scaling */
     double max_content = 0.0;
+    int max_bounds_len = 0;
+    int max_count_len = 0;
+
     for (uint32_t i = 0; i < nbins; ++i) {
-        double c = 0.0;
-        histo_bin_content(h, i, &c);
-        if (c > max_content) max_content = c;
+        double lower = 0.0, upper = 0.0, content = 0.0;
+        histo_bin_bounds(h, i, &lower, &upper);
+        histo_bin_content(h, i, &content);
+        if (content > max_content) max_content = content;
+
+        char b_tmp[64];
+        int blen = snprintf(b_tmp, sizeof(b_tmp), "[%6.2f, %6.2f)", lower, upper);
+        if (blen > max_bounds_len) max_bounds_len = blen;
+
+        char c_tmp[64];
+        int clen;
+        if (content == floor(content) && content >= 0.0 && content < 1e12) {
+            clen = snprintf(c_tmp, sizeof(c_tmp), "%.0f", content);
+        } else {
+            clen = snprintf(c_tmp, sizeof(c_tmp), "%.4g", content);
+        }
+        if (clen > max_count_len) max_count_len = clen;
     }
+
+    if (max_bounds_len < 16) max_bounds_len = 16;
+    if (max_count_len < 6) max_count_len = 6;
 
     /* Print Title & Header */
     if (title && *title) {
-        printf("\033[1m%s\033[0m (Entries: %llu, Total Weight: %.4g)\n", title, (unsigned long long)n_fills, total_w);
+        char tot_str[32];
+        snprintf(tot_str, sizeof(tot_str), (total_w == floor(total_w) && total_w >= 0.0 && total_w < 1e12) ? "%.0f" : "%.4g", total_w);
+        printf("\033[1m%s\033[0m (Entries: %llu, Total Weight: %s)\n", title, (unsigned long long)n_fills, tot_str);
     }
 
     if (show_stats && total_w > 0.0) {
@@ -90,16 +112,37 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
         histo_iqr(h, &iqr);
         histo_mode_continuous(h, &mode);
 
-        printf("┌─ Statistics ────────────────────────────────────────────────────────────────────────┐\n");
-        printf("│ Mean: %-10.4g │ StdDev: %-10.4g │ Median: %-10.4g │ IQR: %-10.4g │ Mode: %-10.4g │\n",
-               mean, sdev, med, iqr, mode);
-        printf("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
+        char s_mean[32], s_sdev[32], s_med[32], s_iqr[32], s_mode[32];
+        snprintf(s_mean, sizeof(s_mean), "Mean: %-7.4g", mean);
+        snprintf(s_sdev, sizeof(s_sdev), "StdDev: %-7.4g", sdev);
+        snprintf(s_med, sizeof(s_med), "Median: %-7.4g", med);
+        snprintf(s_iqr, sizeof(s_iqr), "IQR: %-7.4g", iqr);
+        snprintf(s_mode, sizeof(s_mode), "Mode: %-7.4g", mode);
+
+        char stats_content[256];
+        snprintf(stats_content, sizeof(stats_content),
+                 " %-13s │ %-15s │ %-15s │ %-12s │ %-13s ",
+                 s_mean, s_sdev, s_med, s_iqr, s_mode);
+        int content_len = (int)strlen(stats_content);
+
+        printf("┌─ Statistics ");
+        int dashes_top = content_len - 14;
+        for (int k = 0; k < dashes_top; ++k) {
+            printf("─");
+        }
+        printf("┐\n");
+
+        printf("│%s│\n", stats_content);
+
+        printf("└");
+        for (int k = 0; k < content_len; ++k) {
+            printf("─");
+        }
+        printf("┘\n");
     }
 
     /* Calculate column widths for bounds and counts */
-    int bounds_width = 18;
-    int count_width = 10;
-    int prefix_width = bounds_width + count_width + 4; /* " [ x.x, y.y) | count | " */
+    int prefix_width = max_bounds_len + max_count_len + 6; /* "%-*s │ %*s │ " */
     int bar_max_chars = term_width - prefix_width - 2;
     if (bar_max_chars < 10) bar_max_chars = 10;
 
@@ -117,10 +160,18 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
             histo_bin_error(h, i, &err);
         }
 
-        /* Bin bounds prefix */
-        char bounds_str[32];
+        /* Bin bounds and count formatting */
+        char bounds_str[64];
         snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
-        printf("%-18s │ %8.4g │ ", bounds_str, content);
+
+        char count_str[64];
+        if (content == floor(content) && content >= 0.0 && content < 1e12) {
+            snprintf(count_str, sizeof(count_str), "%.0f", content);
+        } else {
+            snprintf(count_str, sizeof(count_str), "%.4g", content);
+        }
+
+        printf("%-*s │ %*s │ ", max_bounds_len, bounds_str, max_count_len, count_str);
 
         if (max_scaled <= 0.0 || content <= 0.0) {
             printf("\n");
@@ -178,8 +229,14 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
     double uflow = histo_underflow(h);
     double oflow = histo_overflow(h);
     uint64_t n_nan = histo_nan_count(h);
-    printf(" Underflow: %.4g │ In-Range: %.4g │ Overflow: %.4g │ Non-Finite/NaN: %llu\n",
-           uflow, total_w, oflow, (unsigned long long)n_nan);
+
+    char uflow_str[32], oflow_str[32], tot_str[32];
+    snprintf(uflow_str, sizeof(uflow_str), (uflow == floor(uflow) && uflow >= 0.0 && uflow < 1e12) ? "%.0f" : "%.4g", uflow);
+    snprintf(oflow_str, sizeof(oflow_str), (oflow == floor(oflow) && oflow >= 0.0 && oflow < 1e12) ? "%.0f" : "%.4g", oflow);
+    snprintf(tot_str, sizeof(tot_str), (total_w == floor(total_w) && total_w >= 0.0 && total_w < 1e12) ? "%.0f" : "%.4g", total_w);
+
+    printf(" Underflow: %s │ In-Range: %s │ Overflow: %s │ Non-Finite/NaN: %llu\n",
+           uflow_str, tot_str, oflow_str, (unsigned long long)n_nan);
 }
 
 int cmd_plot_main(int argc, char **argv) {
