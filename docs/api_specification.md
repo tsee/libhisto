@@ -218,9 +218,59 @@ histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *
 /* Deserialize from binary buffer */
 histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h);
 
+/* Serialize to newly allocated JSON string (caller frees via histo_free_buffer) */
+histo_status_t histo_serialize_json(const histo_t *h, char **out_json);
+
+/* Deserialize from JSON string */
+histo_status_t histo_deserialize_json(const char *json_str, histo_t **out_h);
+
 /* Migrate older binary format buffers (e.g. v1) to current format version (v2) */
 histo_status_t histo_migrate_binary(const void *in_buf, size_t in_size, void **out_buf, size_t *out_size);
 
 /* Free library-allocated serialization buffers. Safe on NULL. */
 void histo_free_buffer(void *buf);
 ```
+
+---
+
+## 4. DDSketch Online Dynamic Quantile Sketch API: `include/histo/sketch.h`
+
+```c
+/* Opaque sketch handle */
+typedef struct histo_sketch histo_sketch_t;
+
+/* Create a new dynamic quantile sketch with relative error alpha and max circular bins */
+histo_sketch_t* histo_sketch_create(double alpha, uint32_t max_bins);
+
+/* Destroy sketch and release resources. Safe on NULL. */
+void histo_sketch_destroy(histo_sketch_t *s);
+
+/* Insert a sample coordinate with unit weight */
+histo_status_t histo_sketch_insert(histo_sketch_t *s, double value);
+
+/* Insert a sample coordinate with explicit weight */
+histo_status_t histo_sketch_insert_w(histo_sketch_t *s, double value, double weight);
+
+/* Bulk insert N sample coordinates with optional weights array */
+histo_status_t histo_sketch_insert_n(histo_sketch_t *s, size_t n, const double *values, const double *weights);
+
+/* Query quantile q in [0.0, 1.0] with bounded relative error alpha */
+histo_status_t histo_sketch_quantile(const histo_sketch_t *s, double q, double *out_val);
+
+/* Merge source sketch into destination sketch (must share identical alpha) */
+histo_status_t histo_sketch_merge(histo_sketch_t *dest, const histo_sketch_t *src);
+
+/* Reset sketch to empty state */
+histo_status_t histo_sketch_reset(histo_sketch_t *s);
+
+/* Summary accessors */
+double   histo_sketch_min(const histo_sketch_t *s);
+double   histo_sketch_max(const histo_sketch_t *s);
+double   histo_sketch_total_weight(const histo_sketch_t *s);
+uint64_t histo_sketch_num_entries(const histo_sketch_t *s);
+
+/* Binary serialization for sketches */
+histo_status_t histo_sketch_serialize_binary(const histo_sketch_t *s, void **out_buffer, size_t *out_size);
+histo_status_t histo_sketch_deserialize_binary(const void *buffer, size_t size, histo_sketch_t **out_sketch);
+```
+

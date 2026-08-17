@@ -1,8 +1,23 @@
 var searchData=
 [
-  ['uncertainties_0',['4.1 Weighted Monte Carlo Events &amp;amp; Uncertainties',['../index.html#autotoc_md10',1,'']]],
-  ['uniform_20bin_20lookup_204_1',['5.1 Boundary-Guarded Uniform Bin Lookup ( \\(O(1)\\))',['../index.html#autotoc_md23',1,'']]],
-  ['uniform_20binning_20histo_5fbin_5funiform_2',['Uniform Binning (&lt;span class=&quot;tt&quot;&gt;HISTO_BIN_UNIFORM&lt;/span&gt;)',['../index.html#autotoc_md4',1,'']]],
-  ['unix_20cli_20toolkit_3',['4.7 Unix CLI Toolkit',['../index.html#autotoc_md16',1,'']]],
-  ['user_20manual_20architecture_20reference_4',['libhisto User Manual &amp;amp; Architecture Reference',['../index.html',1,'']]]
+  ['save_20load_20json_20serialization_20and_20version_20migration_0',['4.4 Binary Save, Load, JSON Serialization, and Version Migration',['../index.html#autotoc_md16',1,'']]],
+  ['search_206_1',['5.2 Variable-Width Bisection Binary Search ( \\(O(\\log N)\\))',['../index.html#autotoc_md26',1,'']]],
+  ['serialization_20and_20version_20migration_2',['4.4 Binary Save, Load, JSON Serialization, and Version Migration',['../index.html#autotoc_md16',1,'']]],
+  ['shape_20analysis_3',['4.5 Higher-Order Moments &amp;amp; Peak/Shape Analysis',['../index.html#autotoc_md17',1,'']]],
+  ['shape_20formulations_2030_4',['5.4 Higher-Order Central Moments &amp;amp; Shape Formulations ( \\(O(N)\\))',['../index.html#autotoc_md28',1,'']]],
+  ['simd_20ingestion_5',['4.2 High-Throughput Batch SIMD Ingestion',['../index.html#autotoc_md14',1,'']]],
+  ['simd_20vector_20acceleration_20architecture_2030_6',['5.10 SIMD Vector Acceleration Architecture ( \\(O(N)\\))',['../index.html#autotoc_md34',1,'']]],
+  ['sketch_204_20insertion_7',['5.9 DDSketch Bounded Relative-Error Quantile Sketch ( \\(O(1)\\) insertion)',['../index.html#autotoc_md33',1,'']]],
+  ['sketches_20ddsketch_20merging_8',['4.3 Dynamic Quantile Sketches (DDSketch) &amp;amp; Merging',['../index.html#autotoc_md15',1,'']]],
+  ['sketching_20ddsketch_9',['3.2 Streaming Dynamic Quantile Sketching (DDSketch)',['../index.html#autotoc_md10',1,'']]],
+  ['sparklines_20histo_20plot_10',['4.8.2 Terminal Visualization &amp;amp; Sparklines (&lt;span class=&quot;tt&quot;&gt;histo-plot&lt;/span&gt;)',['../index.html#autotoc_md22',1,'']]],
+  ['statistical_20distances_11',['4.7 Comparing Distributions &amp;amp; Statistical Distances',['../index.html#autotoc_md19',1,'']]],
+  ['statistical_20formulations_12',['5. Numerical Algorithms &amp;amp; Statistical Formulations',['../index.html#autotoc_md24',1,'']]],
+  ['statistics_13',['4.6 Robust Non-Parametric &amp;amp; Dispersion Statistics',['../index.html#autotoc_md18',1,'']]],
+  ['statistics_204_14',['5.3 Online Weighted Welford Statistics ( \\(O(1)\\))',['../index.html#autotoc_md27',1,'']]],
+  ['streaming_20dynamic_20quantile_20sketching_20ddsketch_15',['3.2 Streaming Dynamic Quantile Sketching (DDSketch)',['../index.html#autotoc_md10',1,'']]],
+  ['streaming_20ingestion_20histo_20fill_16',['4.8.1 Streaming Ingestion (&lt;span class=&quot;tt&quot;&gt;histo-fill&lt;/span&gt;)',['../index.html#autotoc_md21',1,'']]],
+  ['support_20linear_20quantile_20dispersion_2030_17',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md30',1,'']]],
+  ['sympathy_18',['6. Performance Envelope &amp;amp; Mechanical Sympathy',['../index.html#autotoc_md36',1,'']]],
+  ['sympathy_20principles_19',['Mechanical Sympathy Principles',['../index.html#autotoc_md37',1,'']]]
 ];

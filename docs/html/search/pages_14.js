@@ -1,6 +1,8 @@
 var searchData=
 [
-  ['non_20empty_20support_20linear_20quantile_20dispersion_2029_0',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md28',1,'']]],
-  ['non_20parametric_20dispersion_20statistics_1',['4.5 Robust Non-Parametric &amp;amp; Dispersion Statistics',['../index.html#autotoc_md14',1,'']]],
-  ['numerical_20algorithms_20statistical_20formulations_2',['5. Numerical Algorithms &amp;amp; Statistical Formulations',['../index.html#autotoc_md22',1,'']]]
+  ['libhisto_20user_20manual_20architecture_20reference_0',['libhisto User Manual &amp;amp; Architecture Reference',['../index.html',1,'']]],
+  ['linear_20quantile_20dispersion_2030_1',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md30',1,'']]],
+  ['load_20json_20serialization_20and_20version_20migration_2',['4.4 Binary Save, Load, JSON Serialization, and Version Migration',['../index.html#autotoc_md16',1,'']]],
+  ['logarithmic_20binning_20ddsketch_3',['2.3 Dynamic Logarithmic Binning (DDSketch)',['../index.html#autotoc_md6',1,'']]],
+  ['lookup_204_4',['5.1 Boundary-Guarded Uniform Bin Lookup ( \\(O(1)\\))',['../index.html#autotoc_md25',1,'']]]
 ];

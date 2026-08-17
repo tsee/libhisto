@@ -115,3 +115,39 @@ All 64-bit integer (`uint64_t`), double-precision floating-point (`double`), and
 2. **Valid Bin Count**: `nbins >= 1 && nbins <= HISTO_MAX_NBINS` (capped at $10^8$ to prevent 32-bit integer overflow).
 3. **Strict Monotonicity**: For variable bins, `bin_edges[i] < bin_edges[i+1]` for all $0 \le i < N$.
 4. **Const Correctness**: All read/query functions accept `const histo_t *h` with zero internal side effects or cached pointer mutations.
+
+---
+
+## 6. DDSketch Quantile Sketch Data Structures (`struct histo_sketch`)
+
+Located in `src/sketch.c`:
+
+```c
+typedef struct {
+    double   *counts;    /* Dynamic circular buffer of capacity max_bins */
+    int32_t   min_k;     /* Minimum active logarithmic bin index */
+    int32_t   max_k;     /* Maximum active logarithmic bin index */
+    uint32_t  max_bins;  /* Maximum allowable active bins before collapsing */
+} sketch_store_t;
+
+struct histo_sketch {
+    double         alpha;       /* Relative error guarantee (e.g. 0.01 for +/- 1%) */
+    double         gamma;       /* Multiplicative base: (1 + alpha) / (1 - alpha) */
+    double         log_gamma;   /* Precomputed ln(gamma) for O(1) index calculation */
+    uint32_t       max_bins;    /* User-specified capacity bound */
+    
+    sketch_store_t pos;         /* Positive values store */
+    sketch_store_t neg;         /* Negative values store */
+    
+    double         zero_count;   /* Dedicated exact zero accumulator */
+    double         total_weight; /* Total accumulated weight across all bins */
+    uint64_t       num_entries;  /* Total number of insert operations */
+    double         min_val;      /* Exact minimum observed value */
+    double         max_val;      /* Exact maximum observed value */
+};
+```
+
+### 6.1 Circular Buffer Indexing & Dynamic Collapsing
+- **Circular Mapping**: For any logarithmic index $k$, the array offset is evaluated as `(k % max_bins + max_bins) % max_bins`.
+- **Collapsing Strategy**: When a new insertion requires index $k_{\text{new}} > k_{\min} + \text{max\_bins} - 1$, bins in the range $[k_{\min}, k_{\text{new}} - \text{max\_bins} + 1)$ are collapsed into the new lower boundary bin, zeroing evicted slots while preserving total weight.
+

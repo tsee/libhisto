@@ -1,8 +1,9 @@
 var searchData=
 [
-  ['walkthrough_0',['3. Quickstart Walkthrough',['../index.html#autotoc_md7',1,'']]],
-  ['weighted_20monte_20carlo_20events_20uncertainties_1',['4.1 Weighted Monte Carlo Events &amp;amp; Uncertainties',['../index.html#autotoc_md10',1,'']]],
-  ['weighted_20welford_20statistics_204_2',['5.3 Online Weighted Welford Statistics ( \\(O(1)\\))',['../index.html#autotoc_md25',1,'']]],
-  ['welford_20statistics_204_3',['5.3 Online Weighted Welford Statistics ( \\(O(1)\\))',['../index.html#autotoc_md25',1,'']]],
-  ['width_20bisection_20binary_20search_206_4',['5.2 Variable-Width Bisection Binary Search ( \\(O(\\log N)\\))',['../index.html#autotoc_md24',1,'']]]
+  ['uncertainties_0',['4.1 Weighted Monte Carlo Events &amp;amp; Uncertainties',['../index.html#autotoc_md13',1,'']]],
+  ['uniform_20bin_20lookup_204_1',['5.1 Boundary-Guarded Uniform Bin Lookup ( \\(O(1)\\))',['../index.html#autotoc_md25',1,'']]],
+  ['uniform_20fixed_20width_20binning_20histo_5fbin_5funiform_2',['2.1 Uniform Fixed-Width Binning (&lt;span class=&quot;tt&quot;&gt;HISTO_BIN_UNIFORM&lt;/span&gt;)',['../index.html#autotoc_md4',1,'']]],
+  ['uniform_20histogramming_20moments_20and_20binary_20roundtrip_3',['3.1 Uniform Histogramming, Moments, and Binary Roundtrip',['../index.html#autotoc_md9',1,'']]],
+  ['unix_20cli_20toolkit_4',['4.8 Unix CLI Toolkit',['../index.html#autotoc_md20',1,'']]],
+  ['user_20manual_20architecture_20reference_5',['libhisto User Manual &amp;amp; Architecture Reference',['../index.html',1,'']]]
 ];

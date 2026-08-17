@@ -1,11 +1,7 @@
 var searchData=
 [
-  ['parabolic_20peak_20mode_20fwhm_2029_0',['5.5 Continuous Parabolic Peak Mode &amp;amp; FWHM ( \\(O(N)\\))',['../index.html#autotoc_md27',1,'']]],
-  ['parametric_20dispersion_20statistics_1',['4.5 Robust Non-Parametric &amp;amp; Dispersion Statistics',['../index.html#autotoc_md14',1,'']]],
-  ['peak_20mode_20fwhm_2029_2',['5.5 Continuous Parabolic Peak Mode &amp;amp; FWHM ( \\(O(N)\\))',['../index.html#autotoc_md27',1,'']]],
-  ['peak_20shape_20analysis_3',['4.4 Higher-Order Moments &amp;amp; Peak/Shape Analysis',['../index.html#autotoc_md13',1,'']]],
-  ['pillars_4',['Key Architectural Pillars',['../index.html#autotoc_md1',1,'']]],
-  ['plot_5',['4.7.2 Terminal Visualization (&lt;span class=&quot;tt&quot;&gt;histo-plot&lt;/span&gt;)',['../index.html#autotoc_md18',1,'']]],
-  ['practical_20recipes_6',['4. Practical Recipes',['../index.html#autotoc_md9',1,'']]],
-  ['propagation_2029_7',['5.7 Division-Free Error Propagation ( \\(O(N)\\))',['../index.html#autotoc_md29',1,'']]]
+  ['n_5fentries_0',['n_entries',['../structhisto__stats.html#aecb1c85145be5a393975c8ada7971bb0',1,'histo_stats']]],
+  ['non_20empty_20support_20linear_20quantile_20dispersion_2030_1',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md30',1,'']]],
+  ['non_20parametric_20dispersion_20statistics_2',['4.6 Robust Non-Parametric &amp;amp; Dispersion Statistics',['../index.html#autotoc_md18',1,'']]],
+  ['numerical_20algorithms_20statistical_20formulations_3',['5. Numerical Algorithms &amp;amp; Statistical Formulations',['../index.html#autotoc_md24',1,'']]]
 ];

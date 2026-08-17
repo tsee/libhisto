@@ -1,24 +1,27 @@
 # libhisto User Manual & Architecture Reference {#mainpage}
 
-Welcome to **libhisto**! This guide covers the core concepts, user recipes, advanced statistical algorithms, and computational complexity characteristics of the library.
+Welcome to **libhisto**! This guide covers the core concepts, user recipes, advanced statistical algorithms, SIMD acceleration architectures, DDSketch dynamic quantile sketches, and computational complexity characteristics of the library.
 
 ## 1. Introduction
 
-`libhisto` is a high-performance, portable, memory-safe 1D histogramming library implemented in strict ISO C99. Designed for high-throughput scientific analysis, physical simulations, telemetry ingestion, and general statistical computing, `libhisto` provides mathematically exact results, division-free error propagation, and microsecond-level serialization.
+`libhisto` is a high-performance, portable, memory-safe 1D histogramming and quantile sketch library implemented in strict ISO C99. Designed for high-throughput scientific analysis, physical simulations, telemetry ingestion, and general statistical computing, `libhisto` provides mathematically exact results, division-free error propagation, SIMD vector acceleration, and microsecond-level serialization.
 
 ### Key Architectural Pillars
-- **Zero-Allocation Ingestion**: Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`) perform zero heap allocations in their hot paths, processing >90 Million fills/second in batch mode.
-- **Strict ISO C99 & Memory Safety**: Defensive pointer checks on all public APIs, clear destructor ownership semantics (`histo_destroy`, `histo_free_buffer`), and 100% leak-free ASan/UBSan/Valgrind verification.
-- **Deterministic Endian-Safe Wire Format**: Canonical 256-byte header with Little-Endian IEEE-754 data payloads and automatic version migration (`histo_migrate_binary`).
+- **Zero-Allocation Ingestion**: Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`, `histo_sketch_insert`) perform zero heap allocations in their hot paths, processing >440 Million fills/second in SIMD batch mode.
+- **SIMD Vector Acceleration**: Runtime-detected AVX-512 and AVX2/FMA vector kernels accelerate batch coordinate indexing, boundary guarding, and bin accumulation with clean scalar and NEON-ready fallbacks.
+- **DDSketch Dynamic Quantile Sketches**: Fully dynamic, bounded relative-error online quantile sketches (`include/histo/sketch.h`) with logarithmic dynamic binning, circular collapsing buffers, and mergeability across distributed streams.
+- **Strict ISO C99 & Memory Safety**: Defensive pointer checks on all public APIs, clear destructor ownership semantics (`histo_destroy`, `histo_sketch_destroy`, `histo_free_buffer`), and 100% leak-free ASan/UBSan/Valgrind verification.
+- **Deterministic Endian-Safe Wire Format**: Canonical 256-byte header with Little-Endian IEEE-754 data payloads, lossless JSON serialization, and automatic version migration (`histo_migrate_binary`).
 - **Comprehensive Statistical Analysis**: Online weighted Welford accumulation, two-pass higher-order central moments, sub-bin parabolic peak mode estimation, robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and two-distribution comparison metrics (\f$\chi^2\f$, KS, Wasserstein-1D, KL divergence, Bhattacharyya).
+- **Unix CLI & Terminal Visualization**: Rich command-line toolkit (`histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`) supporting ANSI TrueColor gradients, 1/8th Unicode fractional blocks, compact single-line sparklines (`-S, --sparkline`), and live streaming `--watch` mode.
 
 ---
 
-## 2. Core Concepts: Binning Visualized
+## 2. Core Concepts: Binning Models Visualized
 
-`libhisto` supports two distinct binning models configured at histogram creation:
+`libhisto` provides three fundamental models for distribution tracking:
 
-### Uniform Binning (`HISTO_BIN_UNIFORM`)
+### 2.1 Uniform Fixed-Width Binning (`HISTO_BIN_UNIFORM`)
 Uniform bins divide the domain \f$[x_{\min}, x_{\max})\f$ into \f$N\f$ equidistant intervals of width \f$\Delta = (x_{\max} - x_{\min}) / N\f$. Lookups execute in \f$O(1)\f$ time via boundary-guarded reciprocal multiplication.
 
 ```text
@@ -27,7 +30,7 @@ Uniform bins divide the domain \f$[x_{\min}, x_{\max})\f$ into \f$N\f$ equidista
    0.0          2.5         5.0         7.5        10.0
 ```
 
-### Variable Binning (`HISTO_BIN_VARIABLE`)
+### 2.2 Variable-Width Binning (`HISTO_BIN_VARIABLE`)
 Variable binning allows arbitrary, strictly monotonic boundary edges \f$e_0 < e_1 < \dots < e_N\f$. Lookups execute in \f$O(\log N)\f$ time using an optimized bisection binary search.
 
 ```text
@@ -36,11 +39,20 @@ Variable binning allows arbitrary, strictly monotonic boundary edges \f$e_0 < e_
    0.0     3.0  5.0                15.0         20.0
 ```
 
+### 2.3 Dynamic Logarithmic Binning (DDSketch)
+For streaming datasets spanning multiple orders of magnitude with no predefined lower or upper bounds, DDSketch maps values to exponentially growing logarithmic bins \f$k = \lceil \log_\gamma |x| \rceil\f$ where \f$\gamma = \frac{1+\alpha}{1-\alpha}\f$. Bins grow dynamically and collapse into circular stores when capacity limits are reached.
+
+```text
+      [ Bin -1 )  [  Bin 0  )    [    Bin 1    )      [      Bin 2      )
+    |------------|-----------|------------------|-----------------------|
+  1.000        1.020       1.041              1.062                   1.084
+```
+
 ---
 
 ## 3. Quickstart Walkthrough
 
-The following self-contained C99 program illustrates creating a histogram, filling data, computing statistical moments, and performing a binary serialization roundtrip:
+### 3.1 Uniform Histogramming, Moments, and Binary Roundtrip
 
 ```c
 #include <stdio.h>
@@ -60,21 +72,22 @@ int main(void) {
     histo_fill(h, 25.4);
     histo_fill_w(h, 50.0, 2.5); // Fill coordinate 50.0 with weight 2.5
 
-    // 3. Batch ingestion from array
-    double samples[3] = {12.0, 45.0, 88.0};
-    histo_fill_n(h, 3, samples, NULL); // NULL weights implies unit weights
+    // 3. Batch SIMD ingestion from contiguous array
+    double samples[4] = {12.0, 45.0, 88.0, 50.0};
+    histo_fill_n(h, 4, samples, NULL); // NULL weights implies unit weights
 
-    // 4. Query statistics and shape
-    double mean = 0.0, std_dev = 0.0, median = 0.0, fwhm = 0.0;
+    // 4. Query statistics, robust dispersion, and peak shape
+    double mean = 0.0, std_dev = 0.0, median = 0.0, iqr = 0.0, fwhm = 0.0;
     histo_mean(h, &mean);
     histo_std_dev(h, &std_dev);
     histo_median(h, &median);
+    histo_iqr(h, &iqr);
     histo_fwhm(h, &fwhm);
 
-    printf("Mean: %.3f | Std Dev: %.3f | Median: %.3f | FWHM: %.3f\n", 
-           mean, std_dev, median, fwhm);
+    printf("Mean: %.3f | StdDev: %.3f | Median: %.3f | IQR: %.3f | FWHM: %.3f\n", 
+           mean, std_dev, median, iqr, fwhm);
 
-    // 5. Binary serialization roundtrip
+    // 5. Binary serialization roundtrip (Canonical Little-Endian)
     void *buffer = NULL;
     size_t size = 0;
     if (histo_serialize_binary(h, &buffer, &size) == HISTO_OK) {
@@ -88,6 +101,35 @@ int main(void) {
     
     // 6. Clean teardown (0 memory leaks)
     histo_destroy(h);
+    return 0;
+}
+```
+
+### 3.2 Streaming Dynamic Quantile Sketching (DDSketch)
+
+```c
+#include <stdio.h>
+#include <histo/sketch.h>
+
+int main(void) {
+    // Create sketch: relative error alpha = 0.01 (+/- 1%), max 1024 bins
+    histo_sketch_t *sketch = histo_sketch_create(0.01, 1024);
+    if (!sketch) return 1;
+
+    // Ingest unbounded streaming latencies (microseconds to seconds)
+    histo_sketch_insert(sketch, 0.045);
+    histo_sketch_insert(sketch, 1.250);
+    histo_sketch_insert_w(sketch, 45.100, 3.0);
+
+    // Query tail percentiles
+    double p50 = 0.0, p90 = 0.0, p99 = 0.0;
+    histo_sketch_quantile(sketch, 0.50, &p50);
+    histo_sketch_quantile(sketch, 0.90, &p90);
+    histo_sketch_quantile(sketch, 0.99, &p99);
+
+    printf("Quantiles -> P50: %.3f | P90: %.3f | P99: %.3f\n", p50, p90, p99);
+
+    histo_sketch_destroy(sketch);
     return 0;
 }
 ```
@@ -115,7 +157,7 @@ histo_bin_error(mc_hist, 10, &error);
 printf("Bin 10: %.3f +/- %.3f\n", content, error);
 ```
 
-### 4.2 High-Throughput Batch Array Ingestion
+### 4.2 High-Throughput Batch SIMD Ingestion
 For maximum performance with vectorized telemetry feeds or simulation outputs, ingest contiguous or strided memory buffers:
 
 ```c
@@ -123,7 +165,7 @@ double values[1000];
 double weights[1000];
 // Populate values and weights ...
 
-// Contiguous batch ingestion
+// Contiguous SIMD batch ingestion
 histo_fill_n(h, 1000, values, weights);
 
 // Strided ingestion for Array-of-Structs (AoS) data layouts
@@ -139,11 +181,35 @@ histo_fill_strided(h, 500,
                    &particles[0].weight, sizeof(struct Particle));
 ```
 
-### 4.3 Binary Save, Load, and Version Migration
-Save histograms to files with portable Canonical Little-Endian encoding. Old binary formats (e.g. v1) are automatically migrated:
+### 4.3 Dynamic Quantile Sketches (DDSketch) & Merging
+DDSketch handles online quantile estimation across distributed workers and can merge sketches seamlessly:
 
 ```c
-// Saving to file
+histo_sketch_t *worker1 = histo_sketch_create(0.01, 1024);
+histo_sketch_t *worker2 = histo_sketch_create(0.01, 1024);
+
+// Worker 1 processes partition A
+for (size_t i = 0; i < n_a; ++i) histo_sketch_insert(worker1, samples_a[i]);
+
+// Worker 2 processes partition B
+for (size_t i = 0; i < n_b; ++i) histo_sketch_insert(worker2, samples_b[i]);
+
+// Merge worker2 into worker1
+histo_sketch_merge(worker1, worker2);
+
+double global_p95 = 0.0;
+histo_sketch_quantile(worker1, 0.95, &global_p95);
+printf("Merged Global P95: %.4f\n", global_p95);
+
+histo_sketch_destroy(worker1);
+histo_sketch_destroy(worker2);
+```
+
+### 4.4 Binary Save, Load, JSON Serialization, and Version Migration
+Save histograms to files with portable Canonical Little-Endian encoding or human-readable JSON. Old binary formats (e.g. v1) are automatically migrated:
+
+```c
+// Binary serialization
 void *buf = NULL;
 size_t size = 0;
 if (histo_serialize_binary(h, &buf, &size) == HISTO_OK) {
@@ -155,27 +221,19 @@ if (histo_serialize_binary(h, &buf, &size) == HISTO_OK) {
     histo_free_buffer(buf);
 }
 
-// Loading from file
-FILE *f = fopen("histogram.dat", "rb");
-if (f) {
-    fseek(f, 0, SEEK_END);
-    size_t file_size = (size_t)ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    void *load_buf = malloc(file_size);
-    if (load_buf && fread(load_buf, 1, file_size, f) == file_size) {
-        histo_t *loaded = NULL;
-        if (histo_deserialize_binary(load_buf, file_size, &loaded) == HISTO_OK) {
-            printf("Loaded %u bins successfully\n", histo_nbins(loaded));
-            histo_destroy(loaded);
-        }
+// Lossless JSON serialization
+char *json_str = NULL;
+if (histo_serialize_json(h, &json_str) == HISTO_OK) {
+    FILE *f = fopen("histogram.json", "w");
+    if (f) {
+        fputs(json_str, f);
+        fclose(f);
     }
-    free(load_buf);
-    fclose(f);
+    histo_free_buffer(json_str);
 }
 ```
 
-### 4.4 Higher-Order Moments & Peak/Shape Analysis
+### 4.5 Higher-Order Moments & Peak/Shape Analysis
 Extract distribution asymmetry (skewness), tail heaviness (kurtosis), dominant peak width (FWHM), continuous peak coordinate, and Root Mean Square (RMS):
 
 ```c
@@ -192,7 +250,7 @@ printf("Peak @ %.3f | FWHM: %.3f | Skewness: %.3f | Exc Kurtosis: %.3f | RMS: %.
        peak_mode, fwhm, skewness, excess_kurtosis, rms);
 ```
 
-### 4.5 Robust Non-Parametric & Dispersion Statistics
+### 4.6 Robust Non-Parametric & Dispersion Statistics
 When dealing with heavy-tailed or outlier-prone distributions, robust location and dispersion metrics provide resistant estimators:
 
 ```c
@@ -209,7 +267,7 @@ printf("IQR: %.3f | MAD: %.3f | 10%% Trimmed Mean: %.3f | Winsorized Mean: %.3f\
        iqr, mad, trimmed, winsorized);
 ```
 
-### 4.6 Comparing Distributions & Statistical Distances
+### 4.7 Comparing Distributions & Statistical Distances
 Compare two histograms with matching binning geometries using hypothesis tests and distance metrics:
 
 ```c
@@ -238,7 +296,7 @@ printf("Chi2/NDF: %.2f/%u | KS: %.4f | EMD: %.4f | KL: %.4f | Bhatt: %.4f\n",
        chi2, ndf, ks_stat, emd, kl_div, bhatt_dist);
 ```
 
-### 4.7 Unix CLI Toolkit
+### 4.8 Unix CLI Toolkit
 
 `libhisto` ships with a high-performance, modular Unix CLI toolkit built on the standard Unix filter philosophy (stdin \f$\to\f$ stdout). The tools can be invoked via the multi-call binary `histo <command>` or direct standalone symlinks (`histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`).
 
@@ -254,7 +312,7 @@ Data Stream ──>│ histo-fill │──> Binary Stream / JSON / TSV
    (Terminal Visualizer)      (Moment Report)       (A/B Comparison)
 ```
 
-#### 4.7.1 Streaming Ingestion (`histo-fill`)
+#### 4.8.1 Streaming Ingestion (`histo-fill`)
 Ingests whitespace-delimited numbers, CSV columns, or raw IEEE-754 Little-Endian binary `double` streams (`--binary-f64`):
 
 ```bash
@@ -269,68 +327,14 @@ tail -f access.log | grep -o 'time=[0-9.]*' | cut -d= -f2 | \
     histo-fill --bins=30 --auto-range --emit-interval=0.25 | histo-plot --watch
 ```
 
-**Common `histo-fill` Options:**
-| Option | Description |
-| :--- | :--- |
-| `-n, --bins=<N>` | Number of uniform bins (default: 50) |
-| `--min=<X>, --max=<X>` | Lower and upper boundaries |
-| `--edges=<E0,E1,...>` | Comma-separated variable bin edges |
-| `--auto-range` | Buffers input to compute min/max automatically |
-| `-w, --weights` | Ingests `value weight` pairs |
-| `--value-col=<COL>` | 1-based column for sample value (default: 1) |
-| `--weights-col=<COL>`| 1-based column for sample weight (default: 2) |
-| `--delimiter=<CHAR>` | Field delimiter (default: whitespace) |
-| `--binary-f64` | Ingests raw Little-Endian binary `double` stream |
-| `--merge` | Ingests and adds multiple serialized histograms |
-| `--rebin=<FACTOR>` | Rebins uniform histogram by integer factor |
-| `--cdf` | Converts histogram to Cumulative Distribution Function |
-| `--normalize=<AREA>` | Scales total histogram weight to target area |
-| `-o, --output=<FMT>` | Output format: `binary` (default for pipes), `json`, `tsv`, `table` |
-| `--emit-interval=<S>`| Emits snapshot every \f$S\f$ seconds |
-| `--emit-every=<N>` | Emits snapshot every \f$N\f$ samples |
-
-#### 4.7.2 Terminal Visualization (`histo-plot`)
-Renders histograms directly in terminal emulators with automatic width detection, 1/8th sub-character fractional Unicode blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whiskers (\f$\pm \sigma\f$), and continuous watch mode (`--watch`):
+#### 4.8.2 Terminal Visualization & Sparklines (`histo-plot`)
+Renders histograms directly in terminal emulators with automatic width detection, 1/8th sub-character fractional Unicode blocks (` ▂▃▄▅▆▇█`), ANSI TrueColor density gradients, error whiskers (\f$\pm \sigma\f$), sparklines, and continuous watch mode (`--watch`):
 
 ```bash
 # Gaussian Monte Carlo piped through binary wire format into TrueColor plot
 python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(100000)))" | \
     histo-fill --bins=25 --min=0 --max=100 -o binary | \
     histo-plot --color=always --title="Gaussian Monte Carlo (N=100k, μ=50, σ=15)"
-```
-
-**Output:**
-```text
-Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919)
-┌─ Statistics ──────────────────────────────────────────────────────────────┐
-│ Mean: 49.97  │ StdDev: 14.96 │ Median: 49.97 │ IQR: 20.18  │ Mode: 49.91  │
-└───────────────────────────────────────────────────────────────────────────┘
-[  0.00,   4.00) │     63 │ ▎
-[  4.00,   8.00) │    151 │ ▋
-[  8.00,  12.00) │    314 │ █▍
-[ 12.00,  16.00) │    593 │ ██▊
-[ 16.00,  20.00) │   1111 │ █████▎
-[ 20.00,  24.00) │   1901 │ █████████
-[ 24.00,  28.00) │   2929 │ █████████████▉
-[ 28.00,  32.00) │   4410 │ ████████████████████▉
-[ 32.00,  36.00) │   6002 │ ████████████████████████████▍
-[ 36.00,  40.00) │   7787 │ ████████████████████████████████████▉
-[ 40.00,  44.00) │   9213 │ ███████████████████████████████████████████▋
-[ 44.00,  48.00) │  10301 │ ████████████████████████████████████████████████▊
-[ 48.00,  52.00) │  10546 │ ██████████████████████████████████████████████████
-[ 52.00,  56.00) │  10278 │ ████████████████████████████████████████████████▋
-[ 56.00,  60.00) │   9277 │ ███████████████████████████████████████████▉
-[ 60.00,  64.00) │   7656 │ ████████████████████████████████████▎
-[ 64.00,  68.00) │   6007 │ ████████████████████████████▍
-[ 68.00,  72.00) │   4313 │ ████████████████████▍
-[ 72.00,  76.00) │   2943 │ █████████████▉
-[ 76.00,  80.00) │   1892 │ ████████▉
-[ 80.00,  84.00) │   1059 │ █████
-[ 84.00,  88.00) │    655 │ ███
-[ 88.00,  92.00) │    300 │ █▍
-[ 92.00,  96.00) │    149 │ ▋
-[ 96.00, 100.00) │     69 │ ▎
- Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0
 ```
 
 **Inline Single-Line Sparklines (`-S, --sparkline`):**
@@ -343,68 +347,12 @@ python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15)
     ▂▃▄▆▇██▇▆▄▂▂      [N=9987, range=[0, 1e+02), μ=50, σ=15]
 ```
 
-#### 4.7.3 Summary Statistics (`histo-stats`)
-Inspects exact moments, central moments, robust percentiles, and peak properties:
-
+**ASCII Sparkline (`--style=ascii --no-stats`):**
 ```bash
-cat telemetry.csv | histo-fill --bins=50 --auto-range -o json | histo-stats
+cat data.bin | histo-plot --sparkline --style=ascii --no-stats
 ```
-
-**Output:**
 ```text
-===============================================================
-                    HISTOGRAM SUMMARY REPORT                   
-===============================================================
- Geometry & Counts:
-   Bins:            50           Range: [0.0254, 75.9914)
-   Entries:         100000       Total Weight: 1e+05
-   Underflow:       0            Overflow:     0
-   Non-Finite / NaN:0           
-
- Central Moments & Shape:
-   Mean:            10.0338      Std Deviation: 7.13529
-   Variance:        50.9123      RMS:           12.3121
-   Skewness:        1.42308      Kurtosis:      6.02511
-   Excess Kurtosis: 3.02511     
-
- Robust Non-Parametric Metrics:
-   Median (Q50):    8.42856      IQR (Q75-Q25): 8.68178
-   Q25:             4.80409      Q75:           13.4859
-   MAD:             4.51105      Trimmed Mean:  9.42926
-   Winsorized Mean: 9.77578     
-
- Peak & Width Estimation:
-   Mode (Bin):      3            Mode (Continuous): 5.17544
-   FWHM:            11.9083     
-===============================================================
-```
-
-#### 4.7.4 Two-Distribution Comparison (`histo-cmp`)
-Compares two histograms for hypothesis testing and distribution drift detection:
-
-```bash
-histo-cmp baseline.bin canary.bin
-```
-
-**Output:**
-```text
-===============================================================
-              TWO-DISTRIBUTION COMPARISON REPORT               
-===============================================================
- Source A: baseline.bin (Entries: 50000, Weight: 5e+04)
- Source B: canary.bin (Entries: 49997, Weight: 5e+04)
-
- Hypothesis Testing & Compatibility:
-   Chi-Square (chi^2):       6014.45      NDF: 24
-   chi^2 / NDF:             250.602     
-   Kolmogorov-Smirnov (D):  0.193388     (Max vertical CDF difference)
-
- Statistical Distance Metrics:
-   1D Wasserstein (EMD):    5.06879      (L1 CDF transportation cost)
-   KL Divergence (A || B):  0.116139     nats
-   KL Divergence (B || A):  0.17478      nats
-   Bhattacharyya Distance:  0.0335182   
-===============================================================
+  ..::||##||::..  
 ```
 
 ---
@@ -487,14 +435,49 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 - **Bhattacharyya Distance**: \f$ D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \f$.
 
 ### 5.9 DDSketch Bounded Relative-Error Quantile Sketch (\f$O(1)\f$ insertion)
-The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et al. (VLDB 2019). It guarantees a relative error bound \f$\alpha\f$ for any quantile query.
-- **Logarithmic Mapping**: \f$ k = \lceil \log_{\gamma}(|x|) \rceil \f$ where \f$\gamma = \frac{1 + \alpha}{1 - \alpha}\f$.
-- **Collapsing**: Bins are managed in a circular buffer. When the number of active bins exceeds `max_bins`, the lowest bins are merged to limit memory consumption while bounding the error for large values.
-- **Complexity**: Insertion takes \f$O(1)\f$ time on average (with occasional \f$O(B)\f$ shift amortized over many insertions where \f$B\f$ is `max_bins`). Quantile queries take \f$O(B)\f$ time.
+The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et al. (VLDB 2019). It guarantees a relative error bound \f$\alpha\f$ for any quantile query:
+- **Logarithmic Mapping**: \f$ k = \lceil \log_{\gamma}(|x|) \rceil = \lceil \frac{\ln |x|}{\ln \gamma} \rceil \f$ where \f$\gamma = \frac{1 + \alpha}{1 - \alpha}\f$.
+- **Quantile Reconstruction**: For bin index \f$k\f$, the representative value is \f$\hat{q} = \frac{2 \gamma^k}{1 + \gamma}\f$, bounding the relative error by \f$|q - \hat{q}| \le \alpha \cdot q\f$.
+- **Collapsing Circular Buffer**: Positive and negative values are tracked in independent circular stores. When \f$k_{\max} - k_{\min} \ge \text{max\_bins}\f$, lower bins are collapsed into a single boundary bin to enforce strict memory bounds \f$O(\text{max\_bins})\f$.
+- **Mergeability**: Distributed sketches created with the same \f$\alpha\f$ can be merged exactly in \f$O(\text{max\_bins})\f$ time.
+
+### 5.10 SIMD Vector Acceleration Architecture (\f$O(N)\f$)
+`histo_fill_n` evaluates batch coordinate arrays using vectorized hardware pipelines:
+- **Runtime CPUID Dispatch**: On x86_64 architectures, CPUID dynamically selects AVX-512 (8-wide double vectors) or AVX2/FMA (4-wide double vectors).
+- **Vectorized Indexing**: Coordinates are loaded via unaligned SIMD loads (`_mm256_loadu_pd` / `_mm512_loadu_pd`), subtracted from \f$x_{\min}\f$, and multiplied by \f$\text{inv\_binsize}\f$ using FMA.
+- **Branchless Masking**: Out-of-range (< min, >= max) and NaN/Inf coordinates are detected via SIMD comparison masks (`_mm256_cmp_pd`, `_mm512_cmp_pd_mask`). Valid blocks execute in direct vectorized pipelines; edge cases fall back to scalar handlers.
+- **Cross-Platform Fallback**: On ARM and non-x86 architectures, the pipeline compiles clean, portable scalar/auto-vectorized loops ready for NEON optimization.
 
 ---
 
-## 6. Algorithmic Complexity Reference Table
+## 6. Performance Envelope & Mechanical Sympathy
+
+Benchmark measurements conducted on **Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz max, 20 cores, Linux x86_64)**:
+
+| Operation / Benchmark Target | Throughput | Latency / Sample or Query | Complexity |
+| :--- | :--- | :--- | :--- |
+| **Batch Ingestion (`histo_fill_n` SIMD)** | **441.15 Mops/s** | **2.27 ns / sample** | O(N) vectorized |
+| **Single Uniform Fill (`histo_fill`)** | **288.26 Mops/s** | **3.47 ns / sample** | O(1) |
+| **Weighted Fill + `sum_w2` (`histo_fill_w`)** | **223.45 Mops/s** | **4.48 ns / sample** | O(1) |
+| **Variable Bin Binary Search (100 bins)** | **33.65 Mops/s** | **29.72 ns / sample** | O(log N) |
+| **DDSketch Streaming Ingestion** | **143.58 Mops/s** | **6.97 ns / sample** | O(1) amortized |
+| **DDSketch Quantile Queries (P50/P90/P99)** | **231.17 k-queries/s** | **4.33 µs / query** | O(B) |
+| **Two-Sample Comparison (Chi2/KS/EMD/Bhatt)** | **27.62 k-comparisons/s** | **36.20 µs / comparison** | O(N) |
+| **Two-Pass Moments (Mean + Variance, 10k bins)** | **126.8 k-queries/s** | **7.89 µs / call** | O(N) |
+| **Quantile & Median (Q25 + Q50 + Q75, 10k bins)** | **73.5 k-queries/s** | **13.6 µs / call** | O(N) |
+| **Binary Serialization (10k bins)** | **38.4 k-ser/s** | **26.0 µs / save** | O(N) |
+
+### Mechanical Sympathy Principles
+
+1. **Zero-Allocation Hot Path**: Hot ingestion routines make zero `malloc` or system calls, avoiding heap lock contention and OS memory subsystem latency.
+2. **Instruction Pipeline Optimization**: Uniform coordinate indexing evaluates reciprocal multiplication (`FMUL`, latency 3–4 cycles) rather than floating-point hardware division (`FDIV`, latency 14–20 cycles).
+3. **Data Cache Locality**: Bin arrays and statistical moments are laid out contiguously with strict 8-byte alignment, ensuring maximum cache-line utilization in CPU L1d (32KB–48KB) and L2 caches.
+4. **Vector Execution & FMA**: Ingestion batches utilize 256-bit and 512-bit vector registers to process 4 to 8 IEEE-754 double-precision floats concurrently per core.
+5. **Division-Free Error Propagation**: Arithmetic routines evaluate algebraic formulations that propagate variances without intermediate division operations, preventing floating-point exception traps and zero-divisor stalls.
+
+---
+
+## 7. Algorithmic Complexity Reference Table
 
 | Function | Time Complexity | Space Complexity | Description |
 | :--- | :--- | :--- | :--- |
@@ -507,7 +490,8 @@ The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et
 | `histo_find_bin` (Variable) | O(log N) | O(1) | Monotonic bisection binary search |
 | `histo_fill` / `histo_fill_w` (Uniform) | O(1) | O(1) | Constant-time bin and accumulator increment |
 | `histo_fill` / `histo_fill_w` (Variable) | O(log N) | O(1) | Binary search + bin increment |
-| `histo_fill_n` / `histo_fill_strided` | O(K * L) | O(1) | Batch ingest K samples (L = 1 or log N) |
+| `histo_fill_n` (SIMD) | O(K / V) | O(1) | Vectorized batch ingest of K samples (V = 4 or 8) |
+| `histo_fill_strided` | O(K * L) | O(1) | Strided batch ingest for AoS datasets |
 | `histo_fill_bin` | O(1) | O(1) | Direct indexed bin accumulation |
 | `histo_nbins` / `histo_bin_type` / `histo_range` | O(1) | O(1) | Header field query |
 | `histo_bin_bounds` / `histo_bin_center` | O(1) | O(1) | Boundary coordinate / midpoint calculation |
@@ -545,9 +529,15 @@ The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et
 | `histo_serialize_binary_into` | O(N) | O(1) | Encodes Little-Endian wire format into caller buffer |
 | `histo_serialize_binary` | O(N) | O(N) | Allocates buffer and encodes wire format |
 | `histo_deserialize_binary` | O(N) | O(N) | Decodes wire format into newly allocated histogram |
+| `histo_serialize_json` | O(N) | O(N) | Serializes histogram to IEEE-754 lossless JSON string |
+| `histo_deserialize_json` | O(N) | O(N) | Deserializes histogram from JSON string |
 | `histo_migrate_binary` | O(N) | O(N) | Migrates older binary format buffers to current version |
 | `histo_free_buffer` | O(1) | O(1) | Deallocates library-allocated serialization buffer |
 | `histo_sketch_create` / `destroy` | O(B) | O(B) | Sketch allocation and circular buffer initialization |
-| `histo_sketch_insert` | O(1) | O(1) | Amortized constant time logarithmic mapping & insertion |
+| `histo_sketch_insert` / `_w` | O(1) | O(1) | Amortized constant time logarithmic mapping & insertion |
+| `histo_sketch_insert_n` | O(K) | O(1) | Batch insertion of K elements into sketch |
 | `histo_sketch_quantile` | O(B) | O(1) | Single-pass cumulative weight scan over B bins |
 | `histo_sketch_merge` | O(B) | O(1) | Merges two sketches with identical alpha |
+| `histo_sketch_reset` | O(B) | O(1) | Resets circular stores and summary counters |
+| `histo_sketch_serialize_binary` | O(B) | O(B) | Encodes sketch to binary buffer |
+| `histo_sketch_deserialize_binary` | O(B) | O(B) | Decodes sketch from binary buffer |

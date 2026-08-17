@@ -1,4 +1,4 @@
-.PHONY: all build test test-asan test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 
@@ -11,9 +11,14 @@ build:
 test: test-asan
 
 test-asan:
-	cmake -B $(BUILD_DIR)-asan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON
+	cmake -B $(BUILD_DIR)-asan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON -DLIBHISTO_ENABLE_FUZZING=ON
 	cmake --build $(BUILD_DIR)-asan
 	ctest --test-dir $(BUILD_DIR)-asan --output-on-failure
+
+test-fuzz:
+	cmake -B $(BUILD_DIR)-fuzz -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON -DLIBHISTO_ENABLE_FUZZING=ON
+	cmake --build $(BUILD_DIR)-fuzz
+	ctest --test-dir $(BUILD_DIR)-fuzz -R "fuzz_" --output-on-failure
 
 test-tsan:
 	cmake -B $(BUILD_DIR)-tsan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_TSAN=ON

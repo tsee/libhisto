@@ -100,38 +100,48 @@ $(function(){initNavTree('index.html','',''); });
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><p><a class="anchor" id="mainpage"></a></p>
-<p>Welcome to <b>libhisto</b>! This guide covers the core concepts, user recipes, advanced statistical algorithms, and computational complexity characteristics of the library.</p>
+<p>Welcome to <b>libhisto</b>! This guide covers the core concepts, user recipes, advanced statistical algorithms, SIMD acceleration architectures, DDSketch dynamic quantile sketches, and computational complexity characteristics of the library.</p>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md0"></a>
 1. Introduction</h1>
-<p><span class="tt">libhisto</span> is a high-performance, portable, memory-safe 1D histogramming library implemented in strict ISO C99. Designed for high-throughput scientific analysis, physical simulations, telemetry ingestion, and general statistical computing, <span class="tt">libhisto</span> provides mathematically exact results, division-free error propagation, and microsecond-level serialization.</p>
+<p><span class="tt">libhisto</span> is a high-performance, portable, memory-safe 1D histogramming and quantile sketch library implemented in strict ISO C99. Designed for high-throughput scientific analysis, physical simulations, telemetry ingestion, and general statistical computing, <span class="tt">libhisto</span> provides mathematically exact results, division-free error propagation, SIMD vector acceleration, and microsecond-level serialization.</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
 Key Architectural Pillars</h2>
 <ul>
-<li><b>Zero-Allocation Ingestion</b>: Ingestion routines (<span class="tt"><a class="el" href="histo_8h.html#ad2506d13175740c924af8d726d1a6f4d" title="Fills a single value into the histogram with unit weight (1.0).">histo_fill</a></span>, <span class="tt"><a class="el" href="histo_8h.html#a220bb8eff40144b169cc5bd08b180c36" title="Fills a single value into the histogram with a specified weight.">histo_fill_w</a></span>, <span class="tt"><a class="el" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9" title="Batch fills N contiguous values with optional weights.">histo_fill_n</a></span>, <span class="tt"><a class="el" href="histo_8h.html#a3febe8265345c8415ee270e60e3334c1" title="Strided batch fill for Array-of-Structs (AoS) data layouts.">histo_fill_strided</a></span>) perform zero heap allocations in their hot paths, processing &gt;90 Million fills/second in batch mode.</li>
-<li><b>Strict ISO C99 &amp; Memory Safety</b>: Defensive pointer checks on all public APIs, clear destructor ownership semantics (<span class="tt"><a class="el" href="histo_8h.html#a7cbbd50d92b8fad934c15c0403e9ed38" title="Destroys a histogram and releases all allocated memory.">histo_destroy</a></span>, <span class="tt"><a class="el" href="histo_8h.html#ab189ee9fb6f38041cfdd65fd57a86878" title="Frees a heap buffer allocated by serialization routines. Safe with NULL.">histo_free_buffer</a></span>), and 100% leak-free ASan/UBSan/Valgrind verification.</li>
-<li><b>Deterministic Endian-Safe Wire Format</b>: Canonical 256-byte header with Little-Endian IEEE-754 data payloads and automatic version migration (<span class="tt"><a class="el" href="histo_8h.html#ae46f3534888e638a5e8890770789eca9" title="Migrates a binary serialized histogram to the current format version.">histo_migrate_binary</a></span>).</li>
+<li><b>Zero-Allocation Ingestion</b>: Ingestion routines (<span class="tt"><a class="el" href="histo_8h.html#ad2506d13175740c924af8d726d1a6f4d" title="Fills a single value into the histogram with unit weight (1.0).">histo_fill</a></span>, <span class="tt"><a class="el" href="histo_8h.html#a220bb8eff40144b169cc5bd08b180c36" title="Fills a single value into the histogram with a specified weight.">histo_fill_w</a></span>, <span class="tt"><a class="el" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9" title="Batch fills N contiguous values with optional weights.">histo_fill_n</a></span>, <span class="tt"><a class="el" href="histo_8h.html#a3febe8265345c8415ee270e60e3334c1" title="Strided batch fill for Array-of-Structs (AoS) data layouts.">histo_fill_strided</a></span>, <span class="tt"><a class="el" href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da" title="Insert a value into the sketch.">histo_sketch_insert</a></span>) perform zero heap allocations in their hot paths, processing &gt;440 Million fills/second in SIMD batch mode.</li>
+<li><b>SIMD Vector Acceleration</b>: Runtime-detected AVX-512 and AVX2/FMA vector kernels accelerate batch coordinate indexing, boundary guarding, and bin accumulation with clean scalar and NEON-ready fallbacks.</li>
+<li><b>DDSketch Dynamic Quantile Sketches</b>: Fully dynamic, bounded relative-error online quantile sketches (<span class="tt"><a class="el" href="sketch_8h.html" title="Online Dynamic Quantile Sketch (bounded relative-error, based on DDSketch).">include/histo/sketch.h</a></span>) with logarithmic dynamic binning, circular collapsing buffers, and mergeability across distributed streams.</li>
+<li><b>Strict ISO C99 &amp; Memory Safety</b>: Defensive pointer checks on all public APIs, clear destructor ownership semantics (<span class="tt"><a class="el" href="histo_8h.html#a7cbbd50d92b8fad934c15c0403e9ed38" title="Destroys a histogram and releases all allocated memory.">histo_destroy</a></span>, <span class="tt"><a class="el" href="sketch_8h.html#a290a40f4aa68ef14e6a6fc7ca367139c" title="Destroy a sketch and free its resources.">histo_sketch_destroy</a></span>, <span class="tt"><a class="el" href="histo_8h.html#ab189ee9fb6f38041cfdd65fd57a86878" title="Frees a heap buffer allocated by serialization routines. Safe with NULL.">histo_free_buffer</a></span>), and 100% leak-free ASan/UBSan/Valgrind verification.</li>
+<li><b>Deterministic Endian-Safe Wire Format</b>: Canonical 256-byte header with Little-Endian IEEE-754 data payloads, lossless JSON serialization, and automatic version migration (<span class="tt"><a class="el" href="histo_8h.html#ae46f3534888e638a5e8890770789eca9" title="Migrates a binary serialized histogram to the current format version.">histo_migrate_binary</a></span>).</li>
 <li><b>Comprehensive Statistical Analysis</b>: Online weighted Welford accumulation, two-pass higher-order central moments, sub-bin parabolic peak mode estimation, robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and two-distribution comparison metrics ( \(\chi^2\), KS, Wasserstein-1D, KL divergence, Bhattacharyya).</li>
+<li><b>Unix CLI &amp; Terminal Visualization</b>: Rich command-line toolkit (<span class="tt">histo-fill</span>, <span class="tt">histo-plot</span>, <span class="tt">histo-stats</span>, <span class="tt">histo-cmp</span>) supporting ANSI TrueColor gradients, 1/8th Unicode fractional blocks, compact single-line sparklines (<span class="tt">-S, --sparkline</span>), and live streaming <span class="tt">--watch</span> mode.</li>
 </ul>
 <hr  />
 <h1 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
-2. Core Concepts: Binning Visualized</h1>
-<p><span class="tt">libhisto</span> supports two distinct binning models configured at histogram creation:</p>
+2. Core Concepts: Binning Models Visualized</h1>
+<p><span class="tt">libhisto</span> provides three fundamental models for distribution tracking:</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md4"></a>
-Uniform Binning (<span class="tt">HISTO_BIN_UNIFORM</span>)</h2>
+2.1 Uniform Fixed-Width Binning (<span class="tt">HISTO_BIN_UNIFORM</span>)</h2>
 <p>Uniform bins divide the domain \([x_{\min}, x_{\max})\) into \(N\) equidistant intervals of width \(\Delta = (x_{\max} - x_{\min}) / N\). Lookups execute in \(O(1)\) time via boundary-guarded reciprocal multiplication.</p>
 <div class="fragment"><div class="line">    [ Bin 0 )   [ Bin 1 )   [ Bin 2 )   [ Bin 3 )</div>
 <div class="line">  |-----------|-----------|-----------|-----------|</div>
 <div class="line">0.0          2.5         5.0         7.5        10.0</div>
 </div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
-Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
+2.2 Variable-Width Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <p>Variable binning allows arbitrary, strictly monotonic boundary edges \(e_0 &lt; e_1 &lt; \dots &lt; e_N\). Lookups execute in \(O(\log N)\) time using an optimized bisection binary search.</p>
 <div class="fragment"><div class="line">    [ B0 ) [B1)       [   Bin 2   )  [  Bin 3  )</div>
 <div class="line">  |------|----|-------------------|------------|</div>
 <div class="line">0.0     3.0  5.0                15.0         20.0</div>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md6"></a>
+2.3 Dynamic Logarithmic Binning (DDSketch)</h2>
+<p>For streaming datasets spanning multiple orders of magnitude with no predefined lower or upper bounds, DDSketch maps values to exponentially growing logarithmic bins \(k = \lceil \log_\gamma |x| \rceil\) where \(\gamma = \frac{1+\alpha}{1-\alpha}\). Bins grow dynamically and collapse into circular stores when capacity limits are reached.</p>
+<div class="fragment"><div class="line">    [ Bin -1 )  [  Bin 0  )    [    Bin 1    )      [      Bin 2      )</div>
+<div class="line">  |------------|-----------|------------------|-----------------------|</div>
+<div class="line">1.000        1.020       1.041              1.062                   1.084</div>
 </div><!-- fragment --><hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md7"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md8"></a>
 3. Quickstart Walkthrough</h1>
-<p>The following self-contained C99 program illustrates creating a histogram, filling data, computing statistical moments, and performing a binary serialization roundtrip:</p>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md9"></a>
+3.1 Uniform Histogramming, Moments, and Binary Roundtrip</h2>
 <div class="fragment"><div class="line"><span class="preprocessor">#include &lt;stdio.h&gt;</span></div>
 <div class="line"><span class="preprocessor">#include &lt;<a class="code" href="histo_8h.html">histo/histo.h</a>&gt;</span></div>
 <div class="line"> </div>
@@ -149,21 +159,22 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#ad2506d13175740c924af8d726d1a6f4d">histo_fill</a>(h, 25.4);</div>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#a220bb8eff40144b169cc5bd08b180c36">histo_fill_w</a>(h, 50.0, 2.5); <span class="comment">// Fill coordinate 50.0 with weight 2.5</span></div>
 <div class="line"> </div>
-<div class="line">    <span class="comment">// 3. Batch ingestion from array</span></div>
-<div class="line">    <span class="keywordtype">double</span> samples[3] = {12.0, 45.0, 88.0};</div>
-<div class="line">    <a class="code hl_function" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9">histo_fill_n</a>(h, 3, samples, NULL); <span class="comment">// NULL weights implies unit weights</span></div>
+<div class="line">    <span class="comment">// 3. Batch SIMD ingestion from contiguous array</span></div>
+<div class="line">    <span class="keywordtype">double</span> samples[4] = {12.0, 45.0, 88.0, 50.0};</div>
+<div class="line">    <a class="code hl_function" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9">histo_fill_n</a>(h, 4, samples, NULL); <span class="comment">// NULL weights implies unit weights</span></div>
 <div class="line"> </div>
-<div class="line">    <span class="comment">// 4. Query statistics and shape</span></div>
-<div class="line">    <span class="keywordtype">double</span> mean = 0.0, std_dev = 0.0, median = 0.0, fwhm = 0.0;</div>
+<div class="line">    <span class="comment">// 4. Query statistics, robust dispersion, and peak shape</span></div>
+<div class="line">    <span class="keywordtype">double</span> mean = 0.0, std_dev = 0.0, median = 0.0, iqr = 0.0, fwhm = 0.0;</div>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#a26dded9ef7fd213c989208ffb0514e94">histo_mean</a>(h, &amp;mean);</div>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#a19ccf84946065d7299121b7110fd438f">histo_std_dev</a>(h, &amp;std_dev);</div>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#a3e50387cc565e59ba0660e2ec319054f">histo_median</a>(h, &amp;median);</div>
+<div class="line">    <a class="code hl_function" href="histo_8h.html#a3617a42420e99937daa431183f387a23">histo_iqr</a>(h, &amp;iqr);</div>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#a1ac6771748f14dad70ccb47e060e59cf">histo_fwhm</a>(h, &amp;fwhm);</div>
 <div class="line"> </div>
-<div class="line">    printf(<span class="stringliteral">&quot;Mean: %.3f | Std Dev: %.3f | Median: %.3f | FWHM: %.3f\n&quot;</span>, </div>
-<div class="line">           mean, std_dev, median, fwhm);</div>
+<div class="line">    printf(<span class="stringliteral">&quot;Mean: %.3f | StdDev: %.3f | Median: %.3f | IQR: %.3f | FWHM: %.3f\n&quot;</span>, </div>
+<div class="line">           mean, std_dev, median, iqr, fwhm);</div>
 <div class="line"> </div>
-<div class="line">    <span class="comment">// 5. Binary serialization roundtrip</span></div>
+<div class="line">    <span class="comment">// 5. Binary serialization roundtrip (Canonical Little-Endian)</span></div>
 <div class="line">    <span class="keywordtype">void</span> *buffer = NULL;</div>
 <div class="line">    <span class="keywordtype">size_t</span> size = 0;</div>
 <div class="line">    <span class="keywordflow">if</span> (<a class="code hl_function" href="histo_8h.html#a2885e29188161f9698a8ae0c8b016a9a">histo_serialize_binary</a>(h, &amp;buffer, &amp;size) == <a class="code hl_enumvalue" href="types_8h.html#a1b261f0cbcb57b9b811d32352ef32f55adaa034d5ddb137ce1241243b9bc84490">HISTO_OK</a>) {</div>
@@ -187,6 +198,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="ttc" id="ahisto_8h_html_a2885e29188161f9698a8ae0c8b016a9a"><div class="ttname"><a href="histo_8h.html#a2885e29188161f9698a8ae0c8b016a9a">histo_serialize_binary</a></div><div class="ttdeci">histo_status_t histo_serialize_binary(const histo_t *h, void **out_buf, size_t *out_size)</div><div class="ttdoc">Serializes histogram into a newly heap-allocated binary buffer.</div></div>
 <div class="ttc" id="ahisto_8h_html_a2e57e449de35c9b5ff7f7218590040d3"><div class="ttname"><a href="histo_8h.html#a2e57e449de35c9b5ff7f7218590040d3">histo_total_weight</a></div><div class="ttdeci">double histo_total_weight(const histo_t *h)</div><div class="ttdoc">Retrieves total accumulated weight across all bins (excluding underflow/overflow).</div></div>
 <div class="ttc" id="ahisto_8h_html_a32a8bc89b03cc49a4835de2cefcc7cd9"><div class="ttname"><a href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9">histo_fill_n</a></div><div class="ttdeci">histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double *weights)</div><div class="ttdoc">Batch fills N contiguous values with optional weights.</div></div>
+<div class="ttc" id="ahisto_8h_html_a3617a42420e99937daa431183f387a23"><div class="ttname"><a href="histo_8h.html#a3617a42420e99937daa431183f387a23">histo_iqr</a></div><div class="ttdeci">histo_status_t histo_iqr(const histo_t *h, double *out_iqr)</div><div class="ttdoc">Computes the Interquartile Range (IQR = Q75 - Q25).</div></div>
 <div class="ttc" id="ahisto_8h_html_a3e50387cc565e59ba0660e2ec319054f"><div class="ttname"><a href="histo_8h.html#a3e50387cc565e59ba0660e2ec319054f">histo_median</a></div><div class="ttdeci">histo_status_t histo_median(const histo_t *h, double *out_median)</div><div class="ttdoc">Computes the median coordinate (50th percentile).</div></div>
 <div class="ttc" id="ahisto_8h_html_a7cbbd50d92b8fad934c15c0403e9ed38"><div class="ttname"><a href="histo_8h.html#a7cbbd50d92b8fad934c15c0403e9ed38">histo_destroy</a></div><div class="ttdeci">void histo_destroy(histo_t *h)</div><div class="ttdoc">Destroys a histogram and releases all allocated memory.</div></div>
 <div class="ttc" id="ahisto_8h_html_a805356fff3e1cca97c8df5797d26faca"><div class="ttname"><a href="histo_8h.html#a805356fff3e1cca97c8df5797d26faca">histo_deserialize_binary</a></div><div class="ttdeci">histo_status_t histo_deserialize_binary(const void *buf, size_t size, histo_t **out_h)</div><div class="ttdoc">Deserializes a histogram from a canonical binary byte buffer.</div></div>
@@ -197,10 +209,43 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="ttc" id="atypes_8h_html_aa64f79d78959e0dcbb4c0be5a4ab649f"><div class="ttname"><a href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a></div><div class="ttdeci">struct histo histo_t</div><div class="ttdoc">Opaque histogram handle.</div><div class="ttdef"><b>Definition</b> types.h:21</div></div>
 <div class="ttc" id="atypes_8h_html_aca1d24a12648936b54f70e610e3b3321ad4b2a75eb9ff0be70e632ab37cf9467d"><div class="ttname"><a href="types_8h.html#aca1d24a12648936b54f70e610e3b3321ad4b2a75eb9ff0be70e632ab37cf9467d">HISTO_FLAG_EXACT_MOMENTS</a></div><div class="ttdeci">@ HISTO_FLAG_EXACT_MOMENTS</div><div class="ttdef"><b>Definition</b> types.h:54</div></div>
 <div class="ttc" id="atypes_8h_html_aca1d24a12648936b54f70e610e3b3321afe2175929c755c2b771b5f61374ef860"><div class="ttname"><a href="types_8h.html#aca1d24a12648936b54f70e610e3b3321afe2175929c755c2b771b5f61374ef860">HISTO_FLAG_TRACK_SUMW2</a></div><div class="ttdeci">@ HISTO_FLAG_TRACK_SUMW2</div><div class="ttdef"><b>Definition</b> types.h:53</div></div>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md10"></a>
+3.2 Streaming Dynamic Quantile Sketching (DDSketch)</h2>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;stdio.h&gt;</span></div>
+<div class="line"><span class="preprocessor">#include &lt;<a class="code" href="sketch_8h.html">histo/sketch.h</a>&gt;</span></div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">int</span> main(<span class="keywordtype">void</span>) {</div>
+<div class="line">    <span class="comment">// Create sketch: relative error alpha = 0.01 (+/- 1%), max 1024 bins</span></div>
+<div class="line">    <a class="code hl_typedef" href="sketch_8h.html#a14f239efcea2c200d4b4e32397a35a15">histo_sketch_t</a> *sketch = <a class="code hl_function" href="sketch_8h.html#a5ed1cb251c0e06682b722d981ac38358">histo_sketch_create</a>(0.01, 1024);</div>
+<div class="line">    <span class="keywordflow">if</span> (!sketch) <span class="keywordflow">return</span> 1;</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// Ingest unbounded streaming latencies (microseconds to seconds)</span></div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da">histo_sketch_insert</a>(sketch, 0.045);</div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da">histo_sketch_insert</a>(sketch, 1.250);</div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#aed0751ad38df7c8b766c33d85efeef48">histo_sketch_insert_w</a>(sketch, 45.100, 3.0);</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">// Query tail percentiles</span></div>
+<div class="line">    <span class="keywordtype">double</span> p50 = 0.0, p90 = 0.0, p99 = 0.0;</div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#a5cdcffc9b98fa44c87ff603835f4b6ad">histo_sketch_quantile</a>(sketch, 0.50, &amp;p50);</div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#a5cdcffc9b98fa44c87ff603835f4b6ad">histo_sketch_quantile</a>(sketch, 0.90, &amp;p90);</div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#a5cdcffc9b98fa44c87ff603835f4b6ad">histo_sketch_quantile</a>(sketch, 0.99, &amp;p99);</div>
+<div class="line"> </div>
+<div class="line">    printf(<span class="stringliteral">&quot;Quantiles -&gt; P50: %.3f | P90: %.3f | P99: %.3f\n&quot;</span>, p50, p90, p99);</div>
+<div class="line"> </div>
+<div class="line">    <a class="code hl_function" href="sketch_8h.html#a290a40f4aa68ef14e6a6fc7ca367139c">histo_sketch_destroy</a>(sketch);</div>
+<div class="line">    <span class="keywordflow">return</span> 0;</div>
+<div class="line">}</div>
+<div class="ttc" id="asketch_8h_html"><div class="ttname"><a href="sketch_8h.html">sketch.h</a></div><div class="ttdoc">Online Dynamic Quantile Sketch (bounded relative-error, based on DDSketch).</div></div>
+<div class="ttc" id="asketch_8h_html_a14f239efcea2c200d4b4e32397a35a15"><div class="ttname"><a href="sketch_8h.html#a14f239efcea2c200d4b4e32397a35a15">histo_sketch_t</a></div><div class="ttdeci">struct histo_sketch histo_sketch_t</div><div class="ttdoc">Opaque sketch handle.</div><div class="ttdef"><b>Definition</b> sketch.h:18</div></div>
+<div class="ttc" id="asketch_8h_html_a290a40f4aa68ef14e6a6fc7ca367139c"><div class="ttname"><a href="sketch_8h.html#a290a40f4aa68ef14e6a6fc7ca367139c">histo_sketch_destroy</a></div><div class="ttdeci">void histo_sketch_destroy(histo_sketch_t *s)</div><div class="ttdoc">Destroy a sketch and free its resources.</div></div>
+<div class="ttc" id="asketch_8h_html_a5cdcffc9b98fa44c87ff603835f4b6ad"><div class="ttname"><a href="sketch_8h.html#a5cdcffc9b98fa44c87ff603835f4b6ad">histo_sketch_quantile</a></div><div class="ttdeci">histo_status_t histo_sketch_quantile(const histo_sketch_t *s, double q, double *out_val)</div><div class="ttdoc">Query a quantile from the sketch.</div></div>
+<div class="ttc" id="asketch_8h_html_a5ed1cb251c0e06682b722d981ac38358"><div class="ttname"><a href="sketch_8h.html#a5ed1cb251c0e06682b722d981ac38358">histo_sketch_create</a></div><div class="ttdeci">histo_sketch_t * histo_sketch_create(double alpha, uint32_t max_bins)</div><div class="ttdoc">Create a new dynamic quantile sketch.</div></div>
+<div class="ttc" id="asketch_8h_html_aed0751ad38df7c8b766c33d85efeef48"><div class="ttname"><a href="sketch_8h.html#aed0751ad38df7c8b766c33d85efeef48">histo_sketch_insert_w</a></div><div class="ttdeci">histo_status_t histo_sketch_insert_w(histo_sketch_t *s, double value, double weight)</div><div class="ttdoc">Insert a weighted value into the sketch.</div></div>
+<div class="ttc" id="asketch_8h_html_af7b35c73965492ab5b697634f569e8da"><div class="ttname"><a href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da">histo_sketch_insert</a></div><div class="ttdeci">histo_status_t histo_sketch_insert(histo_sketch_t *s, double value)</div><div class="ttdoc">Insert a value into the sketch.</div></div>
 </div><!-- fragment --><hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md9"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md12"></a>
 4. Practical Recipes</h1>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md10"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md13"></a>
 4.1 Weighted Monte Carlo Events &amp; Uncertainties</h2>
 <p>When processing Monte Carlo simulations, events typically have non-unit statistical weights. Enabling <span class="tt"><a class="el" href="types_8h.html#aca1d24a12648936b54f70e610e3b3321afe2175929c755c2b771b5f61374ef860">HISTO_FLAG_TRACK_SUMW2</a></span> ensures that statistical errors are tracked per bin:</p>
 <div class="fragment"><div class="line"><a class="code hl_typedef" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> *mc_hist = <a class="code hl_function" href="histo_8h.html#a9171e9d46984629cb9192a69a5b9eba5">histo_create_uniform</a>(50, -5.0, 5.0, <a class="code hl_enumvalue" href="types_8h.html#aca1d24a12648936b54f70e610e3b3321afe2175929c755c2b771b5f61374ef860">HISTO_FLAG_TRACK_SUMW2</a>);</div>
@@ -218,14 +263,14 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">printf(<span class="stringliteral">&quot;Bin 10: %.3f +/- %.3f\n&quot;</span>, content, error);</div>
 <div class="ttc" id="ahisto_8h_html_ab8d81fbafa84f7000f5767d07016de6b"><div class="ttname"><a href="histo_8h.html#ab8d81fbafa84f7000f5767d07016de6b">histo_bin_content</a></div><div class="ttdeci">histo_status_t histo_bin_content(const histo_t *h, uint32_t bin_index, double *out_content)</div><div class="ttdoc">Retrieves the accumulated content (weight sum) of a bin.</div></div>
 <div class="ttc" id="ahisto_8h_html_afb25dda3d1e8cdb8582dd740d60bb63b"><div class="ttname"><a href="histo_8h.html#afb25dda3d1e8cdb8582dd740d60bb63b">histo_bin_error</a></div><div class="ttdeci">histo_status_t histo_bin_error(const histo_t *h, uint32_t bin_index, double *out_error)</div><div class="ttdoc">Calculates the statistical uncertainty (error) of a bin.</div></div>
-</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md11"></a>
-4.2 High-Throughput Batch Array Ingestion</h2>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md14"></a>
+4.2 High-Throughput Batch SIMD Ingestion</h2>
 <p>For maximum performance with vectorized telemetry feeds or simulation outputs, ingest contiguous or strided memory buffers:</p>
 <div class="fragment"><div class="line"><span class="keywordtype">double</span> values[1000];</div>
 <div class="line"><span class="keywordtype">double</span> weights[1000];</div>
 <div class="line"><span class="comment">// Populate values and weights ...</span></div>
 <div class="line"> </div>
-<div class="line"><span class="comment">// Contiguous batch ingestion</span></div>
+<div class="line"><span class="comment">// Contiguous SIMD batch ingestion</span></div>
 <div class="line"><a class="code hl_function" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9">histo_fill_n</a>(h, 1000, values, weights);</div>
 <div class="line"> </div>
 <div class="line"><span class="comment">// Strided ingestion for Array-of-Structs (AoS) data layouts</span></div>
@@ -240,10 +285,32 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">                   &amp;particles[0].energy, <span class="keyword">sizeof</span>(<span class="keyword">struct</span> Particle),</div>
 <div class="line">                   &amp;particles[0].weight, <span class="keyword">sizeof</span>(<span class="keyword">struct</span> Particle));</div>
 <div class="ttc" id="ahisto_8h_html_a3febe8265345c8415ee270e60e3334c1"><div class="ttname"><a href="histo_8h.html#a3febe8265345c8415ee270e60e3334c1">histo_fill_strided</a></div><div class="ttdeci">histo_status_t histo_fill_strided(histo_t *h, size_t n, const double *x, size_t x_stride_bytes, const double *weights, size_t w_stride_bytes)</div><div class="ttdoc">Strided batch fill for Array-of-Structs (AoS) data layouts.</div></div>
-</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md12"></a>
-4.3 Binary Save, Load, and Version Migration</h2>
-<p>Save histograms to files with portable Canonical Little-Endian encoding. Old binary formats (e.g. v1) are automatically migrated:</p>
-<div class="fragment"><div class="line"><span class="comment">// Saving to file</span></div>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md15"></a>
+4.3 Dynamic Quantile Sketches (DDSketch) &amp; Merging</h2>
+<p>DDSketch handles online quantile estimation across distributed workers and can merge sketches seamlessly:</p>
+<div class="fragment"><div class="line"><a class="code hl_typedef" href="sketch_8h.html#a14f239efcea2c200d4b4e32397a35a15">histo_sketch_t</a> *worker1 = <a class="code hl_function" href="sketch_8h.html#a5ed1cb251c0e06682b722d981ac38358">histo_sketch_create</a>(0.01, 1024);</div>
+<div class="line"><a class="code hl_typedef" href="sketch_8h.html#a14f239efcea2c200d4b4e32397a35a15">histo_sketch_t</a> *worker2 = <a class="code hl_function" href="sketch_8h.html#a5ed1cb251c0e06682b722d981ac38358">histo_sketch_create</a>(0.01, 1024);</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Worker 1 processes partition A</span></div>
+<div class="line"><span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; n_a; ++i) <a class="code hl_function" href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da">histo_sketch_insert</a>(worker1, samples_a[i]);</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Worker 2 processes partition B</span></div>
+<div class="line"><span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; n_b; ++i) <a class="code hl_function" href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da">histo_sketch_insert</a>(worker2, samples_b[i]);</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Merge worker2 into worker1</span></div>
+<div class="line"><a class="code hl_function" href="sketch_8h.html#a796ce5c1ea179e22b001ba939d7747ee">histo_sketch_merge</a>(worker1, worker2);</div>
+<div class="line"> </div>
+<div class="line"><span class="keywordtype">double</span> global_p95 = 0.0;</div>
+<div class="line"><a class="code hl_function" href="sketch_8h.html#a5cdcffc9b98fa44c87ff603835f4b6ad">histo_sketch_quantile</a>(worker1, 0.95, &amp;global_p95);</div>
+<div class="line">printf(<span class="stringliteral">&quot;Merged Global P95: %.4f\n&quot;</span>, global_p95);</div>
+<div class="line"> </div>
+<div class="line"><a class="code hl_function" href="sketch_8h.html#a290a40f4aa68ef14e6a6fc7ca367139c">histo_sketch_destroy</a>(worker1);</div>
+<div class="line"><a class="code hl_function" href="sketch_8h.html#a290a40f4aa68ef14e6a6fc7ca367139c">histo_sketch_destroy</a>(worker2);</div>
+<div class="ttc" id="asketch_8h_html_a796ce5c1ea179e22b001ba939d7747ee"><div class="ttname"><a href="sketch_8h.html#a796ce5c1ea179e22b001ba939d7747ee">histo_sketch_merge</a></div><div class="ttdeci">histo_status_t histo_sketch_merge(histo_sketch_t *dest, const histo_sketch_t *src)</div><div class="ttdoc">Merge src sketch into dest sketch. Both sketches must have been created with the same alpha.</div></div>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md16"></a>
+4.4 Binary Save, Load, JSON Serialization, and Version Migration</h2>
+<p>Save histograms to files with portable Canonical Little-Endian encoding or human-readable JSON. Old binary formats (e.g. v1) are automatically migrated:</p>
+<div class="fragment"><div class="line"><span class="comment">// Binary serialization</span></div>
 <div class="line"><span class="keywordtype">void</span> *buf = NULL;</div>
 <div class="line"><span class="keywordtype">size_t</span> size = 0;</div>
 <div class="line"><span class="keywordflow">if</span> (<a class="code hl_function" href="histo_8h.html#a2885e29188161f9698a8ae0c8b016a9a">histo_serialize_binary</a>(h, &amp;buf, &amp;size) == <a class="code hl_enumvalue" href="types_8h.html#a1b261f0cbcb57b9b811d32352ef32f55adaa034d5ddb137ce1241243b9bc84490">HISTO_OK</a>) {</div>
@@ -255,27 +322,19 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">    <a class="code hl_function" href="histo_8h.html#ab189ee9fb6f38041cfdd65fd57a86878">histo_free_buffer</a>(buf);</div>
 <div class="line">}</div>
 <div class="line"> </div>
-<div class="line"><span class="comment">// Loading from file</span></div>
-<div class="line">FILE *f = fopen(<span class="stringliteral">&quot;histogram.dat&quot;</span>, <span class="stringliteral">&quot;rb&quot;</span>);</div>
-<div class="line"><span class="keywordflow">if</span> (f) {</div>
-<div class="line">    fseek(f, 0, SEEK_END);</div>
-<div class="line">    <span class="keywordtype">size_t</span> file_size = (size_t)ftell(f);</div>
-<div class="line">    fseek(f, 0, SEEK_SET);</div>
-<div class="line"> </div>
-<div class="line">    <span class="keywordtype">void</span> *load_buf = malloc(file_size);</div>
-<div class="line">    <span class="keywordflow">if</span> (load_buf &amp;&amp; fread(load_buf, 1, file_size, f) == file_size) {</div>
-<div class="line">        <a class="code hl_typedef" href="types_8h.html#aa64f79d78959e0dcbb4c0be5a4ab649f">histo_t</a> *loaded = NULL;</div>
-<div class="line">        <span class="keywordflow">if</span> (<a class="code hl_function" href="histo_8h.html#a805356fff3e1cca97c8df5797d26faca">histo_deserialize_binary</a>(load_buf, file_size, &amp;loaded) == <a class="code hl_enumvalue" href="types_8h.html#a1b261f0cbcb57b9b811d32352ef32f55adaa034d5ddb137ce1241243b9bc84490">HISTO_OK</a>) {</div>
-<div class="line">            printf(<span class="stringliteral">&quot;Loaded %u bins successfully\n&quot;</span>, <a class="code hl_function" href="histo_8h.html#a2d8ed0c4a518216ed97f738235459d9a">histo_nbins</a>(loaded));</div>
-<div class="line">            <a class="code hl_function" href="histo_8h.html#a7cbbd50d92b8fad934c15c0403e9ed38">histo_destroy</a>(loaded);</div>
-<div class="line">        }</div>
+<div class="line"><span class="comment">// Lossless JSON serialization</span></div>
+<div class="line"><span class="keywordtype">char</span> *json_str = NULL;</div>
+<div class="line"><span class="keywordflow">if</span> (<a class="code hl_function" href="histo_8h.html#a92510ddf78bb2eecb6d89d743114a06a">histo_serialize_json</a>(h, &amp;json_str) == <a class="code hl_enumvalue" href="types_8h.html#a1b261f0cbcb57b9b811d32352ef32f55adaa034d5ddb137ce1241243b9bc84490">HISTO_OK</a>) {</div>
+<div class="line">    FILE *f = fopen(<span class="stringliteral">&quot;histogram.json&quot;</span>, <span class="stringliteral">&quot;w&quot;</span>);</div>
+<div class="line">    <span class="keywordflow">if</span> (f) {</div>
+<div class="line">        fputs(json_str, f);</div>
+<div class="line">        fclose(f);</div>
 <div class="line">    }</div>
-<div class="line">    free(load_buf);</div>
-<div class="line">    fclose(f);</div>
+<div class="line">    <a class="code hl_function" href="histo_8h.html#ab189ee9fb6f38041cfdd65fd57a86878">histo_free_buffer</a>(json_str);</div>
 <div class="line">}</div>
-<div class="ttc" id="ahisto_8h_html_a2d8ed0c4a518216ed97f738235459d9a"><div class="ttname"><a href="histo_8h.html#a2d8ed0c4a518216ed97f738235459d9a">histo_nbins</a></div><div class="ttdeci">uint32_t histo_nbins(const histo_t *h)</div><div class="ttdoc">Returns the number of in-range active bins.</div></div>
-</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md13"></a>
-4.4 Higher-Order Moments &amp; Peak/Shape Analysis</h2>
+<div class="ttc" id="ahisto_8h_html_a92510ddf78bb2eecb6d89d743114a06a"><div class="ttname"><a href="histo_8h.html#a92510ddf78bb2eecb6d89d743114a06a">histo_serialize_json</a></div><div class="ttdeci">histo_status_t histo_serialize_json(const histo_t *h, char **out_json)</div><div class="ttdoc">Serializes a histogram into a newly allocated JSON string.</div></div>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
+4.5 Higher-Order Moments &amp; Peak/Shape Analysis</h2>
 <p>Extract distribution asymmetry (skewness), tail heaviness (kurtosis), dominant peak width (FWHM), continuous peak coordinate, and Root Mean Square (RMS):</p>
 <div class="fragment"><div class="line"><span class="keywordtype">double</span> skewness = 0.0, excess_kurtosis = 0.0;</div>
 <div class="line"><a class="code hl_function" href="histo_8h.html#ad353f1301f0edd929a09a3980ee6652f">histo_skewness</a>(h, &amp;skewness);</div>
@@ -292,8 +351,8 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="ttc" id="ahisto_8h_html_a217037b6da00c48337af2bd0dd293e42"><div class="ttname"><a href="histo_8h.html#a217037b6da00c48337af2bd0dd293e42">histo_rms</a></div><div class="ttdeci">histo_status_t histo_rms(const histo_t *h, double *out_rms)</div><div class="ttdoc">Computes the Root Mean Square (RMS) of the distribution: sqrt(M_2 + mean^2).</div></div>
 <div class="ttc" id="ahisto_8h_html_ad353f1301f0edd929a09a3980ee6652f"><div class="ttname"><a href="histo_8h.html#ad353f1301f0edd929a09a3980ee6652f">histo_skewness</a></div><div class="ttdeci">histo_status_t histo_skewness(const histo_t *h, double *out_skewness)</div><div class="ttdoc">Computes the distribution skewness (gamma_1 = M_3 / M_2^(3/2)).</div></div>
 <div class="ttc" id="ahisto_8h_html_ad9d682b8c13b47ee63039c2fd7b9d25f"><div class="ttname"><a href="histo_8h.html#ad9d682b8c13b47ee63039c2fd7b9d25f">histo_mode_continuous</a></div><div class="ttdeci">histo_status_t histo_mode_continuous(const histo_t *h, double *out_mode)</div><div class="ttdoc">Estimates the continuous peak mode coordinate via 3-point parabolic interpolation.</div></div>
-</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md14"></a>
-4.5 Robust Non-Parametric &amp; Dispersion Statistics</h2>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
+4.6 Robust Non-Parametric &amp; Dispersion Statistics</h2>
 <p>When dealing with heavy-tailed or outlier-prone distributions, robust location and dispersion metrics provide resistant estimators:</p>
 <div class="fragment"><div class="line"><span class="keywordtype">double</span> iqr = 0.0, mad = 0.0;</div>
 <div class="line"><a class="code hl_function" href="histo_8h.html#a3617a42420e99937daa431183f387a23">histo_iqr</a>(h, &amp;iqr); <span class="comment">// Interquartile Range (Q75 - Q25)</span></div>
@@ -307,11 +366,10 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">printf(<span class="stringliteral">&quot;IQR: %.3f | MAD: %.3f | 10%% Trimmed Mean: %.3f | Winsorized Mean: %.3f\n&quot;</span>,</div>
 <div class="line">       iqr, mad, trimmed, winsorized);</div>
 <div class="ttc" id="ahisto_8h_html_a136c68ad47872d2bbea86b04fd61ab4e"><div class="ttname"><a href="histo_8h.html#a136c68ad47872d2bbea86b04fd61ab4e">histo_winsorized_mean</a></div><div class="ttdeci">histo_status_t histo_winsorized_mean(const histo_t *h, double lower_p, double upper_p, double *out_mean)</div><div class="ttdoc">Computes the Winsorized mean replacing tails with quantile threshold values.</div></div>
-<div class="ttc" id="ahisto_8h_html_a3617a42420e99937daa431183f387a23"><div class="ttname"><a href="histo_8h.html#a3617a42420e99937daa431183f387a23">histo_iqr</a></div><div class="ttdeci">histo_status_t histo_iqr(const histo_t *h, double *out_iqr)</div><div class="ttdoc">Computes the Interquartile Range (IQR = Q75 - Q25).</div></div>
 <div class="ttc" id="ahisto_8h_html_a6b18f138d3a03cee07b05c8d8fd1a1af"><div class="ttname"><a href="histo_8h.html#a6b18f138d3a03cee07b05c8d8fd1a1af">histo_mad</a></div><div class="ttdeci">histo_status_t histo_mad(const histo_t *h, double *out_mad)</div><div class="ttdoc">Computes the Median Absolute Deviation (MAD = median(|x - median|)).</div></div>
 <div class="ttc" id="ahisto_8h_html_ad6e78771af131829033bf27bb18b7ee8"><div class="ttname"><a href="histo_8h.html#ad6e78771af131829033bf27bb18b7ee8">histo_trimmed_mean</a></div><div class="ttdeci">histo_status_t histo_trimmed_mean(const histo_t *h, double lower_p, double upper_p, double *out_mean)</div><div class="ttdoc">Computes the trimmed mean excluding tails below lower_p and above upper_p.</div></div>
-</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md15"></a>
-4.6 Comparing Distributions &amp; Statistical Distances</h2>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
+4.7 Comparing Distributions &amp; Statistical Distances</h2>
 <p>Compare two histograms with matching binning geometries using hypothesis tests and distance metrics:</p>
 <div class="fragment"><div class="line"><span class="comment">// 1. Chi-Square goodness-of-fit / compatibility</span></div>
 <div class="line"><span class="keywordtype">double</span> chi2 = 0.0;</div>
@@ -341,8 +399,8 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="ttc" id="ahisto_8h_html_a7f930257d1acde57c09099e03d4e4a9f"><div class="ttname"><a href="histo_8h.html#a7f930257d1acde57c09099e03d4e4a9f">histo_cmp_wasserstein_1d</a></div><div class="ttdeci">histo_status_t histo_cmp_wasserstein_1d(const histo_t *h1, const histo_t *h2, double *out_distance)</div><div class="ttdoc">Computes the 1D Wasserstein distance (Earth Mover&#39;s Distance) between two histograms.</div></div>
 <div class="ttc" id="ahisto_8h_html_a9cd4af31501dc5d85cbc88683ba89a8a"><div class="ttname"><a href="histo_8h.html#a9cd4af31501dc5d85cbc88683ba89a8a">histo_cmp_bhattacharyya</a></div><div class="ttdeci">histo_status_t histo_cmp_bhattacharyya(const histo_t *h1, const histo_t *h2, double *out_distance)</div><div class="ttdoc">Computes the Bhattacharyya distance -ln(sum(sqrt(P_i * Q_i))) between two histograms.</div></div>
 <div class="ttc" id="ahisto_8h_html_ad1547891efa84bb2bb34be00079773c2"><div class="ttname"><a href="histo_8h.html#ad1547891efa84bb2bb34be00079773c2">histo_cmp_ks</a></div><div class="ttdeci">histo_status_t histo_cmp_ks(const histo_t *h1, const histo_t *h2, double *out_ks_stat)</div><div class="ttdoc">Computes the Kolmogorov-Smirnov (KS) test statistic D between two histograms.</div></div>
-</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md16"></a>
-4.7 Unix CLI Toolkit</h2>
+</div><!-- fragment --><h2 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
+4.8 Unix CLI Toolkit</h2>
 <p><span class="tt">libhisto</span> ships with a high-performance, modular Unix CLI toolkit built on the standard Unix filter philosophy (stdin \(\to\) stdout). The tools can be invoked via the multi-call binary <span class="tt">histo &lt;command&gt;</span> or direct standalone symlinks (<span class="tt">histo-fill</span>, <span class="tt">histo-plot</span>, <span class="tt">histo-stats</span>, <span class="tt">histo-cmp</span>).</p>
 <div class="fragment"><div class="line">               ┌────────────┐</div>
 <div class="line">Data Stream ──&gt;│ histo-fill │──&gt; Binary Stream / JSON / TSV</div>
@@ -353,8 +411,8 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line">      │ histo-plot │          │ histo-stats │         │ histo-cmp │</div>
 <div class="line">      └────────────┘          └─────────────┘         └───────────┘</div>
 <div class="line">   (Terminal Visualizer)      (Moment Report)       (A/B Comparison)</div>
-</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
-4.7.1 Streaming Ingestion (<span class="tt">histo-fill</span>)</h3>
+</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md21"></a>
+4.8.1 Streaming Ingestion (<span class="tt">histo-fill</span>)</h3>
 <p>Ingests whitespace-delimited numbers, CSV columns, or raw IEEE-754 Little-Endian binary <span class="tt">double</span> streams (<span class="tt">--binary-f64</span>):</p>
 <div class="fragment"><div class="line"># Ingest 100k numbers with automatic min/max range detection</div>
 <div class="line">seq 1 100000 | awk &#39;{print rand() * 100}&#39; | histo-fill --bins=25 --auto-range -o binary &gt; hist.bin</div>
@@ -365,137 +423,23 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <div class="line"># Live streaming snapshot mode (emits binary histogram snapshot every 250ms)</div>
 <div class="line">tail -f access.log | grep -o &#39;time=[0-9.]*&#39; | cut -d= -f2 | \</div>
 <div class="line">    histo-fill --bins=30 --auto-range --emit-interval=0.25 | histo-plot --watch</div>
-</div><!-- fragment --><p><b>Common <span class="tt">histo-fill</span> Options:</b> </p><table class="markdownTable">
-<tr class="markdownTableHead">
-<th class="markdownTableHeadLeft">Option  </th><th class="markdownTableHeadLeft">Description  </th></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">-n, --bins=&lt;N&gt;</span>  </td><td class="markdownTableBodyLeft">Number of uniform bins (default: 50)  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--min=&lt;X&gt;, --max=&lt;X&gt;</span>  </td><td class="markdownTableBodyLeft">Lower and upper boundaries  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">--edges=&lt;E0,E1,...&gt;</span>  </td><td class="markdownTableBodyLeft">Comma-separated variable bin edges  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--auto-range</span>  </td><td class="markdownTableBodyLeft">Buffers input to compute min/max automatically  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">-w, --weights</span>  </td><td class="markdownTableBodyLeft">Ingests <span class="tt">value weight</span> pairs  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--value-col=&lt;COL&gt;</span>  </td><td class="markdownTableBodyLeft">1-based column for sample value (default: 1)  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">--weights-col=&lt;COL&gt;</span>  </td><td class="markdownTableBodyLeft">1-based column for sample weight (default: 2)  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--delimiter=&lt;CHAR&gt;</span>  </td><td class="markdownTableBodyLeft">Field delimiter (default: whitespace)  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">--binary-f64</span>  </td><td class="markdownTableBodyLeft">Ingests raw Little-Endian binary <span class="tt">double</span> stream  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--merge</span>  </td><td class="markdownTableBodyLeft">Ingests and adds multiple serialized histograms  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">--rebin=&lt;FACTOR&gt;</span>  </td><td class="markdownTableBodyLeft">Rebins uniform histogram by integer factor  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--cdf</span>  </td><td class="markdownTableBodyLeft">Converts histogram to Cumulative Distribution Function  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">--normalize=&lt;AREA&gt;</span>  </td><td class="markdownTableBodyLeft">Scales total histogram weight to target area  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">-o, --output=&lt;FMT&gt;</span>  </td><td class="markdownTableBodyLeft">Output format: <span class="tt">binary</span> (default for pipes), <span class="tt">json</span>, <span class="tt">tsv</span>, <span class="tt">table</span>  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt">--emit-interval=&lt;S&gt;</span>  </td><td class="markdownTableBodyLeft">Emits snapshot every \(S\) seconds  </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt">--emit-every=&lt;N&gt;</span>  </td><td class="markdownTableBodyLeft">Emits snapshot every \(N\) samples  </td></tr>
-</table>
-<h3 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
-4.7.2 Terminal Visualization (<span class="tt">histo-plot</span>)</h3>
-<p>Renders histograms directly in terminal emulators with automatic width detection, 1/8th sub-character fractional Unicode blocks (<span class="tt"> ▂▃▄▅▆▇█</span>), ANSI TrueColor density gradients, error whiskers ( \(\pm \sigma\)), and continuous watch mode (<span class="tt">--watch</span>):</p>
+</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+4.8.2 Terminal Visualization &amp; Sparklines (<span class="tt">histo-plot</span>)</h3>
+<p>Renders histograms directly in terminal emulators with automatic width detection, 1/8th sub-character fractional Unicode blocks (<span class="tt"> ▂▃▄▅▆▇█</span>), ANSI TrueColor density gradients, error whiskers ( \(\pm \sigma\)), sparklines, and continuous watch mode (<span class="tt">--watch</span>):</p>
 <div class="fragment"><div class="line"># Gaussian Monte Carlo piped through binary wire format into TrueColor plot</div>
 <div class="line">python3 -c &quot;import random, sys; sys.stdout.write(&#39;&#39;.join(f&#39;{random.gauss(50, 15):.4f}\n&#39; for _ in range(100000)))&quot; | \</div>
 <div class="line">    histo-fill --bins=25 --min=0 --max=100 -o binary | \</div>
 <div class="line">    histo-plot --color=always --title=&quot;Gaussian Monte Carlo (N=100k, μ=50, σ=15)&quot;</div>
-</div><!-- fragment --><p><b>Output:</b> </p><div class="fragment"><div class="line">Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919)</div>
-<div class="line">┌─ Statistics ──────────────────────────────────────────────────────────────┐</div>
-<div class="line">│ Mean: 49.97  │ StdDev: 14.96 │ Median: 49.97 │ IQR: 20.18  │ Mode: 49.91  │</div>
-<div class="line">└───────────────────────────────────────────────────────────────────────────┘</div>
-<div class="line">[  0.00,   4.00) │     63 │ ▎</div>
-<div class="line">[  4.00,   8.00) │    151 │ ▋</div>
-<div class="line">[  8.00,  12.00) │    314 │ █▍</div>
-<div class="line">[ 12.00,  16.00) │    593 │ ██▊</div>
-<div class="line">[ 16.00,  20.00) │   1111 │ █████▎</div>
-<div class="line">[ 20.00,  24.00) │   1901 │ █████████</div>
-<div class="line">[ 24.00,  28.00) │   2929 │ █████████████▉</div>
-<div class="line">[ 28.00,  32.00) │   4410 │ ████████████████████▉</div>
-<div class="line">[ 32.00,  36.00) │   6002 │ ████████████████████████████▍</div>
-<div class="line">[ 36.00,  40.00) │   7787 │ ████████████████████████████████████▉</div>
-<div class="line">[ 40.00,  44.00) │   9213 │ ███████████████████████████████████████████▋</div>
-<div class="line">[ 44.00,  48.00) │  10301 │ ████████████████████████████████████████████████▊</div>
-<div class="line">[ 48.00,  52.00) │  10546 │ ██████████████████████████████████████████████████</div>
-<div class="line">[ 52.00,  56.00) │  10278 │ ████████████████████████████████████████████████▋</div>
-<div class="line">[ 56.00,  60.00) │   9277 │ ███████████████████████████████████████████▉</div>
-<div class="line">[ 60.00,  64.00) │   7656 │ ████████████████████████████████████▎</div>
-<div class="line">[ 64.00,  68.00) │   6007 │ ████████████████████████████▍</div>
-<div class="line">[ 68.00,  72.00) │   4313 │ ████████████████████▍</div>
-<div class="line">[ 72.00,  76.00) │   2943 │ █████████████▉</div>
-<div class="line">[ 76.00,  80.00) │   1892 │ ████████▉</div>
-<div class="line">[ 80.00,  84.00) │   1059 │ █████</div>
-<div class="line">[ 84.00,  88.00) │    655 │ ███</div>
-<div class="line">[ 88.00,  92.00) │    300 │ █▍</div>
-<div class="line">[ 92.00,  96.00) │    149 │ ▋</div>
-<div class="line">[ 96.00, 100.00) │     69 │ ▎</div>
-<div class="line"> Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0</div>
 </div><!-- fragment --><p><b>Inline Single-Line Sparklines (<span class="tt">-S, --sparkline</span>):</b> </p><div class="fragment"><div class="line">python3 -c &quot;import random, sys; sys.stdout.write(&#39;&#39;.join(f&#39;{random.gauss(50, 15):.4f}\n&#39; for _ in range(10000)))&quot; | \</div>
 <div class="line">    histo-fill --bins=20 --min=0 --max=100 -o binary | \</div>
 <div class="line">    histo-plot -S</div>
 </div><!-- fragment --> <div class="fragment"><div class="line">▂▃▄▆▇██▇▆▄▂▂      [N=9987, range=[0, 1e+02), μ=50, σ=15]</div>
-</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
-4.7.3 Summary Statistics (<span class="tt">histo-stats</span>)</h3>
-<p>Inspects exact moments, central moments, robust percentiles, and peak properties:</p>
-<div class="fragment"><div class="line">cat telemetry.csv | histo-fill --bins=50 --auto-range -o json | histo-stats</div>
-</div><!-- fragment --><p><b>Output:</b> </p><div class="fragment"><div class="line">===============================================================</div>
-<div class="line">                    HISTOGRAM SUMMARY REPORT                   </div>
-<div class="line">===============================================================</div>
-<div class="line"> Geometry &amp; Counts:</div>
-<div class="line">   Bins:            50           Range: [0.0254, 75.9914)</div>
-<div class="line">   Entries:         100000       Total Weight: 1e+05</div>
-<div class="line">   Underflow:       0            Overflow:     0</div>
-<div class="line">   Non-Finite / NaN:0           </div>
-<div class="line"> </div>
-<div class="line"> Central Moments &amp; Shape:</div>
-<div class="line">   Mean:            10.0338      Std Deviation: 7.13529</div>
-<div class="line">   Variance:        50.9123      RMS:           12.3121</div>
-<div class="line">   Skewness:        1.42308      Kurtosis:      6.02511</div>
-<div class="line">   Excess Kurtosis: 3.02511     </div>
-<div class="line"> </div>
-<div class="line"> Robust Non-Parametric Metrics:</div>
-<div class="line">   Median (Q50):    8.42856      IQR (Q75-Q25): 8.68178</div>
-<div class="line">   Q25:             4.80409      Q75:           13.4859</div>
-<div class="line">   MAD:             4.51105      Trimmed Mean:  9.42926</div>
-<div class="line">   Winsorized Mean: 9.77578     </div>
-<div class="line"> </div>
-<div class="line"> Peak &amp; Width Estimation:</div>
-<div class="line">   Mode (Bin):      3            Mode (Continuous): 5.17544</div>
-<div class="line">   FWHM:            11.9083     </div>
-<div class="line">===============================================================</div>
-</div><!-- fragment --><h3 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
-4.7.4 Two-Distribution Comparison (<span class="tt">histo-cmp</span>)</h3>
-<p>Compares two histograms for hypothesis testing and distribution drift detection:</p>
-<div class="fragment"><div class="line">histo-cmp baseline.bin canary.bin</div>
-</div><!-- fragment --><p><b>Output:</b> </p><div class="fragment"><div class="line">===============================================================</div>
-<div class="line">              TWO-DISTRIBUTION COMPARISON REPORT               </div>
-<div class="line">===============================================================</div>
-<div class="line"> Source A: baseline.bin (Entries: 50000, Weight: 5e+04)</div>
-<div class="line"> Source B: canary.bin (Entries: 49997, Weight: 5e+04)</div>
-<div class="line"> </div>
-<div class="line"> Hypothesis Testing &amp; Compatibility:</div>
-<div class="line">   Chi-Square (chi^2):       6014.45      NDF: 24</div>
-<div class="line">   chi^2 / NDF:             250.602     </div>
-<div class="line">   Kolmogorov-Smirnov (D):  0.193388     (Max vertical CDF difference)</div>
-<div class="line"> </div>
-<div class="line"> Statistical Distance Metrics:</div>
-<div class="line">   1D Wasserstein (EMD):    5.06879      (L1 CDF transportation cost)</div>
-<div class="line">   KL Divergence (A || B):  0.116139     nats</div>
-<div class="line">   KL Divergence (B || A):  0.17478      nats</div>
-<div class="line">   Bhattacharyya Distance:  0.0335182   </div>
-<div class="line">===============================================================</div>
+</div><!-- fragment --><p><b>ASCII Sparkline (<span class="tt">--style=ascii --no-stats</span>):</b> </p><div class="fragment"><div class="line">cat data.bin | histo-plot --sparkline --style=ascii --no-stats</div>
+</div><!-- fragment --> <div class="fragment"><div class="line">..::||##||::..  </div>
 </div><!-- fragment --><hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
 5. Numerical Algorithms &amp; Statistical Formulations</h1>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
 5.1 Boundary-Guarded Uniform Bin Lookup ( \(O(1)\))</h2>
 <p>For uniform binning over \([x_{\min}, x_{\max})\), naive floating-point division <span class="tt">(x - min) / width</span> is susceptible to floating-point truncation errors at exact bin boundaries. <span class="tt">libhisto</span> computes the candidate provisional index via reciprocal multiplication:   </p><p class="formulaDsp">
 \[i_{\text{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
@@ -505,13 +449,13 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Upper Guard</b>: If \( x \ge x_{\min} + (i_{\text{prov}} + 1) \Delta \), then \( i = i_{\text{prov}} + 1 \).</li>
 <li><b>Lower Guard</b>: If \( x &lt; x_{\min} + i_{\text{prov}} \Delta \), then \( i = i_{\text{prov}} - 1 \). If \( \Delta^{-1} \) overflows to infinity on subnormal ranges, lookup falls back cleanly to robust division.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md26"></a>
 5.2 Variable-Width Bisection Binary Search ( \(O(\log N)\))</h2>
 <p>For variable binning defined by monotonic edges \( e_0 &lt; e_1 &lt; \dots &lt; e_N \), bin lookup uses bisection search on \( [0, N) \):</p><ul>
 <li>Invariant: \( x \in [e_i, e_{i+1}) \) with exact matching at \( e_0 = x_{\min} \) and \( e_N = x_{\max} \).</li>
 <li>Guaranteed \( O(\log N) \) time and \( O(1) \) auxiliary space.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md27"></a>
 5.3 Online Weighted Welford Statistics ( \(O(1)\))</h2>
 <p>When <span class="tt"><a class="el" href="types_8h.html#aca1d24a12648936b54f70e610e3b3321ad4b2a75eb9ff0be70e632ab37cf9467d">HISTO_FLAG_EXACT_MOMENTS</a></span> is enabled, running moments are accumulated without storing historical samples:   </p><p class="formulaDsp">
 \[W_{\text{new}} = W_{\text{old}} + w_i
@@ -530,7 +474,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 \]
 </p>
 <p> Variance is extracted as \( \sigma^2 = M_2 / W \). The algorithm natively supports negative event weights and avoids variance underflow via \( M_2 = \max(0.0, M_2) \) clamping.</p>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md26"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md28"></a>
 5.4 Higher-Order Central Moments &amp; Shape Formulations ( \(O(N)\))</h2>
 <p>For orders \( k \ge 2 \), central moments are computed using a two-pass algorithm over active bin centers:   </p><p class="formulaDsp">
 \[M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
@@ -541,7 +485,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>Kurtosis</b> ( \( \beta_2 \)): \( \beta_2 = \frac{M_4}{M_2^2} = \frac{M_4}{\sigma^4} \)</li>
 <li><b>Excess Kurtosis</b> ( \( \gamma_2 \)): \( \gamma_2 = \beta_2 - 3.0 \) (equals 0.0 for normal distributions).</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md27"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md29"></a>
 5.5 Continuous Parabolic Peak Mode &amp; FWHM ( \(O(N)\))</h2>
 <ul>
 <li><b>Continuous Mode</b>: Identifies mode bin \( m \) having maximum weight \( w_m \). For uniform histograms, fits a parabola through \( (x_{m-1}, w_{m-1}), (x_m, w_m), (x_{m+1}, w_{m+1}) \):   <p class="formulaDsp">
@@ -551,7 +495,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </li>
 <li><b>FWHM</b>: Scans outward from the mode bin to find the left and right crossings where \( w(x) = \frac{1}{2} w_{\text{max}} \), linearly interpolating between bin centers.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md28"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md30"></a>
 5.6 Non-Empty Support Linear Quantile &amp; Dispersion ( \(O(N)\))</h2>
 <p>Quantile coordinates \( Q(p) = F^{-1}(p) \) for \( p \in [0.0, 1.0] \) are evaluated using continuous inverse CDF interpolation:</p><ul>
 <li>Targets cumulative mass \( T = p \cdot W_{\text{total}} \).</li>
@@ -563,7 +507,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </li>
 <li><b>MAD</b>: Evaluates median deviation \( d_i = |x_{c, i} - \text{median}| \), sorts weighted pairs in \( O(N \log N) \), and finds the 50th percentile of absolute deviations.</li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md29"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md31"></a>
 5.7 Division-Free Error Propagation ( \(O(N)\))</h2>
 <p>When combining histograms via multiplication ( \( H = A \cdot B \)) or division ( \( H = A / B \)), statistical uncertainties are propagated without intermediate divisions:</p><ul>
 <li><b>Product Uncertainty</b>:   <p class="formulaDsp">
@@ -577,7 +521,7 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 </p>
 </li>
 </ul>
-<h2 class="doxsection"><a class="anchor" id="autotoc_md30"></a>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md32"></a>
 5.8 Two-Distribution Comparison Metrics ( \(O(N)\))</h2>
 <ul>
 <li><b>Weighted Chi-Square</b>: \( \chi^2 = \sum_{i} \frac{(w_{1,i} - w_{2,i})^2}{\sigma_{1,i}^2 + \sigma_{2,i}^2} \) with \( \text{NDF} \) matching the number of non-zero variance bins.</li>
@@ -586,9 +530,62 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <li><b>KL Divergence</b>: \( D_{\text{KL}}(P \parallel Q) = \sum_{i} P_i \ln \frac{P_i}{Q_i} \) (with \( \epsilon = 10^{-12} \) floor for zero target bins).</li>
 <li><b>Bhattacharyya Distance</b>: \( D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \).</li>
 </ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md33"></a>
+5.9 DDSketch Bounded Relative-Error Quantile Sketch ( \(O(1)\) insertion)</h2>
+<p>The <span class="tt"><a class="el" href="sketch_8h.html#a14f239efcea2c200d4b4e32397a35a15" title="Opaque sketch handle.">histo_sketch_t</a></span> provides a fully dynamic quantile sketch based on Masson et al. (VLDB 2019). It guarantees a relative error bound \(\alpha\) for any quantile query:</p><ul>
+<li><b>Logarithmic Mapping</b>: \( k = \lceil \log_{\gamma}(|x|) \rceil = \lceil \frac{\ln |x|}{\ln \gamma} \rceil \) where \(\gamma = \frac{1 + \alpha}{1 - \alpha}\).</li>
+<li><b>Quantile Reconstruction</b>: For bin index \(k\), the representative value is \(\hat{q} = \frac{2 \gamma^k}{1 + \gamma}\), bounding the relative error by \(|q - \hat{q}| \le \alpha \cdot q\).</li>
+<li><b>Collapsing Circular Buffer</b>: Positive and negative values are tracked in independent circular stores. When \(k_{\max} - k_{\min} \ge \text{max\_bins}\), lower bins are collapsed into a single boundary bin to enforce strict memory bounds \(O(\text{max\_bins})\).</li>
+<li><b>Mergeability</b>: Distributed sketches created with the same \(\alpha\) can be merged exactly in \(O(\text{max\_bins})\) time.</li>
+</ul>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md34"></a>
+5.10 SIMD Vector Acceleration Architecture ( \(O(N)\))</h2>
+<p><span class="tt"><a class="el" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9" title="Batch fills N contiguous values with optional weights.">histo_fill_n</a></span> evaluates batch coordinate arrays using vectorized hardware pipelines:</p><ul>
+<li><b>Runtime CPUID Dispatch</b>: On x86_64 architectures, CPUID dynamically selects AVX-512 (8-wide double vectors) or AVX2/FMA (4-wide double vectors).</li>
+<li><b>Vectorized Indexing</b>: Coordinates are loaded via unaligned SIMD loads (<span class="tt">_mm256_loadu_pd</span> / <span class="tt">_mm512_loadu_pd</span>), subtracted from \(x_{\min}\), and multiplied by \(\text{inv\_binsize}\) using FMA.</li>
+<li><b>Branchless Masking</b>: Out-of-range (&lt; min, &gt;= max) and NaN/Inf coordinates are detected via SIMD comparison masks (<span class="tt">_mm256_cmp_pd</span>, <span class="tt">_mm512_cmp_pd_mask</span>). Valid blocks execute in direct vectorized pipelines; edge cases fall back to scalar handlers.</li>
+<li><b>Cross-Platform Fallback</b>: On ARM and non-x86 architectures, the pipeline compiles clean, portable scalar/auto-vectorized loops ready for NEON optimization.</li>
+</ul>
 <hr  />
-<h1 class="doxsection"><a class="anchor" id="autotoc_md32"></a>
-6. Algorithmic Complexity Reference Table</h1>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md36"></a>
+6. Performance Envelope &amp; Mechanical Sympathy</h1>
+<p>Benchmark measurements conducted on <b>Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz max, 20 cores, Linux x86_64)</b>:</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadLeft">Operation / Benchmark Target  </th><th class="markdownTableHeadLeft">Throughput  </th><th class="markdownTableHeadLeft">Latency / Sample or Query  </th><th class="markdownTableHeadLeft">Complexity  </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><b>Batch Ingestion (<span class="tt"><a class="el" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9" title="Batch fills N contiguous values with optional weights.">histo_fill_n</a></span> SIMD)</b>  </td><td class="markdownTableBodyLeft"><b>441.15 Mops/s</b>  </td><td class="markdownTableBodyLeft"><b>2.27 ns / sample</b>  </td><td class="markdownTableBodyLeft">O(N) vectorized  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><b>Single Uniform Fill (<span class="tt"><a class="el" href="histo_8h.html#ad2506d13175740c924af8d726d1a6f4d" title="Fills a single value into the histogram with unit weight (1.0).">histo_fill</a></span>)</b>  </td><td class="markdownTableBodyLeft"><b>288.26 Mops/s</b>  </td><td class="markdownTableBodyLeft"><b>3.47 ns / sample</b>  </td><td class="markdownTableBodyLeft">O(1)  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><b>Weighted Fill + <span class="tt">sum_w2</span> (<span class="tt"><a class="el" href="histo_8h.html#a220bb8eff40144b169cc5bd08b180c36" title="Fills a single value into the histogram with a specified weight.">histo_fill_w</a></span>)</b>  </td><td class="markdownTableBodyLeft"><b>223.45 Mops/s</b>  </td><td class="markdownTableBodyLeft"><b>4.48 ns / sample</b>  </td><td class="markdownTableBodyLeft">O(1)  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><b>Variable Bin Binary Search (100 bins)</b>  </td><td class="markdownTableBodyLeft"><b>33.65 Mops/s</b>  </td><td class="markdownTableBodyLeft"><b>29.72 ns / sample</b>  </td><td class="markdownTableBodyLeft">O(log N)  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><b>DDSketch Streaming Ingestion</b>  </td><td class="markdownTableBodyLeft"><b>143.58 Mops/s</b>  </td><td class="markdownTableBodyLeft"><b>6.97 ns / sample</b>  </td><td class="markdownTableBodyLeft">O(1) amortized  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><b>DDSketch Quantile Queries (P50/P90/P99)</b>  </td><td class="markdownTableBodyLeft"><b>231.17 k-queries/s</b>  </td><td class="markdownTableBodyLeft"><b>4.33 µs / query</b>  </td><td class="markdownTableBodyLeft">O(B)  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><b>Two-Sample Comparison (Chi2/KS/EMD/Bhatt)</b>  </td><td class="markdownTableBodyLeft"><b>27.62 k-comparisons/s</b>  </td><td class="markdownTableBodyLeft"><b>36.20 µs / comparison</b>  </td><td class="markdownTableBodyLeft">O(N)  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><b>Two-Pass Moments (Mean + Variance, 10k bins)</b>  </td><td class="markdownTableBodyLeft"><b>126.8 k-queries/s</b>  </td><td class="markdownTableBodyLeft"><b>7.89 µs / call</b>  </td><td class="markdownTableBodyLeft">O(N)  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><b>Quantile &amp; Median (Q25 + Q50 + Q75, 10k bins)</b>  </td><td class="markdownTableBodyLeft"><b>73.5 k-queries/s</b>  </td><td class="markdownTableBodyLeft"><b>13.6 µs / call</b>  </td><td class="markdownTableBodyLeft">O(N)  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><b>Binary Serialization (10k bins)</b>  </td><td class="markdownTableBodyLeft"><b>38.4 k-ser/s</b>  </td><td class="markdownTableBodyLeft"><b>26.0 µs / save</b>  </td><td class="markdownTableBodyLeft">O(N)  </td></tr>
+</table>
+<h2 class="doxsection"><a class="anchor" id="autotoc_md37"></a>
+Mechanical Sympathy Principles</h2>
+<ol type="1">
+<li><b>Zero-Allocation Hot Path</b>: Hot ingestion routines make zero <span class="tt">malloc</span> or system calls, avoiding heap lock contention and OS memory subsystem latency.</li>
+<li><b>Instruction Pipeline Optimization</b>: Uniform coordinate indexing evaluates reciprocal multiplication (<span class="tt">FMUL</span>, latency 3–4 cycles) rather than floating-point hardware division (<span class="tt">FDIV</span>, latency 14–20 cycles).</li>
+<li><b>Data Cache Locality</b>: Bin arrays and statistical moments are laid out contiguously with strict 8-byte alignment, ensuring maximum cache-line utilization in CPU L1d (32KB–48KB) and L2 caches.</li>
+<li><b>Vector Execution &amp; FMA</b>: Ingestion batches utilize 256-bit and 512-bit vector registers to process 4 to 8 IEEE-754 double-precision floats concurrently per core.</li>
+<li><b>Division-Free Error Propagation</b>: Arithmetic routines evaluate algebraic formulations that propagate variances without intermediate division operations, preventing floating-point exception traps and zero-divisor stalls.</li>
+</ol>
+<hr  />
+<h1 class="doxsection"><a class="anchor" id="autotoc_md39"></a>
+7. Algorithmic Complexity Reference Table</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadLeft">Function  </th><th class="markdownTableHeadLeft">Time Complexity  </th><th class="markdownTableHeadLeft">Space Complexity  </th><th class="markdownTableHeadLeft">Description  </th></tr>
@@ -611,85 +608,107 @@ Variable Binning (<span class="tt">HISTO_BIN_VARIABLE</span>)</h2>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad2506d13175740c924af8d726d1a6f4d" title="Fills a single value into the histogram with unit weight (1.0).">histo_fill</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a220bb8eff40144b169cc5bd08b180c36" title="Fills a single value into the histogram with a specified weight.">histo_fill_w</a></span> (Variable)  </td><td class="markdownTableBodyLeft">O(log N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Binary search + bin increment  </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9" title="Batch fills N contiguous values with optional weights.">histo_fill_n</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a3febe8265345c8415ee270e60e3334c1" title="Strided batch fill for Array-of-Structs (AoS) data layouts.">histo_fill_strided</a></span>  </td><td class="markdownTableBodyLeft">O(K * L)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Batch ingest K samples (L = 1 or log N)  </td></tr>
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a32a8bc89b03cc49a4835de2cefcc7cd9" title="Batch fills N contiguous values with optional weights.">histo_fill_n</a></span> (SIMD)  </td><td class="markdownTableBodyLeft">O(K / V)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Vectorized batch ingest of K samples (V = 4 or 8)  </td></tr>
 <tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a3febe8265345c8415ee270e60e3334c1" title="Strided batch fill for Array-of-Structs (AoS) data layouts.">histo_fill_strided</a></span>  </td><td class="markdownTableBodyLeft">O(K * L)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Strided batch ingest for AoS datasets  </td></tr>
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a71cf0f4d8ceff6a717f9bbd1adb2a0ca" title="Directly accumulates weight into a specific bin index.">histo_fill_bin</a></span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Direct indexed bin accumulation  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a2d8ed0c4a518216ed97f738235459d9a" title="Returns the number of in-range active bins.">histo_nbins</a></span> / <span class="tt"><a class="el" href="types_8h.html#a86dd7a90be7b2fb1e2a4522419d47a59" title="Binning models supported by the library.">histo_bin_type</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a4ec909738bbd0da7d11f32ff30f1a34c" title="Retrieves the overall range limits [min, max].">histo_range</a></span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Header field query  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a71c26abc160d17d5d5d96ea545075943" title="Retrieves the boundary interval [lower, upper] for a specific bin.">histo_bin_bounds</a></span> / <span class="tt"><a class="el" href="histo_8h.html#ac903f8e2ac3b0f5435211451844da2ac" title="Computes the midpoint center of a specific bin.">histo_bin_center</a></span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Boundary coordinate / midpoint calculation  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ab8d81fbafa84f7000f5767d07016de6b" title="Retrieves the accumulated content (weight sum) of a bin.">histo_bin_content</a></span> / <span class="tt"><a class="el" href="histo_8h.html#afb25dda3d1e8cdb8582dd740d60bb63b" title="Calculates the statistical uncertainty (error) of a bin.">histo_bin_error</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a2a3612754de97fe145b5c6b628c0402c" title="Retrieves the sum of squared weights (sum_w2) for a bin.">histo_bin_sum_w2</a></span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Bin content and statistical uncertainty query  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a2e57e449de35c9b5ff7f7218590040d3" title="Retrieves total accumulated weight across all bins (excluding underflow/overflow).">histo_total_weight</a></span> / <span class="tt"><a class="el" href="histo_8h.html#adee93ffef980cb76e19317083d1395c7" title="Retrieves total number of fill operations performed.">histo_num_entries</a></span> / counters  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Summary accumulator accessors  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a26dded9ef7fd213c989208ffb0514e94" title="Computes the distribution mean.">histo_mean</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a0def038fed42b6bbe3669c5bf3654e67" title="Computes the distribution variance.">histo_variance</a></span> (Exact Moments)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Direct query from online Welford accumulators  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a26dded9ef7fd213c989208ffb0514e94" title="Computes the distribution mean.">histo_mean</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a0def038fed42b6bbe3669c5bf3654e67" title="Computes the distribution variance.">histo_variance</a></span> (Two-Pass)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Two-pass bin-center moments calculation  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a19ccf84946065d7299121b7110fd438f" title="Computes the distribution standard deviation.">histo_std_dev</a></span>  </td><td class="markdownTableBodyLeft">O(1) or O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Square root of variance  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a86ca280d349e10057f29cf67468e727f" title="Computes the k-th central statistical moment M_k = sum(w_i * (x_i - mean)^k) / total_weight.">histo_central_moment</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Two-pass calculation of k-th central moment  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad353f1301f0edd929a09a3980ee6652f" title="Computes the distribution skewness (gamma_1 = M_3 / M_2^(3/2)).">histo_skewness</a></span> / <span class="tt"><a class="el" href="histo_8h.html#ae4db91e4f8b34f5e63061875e1d9fc95" title="Computes the distribution kurtosis (beta_2 = M_4 / M_2^2).">histo_kurtosis</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a1e0bc970176d5121eb866f8d798e32c5" title="Computes the distribution excess kurtosis (gamma_2 = beta_2 - 3.0).">histo_excess_kurtosis</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Higher-order standardized moments  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a4ff3ab6312fc9a80724af289461a1c4e" title="Identifies the index of the bin with the highest accumulated weight (mode bin).">histo_mode_bin</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Linear scan for maximum weight bin  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad9d682b8c13b47ee63039c2fd7b9d25f" title="Estimates the continuous peak mode coordinate via 3-point parabolic interpolation.">histo_mode_continuous</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">3-point parabolic peak vertex interpolation  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a1ac6771748f14dad70ccb47e060e59cf" title="Computes the Full Width at Half Maximum (FWHM) of the dominant peak.">histo_fwhm</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Full Width at Half Maximum linear edge crossings  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a217037b6da00c48337af2bd0dd293e42" title="Computes the Root Mean Square (RMS) of the distribution: sqrt(M_2 + mean^2).">histo_rms</a></span>  </td><td class="markdownTableBodyLeft">O(N) or O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Root Mean Square: sqrt(variance + mean^2)  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad895a59e8599d1ad3d14fb3420a41a10" title="Computes the quantile coordinate for probability p in [0.0, 1.0].">histo_quantile</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a3e50387cc565e59ba0660e2ec319054f" title="Computes the median coordinate (50th percentile).">histo_median</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Single-pass cumulative CDF scan  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a3617a42420e99937daa431183f387a23" title="Computes the Interquartile Range (IQR = Q75 - Q25).">histo_iqr</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Interquartile Range: Q75 - Q25  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a6b18f138d3a03cee07b05c8d8fd1a1af" title="Computes the Median Absolute Deviation (MAD = median(|x - median|)).">histo_mad</a></span>  </td><td class="markdownTableBodyLeft">O(N log N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Median Absolute Deviation from median  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad6e78771af131829033bf27bb18b7ee8" title="Computes the trimmed mean excluding tails below lower_p and above upper_p.">histo_trimmed_mean</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Truncated mean across percentile interval  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a136c68ad47872d2bbea86b04fd61ab4e" title="Computes the Winsorized mean replacing tails with quantile threshold values.">histo_winsorized_mean</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Outlier-clamped Winsorized mean  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#aa8e7a85ae76520be1639a57221ec9927" title="Computes the integral (sum of bin contents) over bin range [start_bin, end_bin].">histo_integral</a></span>  </td><td class="markdownTableBodyLeft">O(M)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Sum over M &lt;= N bins  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#accced3bb05b8863840dc03f3114458ef" title="Computes complete summary statistics container in a single call.">histo_get_stats</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Aggregates moments, range limits, and median  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a02eb63828c49748ff87441a0ba9f996b" title="Computes the Chi-Square (chi^2) test of compatibility between two histograms.">histo_cmp_chi2</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Weighted Chi-Square test statistic &amp; NDF  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad1547891efa84bb2bb34be00079773c2" title="Computes the Kolmogorov-Smirnov (KS) test statistic D between two histograms.">histo_cmp_ks</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Kolmogorov-Smirnov maximum vertical CDF metric  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a7f930257d1acde57c09099e03d4e4a9f" title="Computes the 1D Wasserstein distance (Earth Mover&#39;s Distance) between two histograms.">histo_cmp_wasserstein_1d</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">1D Earth Mover's Distance / L1 CDF integral  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a6b1eb5449f72073817bcacb4984a8b3b" title="Computes the Kullback-Leibler (KL) divergence D_KL(h1 || h2).">histo_cmp_kl_divergence</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Kullback-Leibler relative entropy in nats  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a9cd4af31501dc5d85cbc88683ba89a8a" title="Computes the Bhattacharyya distance -ln(sum(sqrt(P_i * Q_i))) between two histograms.">histo_cmp_bhattacharyya</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Bhattacharyya distance between distributions  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a67314ff893c3d38ca8588f7828323470" title="Performs element-wise addition: target += other.">histo_add</a></span> / <span class="tt"><a class="el" href="histo_8h.html#aa3b56b0466f28c89c225444a47c486a1" title="Performs element-wise subtraction: target -= other.">histo_subtract</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Element-wise vector arithmetic and moment update  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ad9a38390c2d14a8dabe85800f99537a0" title="Performs element-wise multiplication: target *= other.">histo_multiply</a></span> / <span class="tt"><a class="el" href="histo_8h.html#a9e80dda03eea8d3f4e77e22d8b2f9dc8" title="Performs element-wise division: target /= other.">histo_divide</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Element-wise arithmetic + sum_w2 error propagation  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a99289271531efc03c2f2754375d6fbde" title="Scales all bin contents and weights by a scalar factor.">histo_scale</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Linear scaling of all bins and moments  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a9b197ed7722b392fb17af3e2f1009875" title="Normalizes the histogram such that total in-range weight equals target_area.">histo_normalize</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Scales total weight to target area  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#add8d0542dc60ed24d8318898c9f66d09" title="Merges adjacent uniform bins by an integer rebinning factor.">histo_rebin</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N / k)  </td><td class="markdownTableBodyLeft">Allocates and merges adjacent uniform bins  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ac30251d851b3182b78fc7f853e3cd073" title="Extracts a subset slice of bins [start_bin, end_bin].">histo_slice</a></span>  </td><td class="markdownTableBodyLeft">O(M)  </td><td class="markdownTableBodyLeft">O(M)  </td><td class="markdownTableBodyLeft">Allocates sub-range histogram of M bins  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#acc1db1b015257575ab6ba0a3cab078b8" title="Generates a Cumulative Distribution Function (CDF) histogram.">histo_cdf</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Allocates prefix-sum CDF histogram  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a3bce1b585e23eb4d9910c13d1f2f257d" title="Calculates exact byte capacity required for canonical binary serialization.">histo_serialize_binary_size</a></span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Header (256B) + payload size calculation  </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a3b1c426cb47769ebd256792ba011c67a" title="Serializes histogram into a caller-allocated binary buffer.">histo_serialize_binary_into</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Encodes Little-Endian wire format into caller buffer  </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a2885e29188161f9698a8ae0c8b016a9a" title="Serializes histogram into a newly heap-allocated binary buffer.">histo_serialize_binary</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Allocates buffer and encodes wire format  </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a805356fff3e1cca97c8df5797d26faca" title="Deserializes a histogram from a canonical binary byte buffer.">histo_deserialize_binary</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Decodes wire format into newly allocated histogram  </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ae46f3534888e638a5e8890770789eca9" title="Migrates a binary serialized histogram to the current format version.">histo_migrate_binary</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Migrates older binary format buffers to current version  </td></tr>
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a805356fff3e1cca97c8df5797d26faca" title="Deserializes a histogram from a canonical binary byte buffer.">histo_deserialize_binary</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Decodes wire format into newly allocated histogram  </td></tr>
 <tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#a92510ddf78bb2eecb6d89d743114a06a" title="Serializes a histogram into a newly allocated JSON string.">histo_serialize_json</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Serializes histogram to IEEE-754 lossless JSON string  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ae04e44523bb4d3dec2f2f50f524b8af7" title="Deserializes a histogram from a JSON string.">histo_deserialize_json</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Deserializes histogram from JSON string  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ae46f3534888e638a5e8890770789eca9" title="Migrates a binary serialized histogram to the current format version.">histo_migrate_binary</a></span>  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">O(N)  </td><td class="markdownTableBodyLeft">Migrates older binary format buffers to current version  </td></tr>
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="histo_8h.html#ab189ee9fb6f38041cfdd65fd57a86878" title="Frees a heap buffer allocated by serialization routines. Safe with NULL.">histo_free_buffer</a></span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Deallocates library-allocated serialization buffer  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#a5ed1cb251c0e06682b722d981ac38358" title="Create a new dynamic quantile sketch.">histo_sketch_create</a></span> / <span class="tt">destroy</span>  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">Sketch allocation and circular buffer initialization  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#af7b35c73965492ab5b697634f569e8da" title="Insert a value into the sketch.">histo_sketch_insert</a></span> / <span class="tt">_w</span>  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Amortized constant time logarithmic mapping &amp; insertion  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#a0eff4445d2c8453dccdf9beaf5376985" title="Insert an array of weighted values into the sketch.">histo_sketch_insert_n</a></span>  </td><td class="markdownTableBodyLeft">O(K)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Batch insertion of K elements into sketch  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#a5cdcffc9b98fa44c87ff603835f4b6ad" title="Query a quantile from the sketch.">histo_sketch_quantile</a></span>  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Single-pass cumulative weight scan over B bins  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#a796ce5c1ea179e22b001ba939d7747ee" title="Merge src sketch into dest sketch. Both sketches must have been created with the same alpha.">histo_sketch_merge</a></span>  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Merges two sketches with identical alpha  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#a5a82157a581848ee23055b632d94bba6" title="Reset the sketch to an empty state.">histo_sketch_reset</a></span>  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">O(1)  </td><td class="markdownTableBodyLeft">Resets circular stores and summary counters  </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#af7795647e29353e7bbcb95835cc61f9f" title="Serialize the sketch to a binary format.">histo_sketch_serialize_binary</a></span>  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">Encodes sketch to binary buffer  </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyLeft"><span class="tt"><a class="el" href="sketch_8h.html#af1cb22fe25ee7e247bef4ddcd37b7897" title="Deserialize a sketch from a binary format.">histo_sketch_deserialize_binary</a></span>  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">O(B)  </td><td class="markdownTableBodyLeft">Decodes sketch from binary buffer  </td></tr>
 </table>
 </div></div><!-- PageDoc -->
 <a href="doxygen_crawl.html"></a>

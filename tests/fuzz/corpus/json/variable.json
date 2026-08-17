@@ -1,0 +1,1 @@
+{"schema":"libhisto-v2","bin_type":"variable","nbins":5,"min":0,"max":100,"flags":0,"underflow":{"weight":0,"sum_w2":0,"entries":0},"overflow":{"weight":0,"sum_w2":0,"entries":0},"nan_count":0,"total":{"weight":50,"sum_w2":0,"entries":50},"bin_edges":[0,5,15,30,60,100],"bins":[3,5,7,15,20]}

@@ -1,0 +1,13 @@
+<map id="/home/steffenm/src/libhisto/include/histo/sketch.h" name="/home/steffenm/src/libhisto/include/histo/sketch.h">
+<area shape="rect" id="Node000001" title="Online Dynamic Quantile Sketch (bounded relative&#45;error, based on DDSketch)." alt="" coords="63,5,224,67"/>
+<area shape="rect" id="Node000002" href="$types_8h.html" title="Core types and enumerations for libhisto." alt="" coords="91,115,196,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="145,65,146,100,141,98,142,70"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,191,79,218"/>
+<area shape="poly" id="edge5_Node000001_Node000003" title=" " alt="" coords="113,70,82,116,54,177,49,175,77,114,117,65"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="208,191,278,218"/>
+<area shape="poly" id="edge6_Node000001_Node000004" title=" " alt="" coords="173,65,211,114,226,145,237,176,233,174,221,147,206,116,172,70"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="128,143,74,184,71,179,123,144"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="162,141,216,181,211,182,160,146"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="103,191,184,218"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="145,141,146,176,141,174,142,145"/>
+</map>

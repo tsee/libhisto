@@ -1,6 +1,15 @@
 var searchData=
 [
-  ['empty_20support_20linear_20quantile_20dispersion_2029_0',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md28',1,'']]],
-  ['error_20propagation_2029_1',['5.7 Division-Free Error Propagation ( \\(O(N)\\))',['../index.html#autotoc_md29',1,'']]],
-  ['events_20uncertainties_2',['4.1 Weighted Monte Carlo Events &amp;amp; Uncertainties',['../index.html#autotoc_md10',1,'']]]
+  ['ddsketch_0',['DDSketch',['../index.html#autotoc_md6',1,'2.3 Dynamic Logarithmic Binning (DDSketch)'],['../index.html#autotoc_md10',1,'3.2 Streaming Dynamic Quantile Sketching (DDSketch)']]],
+  ['ddsketch_20bounded_20relative_20error_20quantile_20sketch_204_20insertion_1',['5.9 DDSketch Bounded Relative-Error Quantile Sketch ( \\(O(1)\\) insertion)',['../index.html#autotoc_md33',1,'']]],
+  ['ddsketch_20merging_2',['4.3 Dynamic Quantile Sketches (DDSketch) &amp;amp; Merging',['../index.html#autotoc_md15',1,'']]],
+  ['dispersion_2030_3',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md30',1,'']]],
+  ['dispersion_20statistics_4',['4.6 Robust Non-Parametric &amp;amp; Dispersion Statistics',['../index.html#autotoc_md18',1,'']]],
+  ['distances_5',['4.7 Comparing Distributions &amp;amp; Statistical Distances',['../index.html#autotoc_md19',1,'']]],
+  ['distribution_20comparison_20metrics_2030_6',['5.8 Two-Distribution Comparison Metrics ( \\(O(N)\\))',['../index.html#autotoc_md32',1,'']]],
+  ['distributions_20statistical_20distances_7',['4.7 Comparing Distributions &amp;amp; Statistical Distances',['../index.html#autotoc_md19',1,'']]],
+  ['division_20free_20error_20propagation_2030_8',['5.7 Division-Free Error Propagation ( \\(O(N)\\))',['../index.html#autotoc_md31',1,'']]],
+  ['dynamic_20logarithmic_20binning_20ddsketch_9',['2.3 Dynamic Logarithmic Binning (DDSketch)',['../index.html#autotoc_md6',1,'']]],
+  ['dynamic_20quantile_20sketches_20ddsketch_20merging_10',['4.3 Dynamic Quantile Sketches (DDSketch) &amp;amp; Merging',['../index.html#autotoc_md15',1,'']]],
+  ['dynamic_20quantile_20sketching_20ddsketch_11',['3.2 Streaming Dynamic Quantile Sketching (DDSketch)',['../index.html#autotoc_md10',1,'']]]
 ];

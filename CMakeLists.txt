@@ -23,6 +23,7 @@ option(LIBHISTO_ENABLE_SANITIZERS "Enable ASan and UBSan (Alias for LIBHISTO_ENA
 option(LIBHISTO_ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(LIBHISTO_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
 option(LIBHISTO_ENABLE_MSAN "Enable MemorySanitizer (Clang only)" OFF)
+option(LIBHISTO_ENABLE_FUZZING "Build fuzz testing harnesses and standalone corpus runners" OFF)
 option(LIBHISTO_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(LIBHISTO_BUILD_DOCS "Build Doxygen documentation" OFF)
 
@@ -109,6 +110,10 @@ if(LIBHISTO_BUILD_TESTS)
             COMMENT "Running tests under Valgrind"
         )
     endif()
+elseif(LIBHISTO_ENABLE_FUZZING)
+    include(CTest)
+    enable_testing()
+    add_subdirectory(tests/fuzz)
 endif()
 
 # Benchmarks

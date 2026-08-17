@@ -197,3 +197,32 @@ $$D_B(P, Q) = -\ln(\text{BC}(P, Q)) \ge 0.0$$
 - **Division ($H_3 = H_1 / H_2$)**:
   $$\text{sum\_w2}_{3, i} = \frac{\text{sum\_w2}_{1, i} \cdot H_{2, i}^2 + \text{sum\_w2}_{2, i} \cdot H_{1, i}^2}{H_{2, i}^4}$$
   If $H_{2, i} == 0$, $H_{3, i} = 0.0$ and $\text{sum\_w2}_{3, i} = 0.0$.
+
+---
+
+## 9. DDSketch Bounded Relative-Error Quantile Sketch
+
+DDSketch (Masson et al., VLDB 2019) provides an online sketch for streaming data with a guaranteed relative-error bound $\alpha \in (0, 1)$ over unbounded numeric values.
+
+### 9.1 Base Multiplier & Logarithmic Bin Mapping
+Given relative accuracy parameter $\alpha$, the growth factor $\gamma$ is defined as:
+$$\gamma = \frac{1 + \alpha}{1 - \alpha} > 1$$
+
+For a non-zero value $x$, its logarithmic bin index $k$ is:
+$$k = \left\lceil \frac{\ln |x|}{\ln \gamma} \right\rceil$$
+
+Bin $k$ covers the half-open interval $(\gamma^{k-1}, \gamma^k]$.
+
+### 9.2 Representative Value & Relative Error Guarantee
+When retrieving the quantile for a cumulative rank in bin $k$, the representative value $\hat{q}$ is chosen as the midpoint of the relative error envelope:
+$$\hat{q} = \frac{2 \gamma^k}{1 + \gamma}$$
+
+For any value $x \in (\gamma^{k-1}, \gamma^k]$:
+$$|x - \hat{q}| \le \alpha \cdot x$$
+which guarantees that the reconstructed quantile has relative error bounded by $\alpha$:
+$$\frac{|\hat{q} - q|}{q} \le \alpha$$
+
+### 9.3 Zero and Negative Value Support
+- **Zero Value Accumulator**: A distinct scalar accumulator $w_0$ captures exact zeros ($x = 0$).
+- **Symmetric Positive & Negative Stores**: Values with $x > 0$ and $x < 0$ are maintained in separate logarithmic stores (`pos` and `neg`), ensuring identical $\alpha$ error guarantees across all positive and negative real numbers.
+

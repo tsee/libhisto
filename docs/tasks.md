@@ -65,3 +65,10 @@
 - [x] **F1** Runtime-Detected AVX2 / AVX-512 Vector Acceleration (`histo_fill_n` SIMD kernel)
 - [x] **F2** Online Dynamic Quantile Sketches (DDSketch relative-error bounded streaming sketch in `include/histo/sketch.h` & `src/sketch.c`)
 - [x] **F3** Sparklines in Terminal Visualization Toolkit (`histo-plot -S / --sparkline`)
+
+---
+
+## Phase G: Fuzzing & Security Hardening
+- [x] **G1** Coverage-guided & standalone fuzzing harnesses (`fuzz_deserialize_binary`, `fuzz_deserialize_json`, `fuzz_sketch_binary`, `fuzz_fill`)
+- [x] **G2** Modern CMake integration (`LIBHISTO_ENABLE_FUZZING`, LLVM `libFuzzer` Clang support & portable standalone mutation engine)
+- [x] **G3** Curated seed corpora in `tests/fuzz/corpus/`, corpus generator tool, and 100% leak-free ASan/UBSan verification

@@ -21,3 +21,8 @@ add_subdirectory(unit)
 
 # Integration tests
 add_subdirectory(integration)
+
+# Fuzzing harnesses
+if(LIBHISTO_ENABLE_FUZZING)
+    add_subdirectory(fuzz)
+endif()

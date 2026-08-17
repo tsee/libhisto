@@ -1,12 +1,12 @@
 var searchData=
 [
-  ['batch_20array_20ingestion_0',['4.2 High-Throughput Batch Array Ingestion',['../index.html#autotoc_md11',1,'']]],
-  ['bin_20lookup_204_1',['5.1 Boundary-Guarded Uniform Bin Lookup ( \\(O(1)\\))',['../index.html#autotoc_md23',1,'']]],
-  ['binary_20save_20load_20and_20version_20migration_2',['4.3 Binary Save, Load, and Version Migration',['../index.html#autotoc_md12',1,'']]],
-  ['binary_20search_206_3',['5.2 Variable-Width Bisection Binary Search ( \\(O(\\log N)\\))',['../index.html#autotoc_md24',1,'']]],
-  ['binning_20histo_5fbin_5funiform_4',['Uniform Binning (&lt;span class=&quot;tt&quot;&gt;HISTO_BIN_UNIFORM&lt;/span&gt;)',['../index.html#autotoc_md4',1,'']]],
-  ['binning_20histo_5fbin_5fvariable_5',['Variable Binning (&lt;span class=&quot;tt&quot;&gt;HISTO_BIN_VARIABLE&lt;/span&gt;)',['../index.html#autotoc_md5',1,'']]],
-  ['binning_20visualized_6',['2. Core Concepts: Binning Visualized',['../index.html#autotoc_md3',1,'']]],
-  ['bisection_20binary_20search_206_7',['5.2 Variable-Width Bisection Binary Search ( \\(O(\\log N)\\))',['../index.html#autotoc_md24',1,'']]],
-  ['boundary_20guarded_20uniform_20bin_20lookup_204_8',['5.1 Boundary-Guarded Uniform Bin Lookup ( \\(O(1)\\))',['../index.html#autotoc_md23',1,'']]]
+  ['acceleration_20architecture_2030_0',['5.10 SIMD Vector Acceleration Architecture ( \\(O(N)\\))',['../index.html#autotoc_md34',1,'']]],
+  ['algorithmic_20complexity_20reference_20table_1',['7. Algorithmic Complexity Reference Table',['../index.html#autotoc_md39',1,'']]],
+  ['algorithms_20statistical_20formulations_2',['5. Numerical Algorithms &amp;amp; Statistical Formulations',['../index.html#autotoc_md24',1,'']]],
+  ['analysis_3',['4.5 Higher-Order Moments &amp;amp; Peak/Shape Analysis',['../index.html#autotoc_md17',1,'']]],
+  ['and_20binary_20roundtrip_4',['3.1 Uniform Histogramming, Moments, and Binary Roundtrip',['../index.html#autotoc_md9',1,'']]],
+  ['and_20version_20migration_5',['4.4 Binary Save, Load, JSON Serialization, and Version Migration',['../index.html#autotoc_md16',1,'']]],
+  ['architectural_20pillars_6',['Key Architectural Pillars',['../index.html#autotoc_md1',1,'']]],
+  ['architecture_2030_7',['5.10 SIMD Vector Acceleration Architecture ( \\(O(N)\\))',['../index.html#autotoc_md34',1,'']]],
+  ['architecture_20reference_8',['libhisto User Manual &amp;amp; Architecture Reference',['../index.html',1,'']]]
 ];

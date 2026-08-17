@@ -1,25 +1,28 @@
 # libhisto
 
-**libhisto** is a high-performance, portable, memory-safe ISO C99 1D histogramming library designed for high-throughput scientific computing, physics simulations, telemetry ingestion, and general statistical analysis. It offers exact online Welford moments, robust non-parametric statistics, two-distribution distance metrics, deterministic binary serialization, and zero-allocation ingestion loops capable of processing tens of millions of samples per second.
+**libhisto** is a high-performance, portable, memory-safe ISO C99 1D histogramming and quantile sketch library designed for high-throughput scientific computing, physics simulations, telemetry ingestion, and general statistical analysis. It offers exact online Welford moments, robust non-parametric statistics, DDSketch dynamic quantile sketches, SIMD vector acceleration (AVX-512 / AVX2 / NEON-ready), two-distribution distance metrics, deterministic binary serialization, and zero-allocation ingestion loops capable of processing hundreds of millions of samples per second.
 
 ## Key Features
 
 - **Flexible Binning:** Uniform ($O(1)$) and Variable-width ($O(\log N)$) binning configurations with boundary-guarded floating-point indexing.
-- **Exact Online Moments:** Online weighted Welford moments for sample mean and variance with variance floor clamping and full support for negative weights.
+- **SIMD Vector Acceleration:** AVX-512 and AVX2 / FMA vectorized batch ingestion (`histo_fill_n`) with automatic runtime CPUID feature detection and scalar fallback.
+- **DDSketch Dynamic Quantile Sketches:** Fully dynamic, bounded relative-error online quantile sketches (`include/histo/sketch.h`) with configurable accuracy $\alpha$, logarithmic dynamic binning, circular collapsing buffers, and mergeability.
+- **Exact Online Moments:** Online weighted Welford moments for sample mean and variance with numerical variance floor protection and full support for negative weights.
 - **Statistical Uncertainty:** Division-free `sum_w2` statistical error tracking and propagation across arithmetic operations (addition, subtraction, multiplication, division).
 - **Comprehensive Summary Statistics:** Mean, variance, standard deviation, higher-order central moments ($M_k$), skewness, kurtosis, and excess kurtosis.
 - **Peak & Shape Characterization:** Discrete mode bin lookup, continuous 3-point parabolic peak interpolation, Full Width at Half Maximum (FWHM), and Root Mean Square (RMS).
 - **Robust Non-Parametric Measures:** Piecewise-linear quantile interpolation, Median, Interquartile Range (IQR), Median Absolute Deviation (MAD), Trimmed Mean, and Winsorized Mean.
 - **Two-Distribution Comparisons:** Weighted Chi-Square ($\chi^2$) test with degrees of freedom (NDF), Kolmogorov-Smirnov ($D$), 1D Wasserstein / Earth Mover's Distance ($W_1$), Kullback-Leibler (KL) divergence, and Bhattacharyya distance.
 - **Transformations & Arithmetic:** Element-wise vector arithmetic (`add`, `subtract`, `multiply`, `divide`), scalar scaling, normalization to target area, integer rebinning, slicing, and cumulative distribution functions (CDF).
-- **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format with automatic format migration (`histo_migrate_binary`) for cross-platform data interchange.
+- **Terminal Sparkline & Visualization:** Multi-style terminal plotting (`histo-plot`) featuring 1/8th sub-character Unicode fractional blocks, compact single-line sparklines (`-S, --sparkline`), TrueColor gradients, and live continuous streaming watch mode (`--watch`).
+- **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format with automatic format migration (`histo_migrate_binary`) and IEEE-754 lossless JSON serialization.
 - **Memory Safety & Portability:** Strict ISO C99, 100% leak-free, thread-safe concurrent queries, zero compiler warnings, and clean ASan/UBSan/TSan/Valgrind validation.
 
 ---
 
 ## 5-Minute Quickstart
 
-Here is a quick demonstration of creating a histogram, filling data, calculating statistics, and serializing to binary format:
+### 1. Fixed-Grid Histogramming & Statistical Moments
 
 ```c
 #include <stdio.h>
@@ -39,18 +42,19 @@ int main(void) {
     histo_fill(h, 25.4);
     histo_fill_w(h, 50.0, 2.5); // Fill coordinate 50.0 with weight 2.5
 
-    // 3. High-throughput batch ingestion from array
-    double samples[3] = {12.0, 45.0, 88.0};
-    histo_fill_n(h, 3, samples, NULL); // NULL weights implies unit weight (1.0)
+    // 3. High-throughput SIMD batch ingestion from array
+    double samples[4] = {12.0, 45.0, 88.0, 50.0};
+    histo_fill_n(h, 4, samples, NULL); // NULL weights implies unit weight (1.0)
 
-    // 4. Query statistics and shape metrics
-    double mean = 0.0, std_dev = 0.0, median = 0.0, fwhm = 0.0;
+    // 4. Query statistics, robust dispersion, and shape metrics
+    double mean = 0.0, std_dev = 0.0, median = 0.0, iqr = 0.0, fwhm = 0.0;
     histo_mean(h, &mean);
     histo_std_dev(h, &std_dev);
     histo_median(h, &median);
+    histo_iqr(h, &iqr);
     histo_fwhm(h, &fwhm);
-    printf("Mean: %.3f | Std Dev: %.3f | Median: %.3f | FWHM: %.3f\n",
-           mean, std_dev, median, fwhm);
+    printf("Mean: %.3f | StdDev: %.3f | Median: %.3f | IQR: %.3f | FWHM: %.3f\n",
+           mean, std_dev, median, iqr, fwhm);
 
     // 5. Binary serialization roundtrip (Canonical Little-Endian)
     void *buffer = NULL;
@@ -67,6 +71,37 @@ int main(void) {
     
     // 6. Clean teardown (0 memory leaks)
     histo_destroy(h);
+    return 0;
+}
+```
+
+### 2. Online Dynamic Quantile Sketches (DDSketch)
+
+For streaming quantile estimation over unbounded numeric ranges with guaranteed relative error:
+
+```c
+#include <stdio.h>
+#include <histo/sketch.h>
+
+int main(void) {
+    // 1. Create a DDSketch: alpha = 0.01 (+/- 1% error guarantee), max 1024 bins
+    histo_sketch_t *sketch = histo_sketch_create(0.01, 1024);
+    if (!sketch) return 1;
+
+    // 2. Stream latency values across multiple orders of magnitude (e.g. microseconds to seconds)
+    histo_sketch_insert(sketch, 0.042);
+    histo_sketch_insert(sketch, 1.250);
+    histo_sketch_insert_w(sketch, 45.100, 3.0); // Weighted entry
+
+    // 3. Query arbitrary quantiles with bounded relative error
+    double p50 = 0.0, p90 = 0.0, p99 = 0.0;
+    histo_sketch_quantile(sketch, 0.50, &p50);
+    histo_sketch_quantile(sketch, 0.90, &p90);
+    histo_sketch_quantile(sketch, 0.99, &p99);
+    printf("Quantiles -> P50: %.3f | P90: %.3f | P99: %.3f\n", p50, p90, p99);
+
+    // 4. Destroy sketch
+    histo_sketch_destroy(sketch);
     return 0;
 }
 ```
@@ -108,6 +143,10 @@ target_link_libraries(your_target PRIVATE libhisto::libhisto)
 - **Uniform vs. Variable Bins:**
   - *Uniform Binning*: Divides range $[x_{\min}, x_{\max})$ into equal widths, enabling $O(1)$ lookups via boundary-guarded reciprocal multiplication.
   - *Variable Binning*: Allows arbitrary monotonically increasing bin edges, utilizing an optimized $O(\log N)$ bisection binary search.
+- **SIMD Vector Acceleration:**
+  - `histo_fill_n` dynamically selects AVX-512 or AVX2 vectorized execution paths when supported by the host CPU, computing candidate bin indices, branchless boundary guards, and parallel memory increments in vectorized batches.
+- **DDSketch Dynamic Quantile Sketches:**
+  - Unbounded-range streaming quantile estimator with provable relative error bound $\alpha$. Uses logarithmic binning ($k = \lceil \log_\gamma |x| \rceil$ with $\gamma = \frac{1+\alpha}{1-\alpha}$) and dense circular buffer collapsing to enforce bounded memory $O(\text{max\_bins})$.
 - **Statistical Uncertainty (`sum_w2`):**
   - Accurately tracks per-bin $\sum w_i^2$, providing statistical error bars ($\sigma_i = \sqrt{\sum w_i^2}$) and enabling division-free error propagation for histogram products and quotients.
 - **Exact Online Welford Moments:**
@@ -117,18 +156,30 @@ target_link_libraries(your_target PRIVATE libhisto::libhisto)
 
 ---
 
-## Performance Envelope
+## Performance Envelope & Hardware Benchmarks
 
-Measured benchmarks on modern x86_64 architecture:
+Benchmark measurements conducted on **Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz max, 20 cores, Linux x86_64)**:
 
-| Operation | Throughput | Latency |
-| :--- | :--- | :--- |
-| **Batch Ingestion (`histo_fill_n`)** | ~93.1 Mops/s | 10.7 ns/sample |
-| **Single Fill (`histo_fill`)** | ~45.6 Mops/s | 21.9 ns/op |
-| **Weighted Fill + `sum_w2` (`histo_fill_w`)** | ~43.1 Mops/s | 23.2 ns/op |
-| **Variable Bin Lookup (100 bins)** | ~22.2 Mops/s | 45.0 ns/op |
-| **Binary Serialization (10k bins)** | ~13,500 saves/s | 74.0 µs/op |
-| **Quantile Scan / CDF Interpolation** | ~12.5 Mops/s | 80.0 ns/op |
+| Operation / Routine | Throughput | Latency / Call | Complexity |
+| :--- | :--- | :--- | :--- |
+| **Batch Ingestion (`histo_fill_n` SIMD)** | **441.15 Mops/s** | **2.27 ns / sample** | $O(N)$ vectorized |
+| **Single Uniform Fill (`histo_fill`)** | **288.26 Mops/s** | **3.47 ns / sample** | $O(1)$ |
+| **Weighted Fill + `sum_w2` (`histo_fill_w`)** | **223.45 Mops/s** | **4.48 ns / sample** | $O(1)$ |
+| **Variable Bin Binary Search (100 bins)** | **33.65 Mops/s** | **29.72 ns / sample** | $O(\log N)$ |
+| **DDSketch Streaming Ingestion** | **143.58 Mops/s** | **6.97 ns / sample** | $O(1)$ amortized |
+| **DDSketch Quantile Queries (P50/P90/P99)** | **231.17 k-queries/s** | **4.33 µs / query** | $O(B)$ |
+| **Two-Sample Comparison (Chi2/KS/EMD/Bhatt)** | **27.62 k-comparisons/s** | **36.20 µs / comparison** | $O(N)$ |
+| **Two-Pass Moments (Mean + Variance, 10k bins)** | **126.8 k-queries/s** | **7.89 µs / call** | $O(N)$ |
+| **Quantile & Median (Q25 + Q50 + Q75, 10k bins)** | **73.5 k-queries/s** | **13.6 µs / call** | $O(N)$ |
+| **Binary Serialization (10k bins)** | **38.4 k-ser/s** | **26.0 µs / save** | $O(N)$ |
+
+### Mechanical Sympathy & Engineering Principles
+
+1. **Zero Heap Allocation in Ingestion Hot Path:** Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`, `histo_sketch_insert`) execute with zero heap allocation overhead, operating directly on pre-allocated cache-line aligned memory.
+2. **Reciprocal Multiplication (`FMUL`) instead of Division (`FDIV`):** For uniform binning, bin coordinate lookup evaluates `(x - min) * inv_binsize` using precomputed reciprocal multiplication (latency $\approx 3$–4 cycles) rather than expensive floating-point division instructions (latency $\approx 14$–20 cycles).
+3. **Branchless SIMD Ingestion Kernels:** Vectorized batch ingestion utilizes AVX-512 / AVX2 instructions with FMA to transform coordinate blocks in parallel, applying vector min/max clamping and vectorized non-finite checks.
+4. **Division-Free Statistical Error Propagation:** Algebraic expansions for arithmetic operations propagate $\sum w^2$ without intermediate floating-point divisions, eliminating NaN singularities and CPU pipeline stalls on empty bins.
+5. **Strict 8-Byte Alignment & Cache-Conscious Data Structures:** Internal structures feature explicit 8-byte alignment padding and contiguous cache layouts, maximizing L1d/L2 cache hit ratios.
 
 ---
 
@@ -192,6 +243,28 @@ Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919
  Underflow: 36 │ In-Range: 99919 │ Overflow: 45 │ Non-Finite/NaN: 0
 ```
 
+### Inline Single-Line Sparklines (`-S, --sparkline`)
+
+For compact in-terminal dashboards, shell prompts, or streaming logs, render distributions as 1-line sparklines:
+
+```bash
+# Render compact Unicode sparkline
+python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(10000)))" | \
+    histo-fill --bins=20 --min=0 --max=100 -o binary | \
+    histo-plot -S
+```
+```text
+    ▂▃▄▆▇██▇▆▄▂▂      [N=9987, range=[0, 1e+02), μ=50, σ=15]
+```
+
+```bash
+# Render ASCII sparkline without statistics trailer
+cat data.bin | histo-plot --sparkline --style=ascii --no-stats
+```
+```text
+  ..::||##||::..  
+```
+
 ### CLI Tool Overview
 
 1. **`histo-fill`**:
@@ -228,7 +301,7 @@ Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919
 Build and test using standard CMake or the provided `Makefile`:
 
 ```bash
-# Build static library (libhisto.a)
+# Build static library (libhisto.a) and CLI tools
 make build
 # or: cmake -B build -S . && cmake --build build
 
@@ -247,6 +320,14 @@ make test-msan
 
 # Run tests under Valgrind Memcheck
 make memcheck
+
+# Run standalone fuzzing regression suite under AddressSanitizer & UBSan
+make test-fuzz
+
+# Build with native LLVM libFuzzer (Clang)
+# CC=clang cmake -B build-fuzz -S . -DLIBHISTO_ENABLE_FUZZING=ON
+# cmake --build build-fuzz
+# ./build-fuzz/tests/fuzz/fuzz_deserialize_binary tests/fuzz/corpus/binary
 
 # Run benchmark suite
 ./build/bench/bench_histo
