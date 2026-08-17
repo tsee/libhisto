@@ -254,7 +254,13 @@ static inline void histo_update_welford(histo_t *h, double x, double w) {
 
 
 static inline void histo_fill_uniform_unchecked(histo_t *h, double x, double w, bool has_w2) {
-    int64_t idx = (int64_t)((x - h->min) * h->inv_binsize);
+    int64_t idx;
+    if (h->inv_binsize > 0.0) {
+        idx = (int64_t)((x - h->min) * h->inv_binsize);
+    } else {
+        idx = (int64_t)((x - h->min) / h->binsize);
+    }
+    
     if (idx < 0) idx = 0;
     else if ((uint32_t)idx >= h->nbins) idx = h->nbins - 1;
 
@@ -415,6 +421,12 @@ histo_status_t histo_fill_bin(histo_t *h, uint32_t bin_index, double weight) {
     }
     h->n_fills++;
 
+    if (h->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        double center = 0.0;
+        histo_bin_center(h, bin_index, &center);
+        histo_update_welford(h, center, weight);
+    }
+
     return HISTO_OK;
 }
 
@@ -482,12 +494,14 @@ histo_status_t histo_fill_n(histo_t *h, size_t n, const double *x, const double 
                 }
                 if (val < h->min) {
                     h->underflow_weight += 1.0;
+                    if (has_w2) h->underflow_sum_w2 += 1.0;
                     h->n_underflow++;
                 } else if (val >= h->max) {
                     h->overflow_weight += 1.0;
+                    if (has_w2) h->overflow_sum_w2 += 1.0;
                     h->n_overflow++;
                 } else {
-                    histo_fill_uniform_unchecked(h, val, 1.0, false);
+                    histo_fill_uniform_unchecked(h, val, 1.0, has_w2);
                 }
             }
         } else if (weights && !exact) {
@@ -741,7 +755,8 @@ histo_status_t histo_variance(const histo_t *h, double *out_variance) {
     }
 
     if (h->flags & HISTO_FLAG_EXACT_MOMENTS) {
-        *out_variance = h->stats_M2 / h->total_weight;
+        double var_val = h->stats_M2 / h->total_weight;
+        *out_variance = (var_val > 0.0) ? var_val : 0.0;
         return HISTO_OK;
     }
 
@@ -759,7 +774,8 @@ histo_status_t histo_variance(const histo_t *h, double *out_variance) {
         double diff = center - mean_val;
         sum_sq_diff += h->bins[i] * (diff * diff);
     }
-    *out_variance = sum_sq_diff / h->total_weight;
+    double var_val = sum_sq_diff / h->total_weight;
+    *out_variance = (var_val > 0.0) ? var_val : 0.0;
     return HISTO_OK;
 }
 
@@ -772,7 +788,7 @@ histo_status_t histo_std_dev(const histo_t *h, double *out_std_dev) {
     if (st != HISTO_OK) {
         return st;
     }
-    *out_std_dev = sqrt(var);
+    *out_std_dev = (var > 0.0) ? sqrt(var) : 0.0;
     return HISTO_OK;
 }
 
@@ -1605,6 +1621,29 @@ histo_status_t histo_multiply(histo_t *target, const histo_t *other) {
     target->overflow_weight *= other->overflow_weight;
     target->n_fills += other->n_fills;
 
+    if (target->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        if (target->total_weight > 0.0) {
+            double sum = 0.0;
+            for (uint32_t i = 0; i < target->nbins; ++i) {
+                double c = 0.0;
+                histo_bin_center(target, i, &c);
+                sum += target->bins[i] * c;
+            }
+            target->stats_mean = sum / target->total_weight;
+            double m2 = 0.0;
+            for (uint32_t i = 0; i < target->nbins; ++i) {
+                double c = 0.0;
+                histo_bin_center(target, i, &c);
+                double diff = c - target->stats_mean;
+                m2 += target->bins[i] * diff * diff;
+            }
+            target->stats_M2 = (m2 > 0.0) ? m2 : 0.0;
+        } else {
+            target->stats_mean = 0.0;
+            target->stats_M2 = 0.0;
+        }
+    }
+
     return HISTO_OK;
 }
 
@@ -1649,6 +1688,29 @@ histo_status_t histo_divide(histo_t *target, const histo_t *other) {
     else target->overflow_weight = 0.0;
     target->n_fills += other->n_fills;
 
+    if (target->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        if (target->total_weight > 0.0) {
+            double sum = 0.0;
+            for (uint32_t i = 0; i < target->nbins; ++i) {
+                double c = 0.0;
+                histo_bin_center(target, i, &c);
+                sum += target->bins[i] * c;
+            }
+            target->stats_mean = sum / target->total_weight;
+            double m2 = 0.0;
+            for (uint32_t i = 0; i < target->nbins; ++i) {
+                double c = 0.0;
+                histo_bin_center(target, i, &c);
+                double diff = c - target->stats_mean;
+                m2 += target->bins[i] * diff * diff;
+            }
+            target->stats_M2 = (m2 > 0.0) ? m2 : 0.0;
+        } else {
+            target->stats_mean = 0.0;
+            target->stats_M2 = 0.0;
+        }
+    }
+
     return HISTO_OK;
 }
 
@@ -1675,6 +1737,12 @@ histo_status_t histo_scale(histo_t *h, double factor) {
     if (h->sum_w2) {
         h->underflow_sum_w2 *= factor_sq;
         h->overflow_sum_w2 *= factor_sq;
+    }
+    if (h->flags & HISTO_FLAG_EXACT_MOMENTS) {
+        h->stats_M2 *= factor;
+        if (h->stats_M2 < 0.0) {
+            h->stats_M2 = 0.0;
+        }
     }
 
     return HISTO_OK;

@@ -128,11 +128,76 @@ void test_binary_deserialization_errors(void) {
     TEST_ASSERT_EQUAL(HISTO_ERR_DESERIALIZATION, histo_deserialize_binary(fake_buf, sizeof(fake_buf), &dst));
 }
 
+/* Test serialize_into with insufficient and exact buffer capacity */
+void test_serialize_exact_capacity_and_insufficient_capacity(void) {
+    histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    TEST_ASSERT_NOT_NULL(h);
+    histo_fill(h, 50.0);
+
+    size_t req_size = histo_serialize_binary_size(h);
+    TEST_ASSERT_TRUE(req_size > 256);
+
+    uint8_t *buf = malloc(req_size);
+    TEST_ASSERT_NOT_NULL(buf);
+
+    /* NULL checks */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_serialize_binary_into(NULL, buf, req_size));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_serialize_binary_into(h, NULL, req_size));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_serialize_binary(h, NULL, &req_size));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_serialize_binary(h, (void**)&buf, NULL));
+
+    /* Capacity 1 byte too small */
+    TEST_ASSERT_EQUAL(HISTO_ERR_SERIALIZATION, histo_serialize_binary_into(h, buf, req_size - 1));
+
+    /* Exact capacity */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_serialize_binary_into(h, buf, req_size));
+
+    free(buf);
+    histo_destroy(h);
+}
+
+/* Test deserialization with tampered inverted geometry in header */
+void test_deserialize_tampered_geometry(void) {
+    histo_t *h = histo_create_uniform(5, 0.0, 50.0, 0);
+    TEST_ASSERT_NOT_NULL(h);
+
+    void *buf = NULL;
+    size_t size = 0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_serialize_binary(h, &buf, &size));
+    TEST_ASSERT_NOT_NULL(buf);
+
+    uint8_t *tampered = malloc(size);
+    TEST_ASSERT_NOT_NULL(tampered);
+    memcpy(tampered, buf, size);
+
+    /* Set min = 100.0, max = 0.0 (inverted range) */
+    double bad_min = 100.0;
+    double bad_max = 0.0;
+    memcpy(tampered + 0x18, &bad_min, sizeof(double));
+    memcpy(tampered + 0x20, &bad_max, sizeof(double));
+
+    histo_t *dst = NULL;
+    TEST_ASSERT_EQUAL(HISTO_ERR_DESERIALIZATION, histo_deserialize_binary(tampered, size, &dst));
+    TEST_ASSERT_NULL(dst);
+
+    /* Set min = NAN */
+    double nan_val = NAN;
+    memcpy(tampered + 0x18, &nan_val, sizeof(double));
+    TEST_ASSERT_EQUAL(HISTO_ERR_DESERIALIZATION, histo_deserialize_binary(tampered, size, &dst));
+    TEST_ASSERT_NULL(dst);
+
+    free(tampered);
+    histo_free_buffer(buf);
+    histo_destroy(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_binary_roundtrip_uniform);
     RUN_TEST(test_binary_roundtrip_variable);
     RUN_TEST(test_binary_deserialization_errors);
+    RUN_TEST(test_serialize_exact_capacity_and_insufficient_capacity);
+    RUN_TEST(test_deserialize_tampered_geometry);
     return UNITY_END();
 }
 

@@ -156,6 +156,59 @@ void test_cmp_empty_and_null(void) {
     histo_destroy(h2);
 }
 
+/* Test all comparison metrics on variable binning histograms */
+void test_cmp_variable_metrics(void) {
+    const double edges[] = {0.0, 1.0, 5.0, 20.0, 100.0}; /* 4 variable bins */
+    histo_t *h1 = histo_create_variable(4, edges, HISTO_FLAG_TRACK_SUMW2);
+    histo_t *h2 = histo_create_variable(4, edges, HISTO_FLAG_TRACK_SUMW2);
+
+    histo_fill_bin(h1, 0, 10.0);
+    histo_fill_bin(h1, 1, 20.0);
+    histo_fill_bin(h2, 0, 10.0);
+    histo_fill_bin(h2, 1, 20.0);
+
+    double chi2 = 0.0, ks = 0.0, wass = 0.0, kl = 0.0, bhatt = 0.0;
+    uint32_t ndf = 0;
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_chi2(h1, h2, &chi2, &ndf));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, chi2);
+    TEST_ASSERT_EQUAL_UINT32(2, ndf);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_ks(h1, h2, &ks));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, ks);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_wasserstein_1d(h1, h2, &wass));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, wass);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_kl_divergence(h1, h2, &kl));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, kl);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_bhattacharyya(h1, h2, &bhatt));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, bhatt);
+
+    histo_destroy(h1);
+    histo_destroy(h2);
+}
+
+/* Test KL divergence with epsilon smoothing when Q has zero bins */
+void test_cmp_kl_divergence_smoothing(void) {
+    histo_t *h1 = histo_create_uniform(4, 0.0, 40.0, HISTO_FLAG_NONE);
+    histo_t *h2 = histo_create_uniform(4, 0.0, 40.0, HISTO_FLAG_NONE);
+
+    /* h1 has weight in bins 0 and 1, h2 only has weight in bin 0 */
+    histo_fill_bin(h1, 0, 10.0);
+    histo_fill_bin(h1, 1, 10.0);
+    histo_fill_bin(h2, 0, 20.0);
+
+    double kl = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_kl_divergence(h1, h2, &kl));
+    /* With epsilon smoothing on Q for bin 1, KL divergence must be finite and positive */
+    TEST_ASSERT_TRUE(isfinite(kl) && kl > 0.0);
+
+    histo_destroy(h1);
+    histo_destroy(h2);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_cmp_identical);
@@ -164,5 +217,7 @@ int main(void) {
     RUN_TEST(test_cmp_variable_bins);
     RUN_TEST(test_cmp_incompatible);
     RUN_TEST(test_cmp_empty_and_null);
+    RUN_TEST(test_cmp_variable_metrics);
+    RUN_TEST(test_cmp_kl_divergence_smoothing);
     return UNITY_END();
 }

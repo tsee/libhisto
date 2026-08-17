@@ -169,6 +169,84 @@ void test_fill_strided_and_batch(void) {
     histo_destroy(h);
 }
 
+/* Test fill_n with unit weights (weights == NULL) on histogram tracking sum_w2 */
+void test_fill_n_sumw2_unit_weights(void) {
+    histo_t *h = histo_create_uniform(4, 0.0, 40.0, HISTO_FLAG_TRACK_SUMW2);
+    TEST_ASSERT_NOT_NULL(h);
+
+    /* Samples: -5.0 (underflow), 5.0 (bin 0), 5.0 (bin 0), 15.0 (bin 1), 45.0 (overflow), NAN (rejected) */
+    double x_vals[6] = {-5.0, 5.0, 5.0, 15.0, 45.0, NAN};
+    histo_status_t st = histo_fill_n(h, 6, x_vals, NULL);
+    TEST_ASSERT_EQUAL(HISTO_WARN_NON_FINITE, st);
+
+    TEST_ASSERT_EQUAL_UINT64(1, histo_nan_count(h));
+    TEST_ASSERT_EQUAL_UINT64(3, histo_num_entries(h));
+    TEST_ASSERT_EQUAL_DOUBLE(3.0, histo_total_weight(h));
+    TEST_ASSERT_EQUAL_DOUBLE(1.0, histo_underflow(h));
+    TEST_ASSERT_EQUAL_DOUBLE(1.0, histo_overflow(h));
+
+    double content0 = 0.0, sumw2_0 = 0.0, err0 = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_content(h, 0, &content0));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_sum_w2(h, 0, &sumw2_0));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_error(h, 0, &err0));
+    TEST_ASSERT_EQUAL_DOUBLE(2.0, content0);
+    TEST_ASSERT_EQUAL_DOUBLE(2.0, sumw2_0); /* 1^2 + 1^2 = 2 */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, sqrt(2.0), err0);
+
+    double content1 = 0.0, sumw2_1 = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_content(h, 1, &content1));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_bin_sum_w2(h, 1, &sumw2_1));
+    TEST_ASSERT_EQUAL_DOUBLE(1.0, content1);
+    TEST_ASSERT_EQUAL_DOUBLE(1.0, sumw2_1);
+
+    histo_destroy(h);
+}
+
+/* Test fill_bin with exact moments flag enabled */
+void test_fill_bin_exact_moments(void) {
+    histo_t *h = histo_create_uniform(4, 0.0, 40.0, HISTO_FLAG_EXACT_MOMENTS);
+    TEST_ASSERT_NOT_NULL(h);
+
+    /* Bin 0: center 5.0, weight 10.0 */
+    /* Bin 2: center 25.0, weight 10.0 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_bin(h, 0, 10.0));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_bin(h, 2, 10.0));
+
+    double mean = 0.0, var = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mean(h, &mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 15.0, mean);
+
+    /* Variance: ((5-15)^2 * 10 + (25-15)^2 * 10) / 20 = (1000 + 1000) / 20 = 100.0 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_variance(h, &var));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 100.0, var);
+
+    histo_destroy(h);
+}
+
+/* Test strided fill with 0 stride defaults and NULL array bounds */
+void test_fill_strided_zero_stride(void) {
+    histo_t *h = histo_create_uniform(5, 0.0, 10.0, HISTO_FLAG_NONE);
+    TEST_ASSERT_NOT_NULL(h);
+
+    double x_vals[3] = {1.0, 3.0, 5.0};
+    /* Stride 0 should default to sizeof(double) */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_strided(h, 3, x_vals, 0, NULL, 0));
+    TEST_ASSERT_EQUAL_UINT64(3, histo_num_entries(h));
+    TEST_ASSERT_EQUAL_DOUBLE(3.0, histo_total_weight(h));
+
+    /* Empty batch n = 0 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_strided(h, 0, NULL, 0, NULL, 0));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_n(h, 0, NULL, NULL));
+
+    /* Invalid pointer with n > 0 */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fill_strided(h, 5, NULL, 0, NULL, 0));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fill_n(h, 5, NULL, NULL));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fill_strided(NULL, 3, x_vals, 0, NULL, 0));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fill_n(NULL, 3, x_vals, NULL));
+
+    histo_destroy(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_uniform_find_bin_boundaries);
@@ -176,5 +254,8 @@ int main(void) {
     RUN_TEST(test_ieee754_edge_cases);
     RUN_TEST(test_fill_bin);
     RUN_TEST(test_fill_strided_and_batch);
+    RUN_TEST(test_fill_n_sumw2_unit_weights);
+    RUN_TEST(test_fill_bin_exact_moments);
+    RUN_TEST(test_fill_strided_zero_stride);
     return UNITY_END();
 }

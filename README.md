@@ -1,57 +1,72 @@
 # libhisto
 
-**libhisto** is a high-performance, portable, memory-safe ISO C99 1D histogramming library designed for high-throughput scientific computing, physics simulations, telemetry ingestion, and general statistical analysis. It offers exact online Welford statistics, deterministic binary serialization, and zero-allocation ingestion loops capable of processing tens of millions of samples per second.
+**libhisto** is a high-performance, portable, memory-safe ISO C99 1D histogramming library designed for high-throughput scientific computing, physics simulations, telemetry ingestion, and general statistical analysis. It offers exact online Welford moments, robust non-parametric statistics, two-distribution distance metrics, deterministic binary serialization, and zero-allocation ingestion loops capable of processing tens of millions of samples per second.
 
 ## Key Features
 
-- **Flexible Binning:** Uniform (O(1)) and Variable-width (O(log N)) binning configurations.
-- **Exact Statistics:** Online exact Welford moments for mean and variance, with support for negative weights and protection against precision loss.
-- **Error Propagation:** Division-free `sum_w2` statistical uncertainty propagation across arithmetic operations.
-- **Advanced Operations:** Continuous quantile interpolation, vector arithmetic (add, sub, mul, div, scale, normalize, rebin, slice, cdf).
-- **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format for reliable cross-platform data interchange.
-- **Memory Safety:** 100% leak-free, defensive pointer checks, and clear ownership semantics.
+- **Flexible Binning:** Uniform ($O(1)$) and Variable-width ($O(\log N)$) binning configurations with boundary-guarded floating-point indexing.
+- **Exact Online Moments:** Online weighted Welford moments for sample mean and variance with variance floor clamping and full support for negative weights.
+- **Statistical Uncertainty:** Division-free `sum_w2` statistical error tracking and propagation across arithmetic operations (addition, subtraction, multiplication, division).
+- **Comprehensive Summary Statistics:** Mean, variance, standard deviation, higher-order central moments ($M_k$), skewness, kurtosis, and excess kurtosis.
+- **Peak & Shape Characterization:** Discrete mode bin lookup, continuous 3-point parabolic peak interpolation, Full Width at Half Maximum (FWHM), and Root Mean Square (RMS).
+- **Robust Non-Parametric Measures:** Piecewise-linear quantile interpolation, Median, Interquartile Range (IQR), Median Absolute Deviation (MAD), Trimmed Mean, and Winsorized Mean.
+- **Two-Distribution Comparisons:** Weighted Chi-Square ($\chi^2$) test with degrees of freedom (NDF), Kolmogorov-Smirnov ($D$), 1D Wasserstein / Earth Mover's Distance ($W_1$), Kullback-Leibler (KL) divergence, and Bhattacharyya distance.
+- **Transformations & Arithmetic:** Element-wise vector arithmetic (`add`, `subtract`, `multiply`, `divide`), scalar scaling, normalization to target area, integer rebinning, slicing, and cumulative distribution functions (CDF).
+- **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format with automatic format migration (`histo_migrate_binary`) for cross-platform data interchange.
+- **Memory Safety & Portability:** Strict ISO C99, 100% leak-free, thread-safe concurrent queries, zero compiler warnings, and clean ASan/UBSan/TSan/Valgrind validation.
+
+---
 
 ## 5-Minute Quickstart
 
-Here's how to create a histogram, ingest data, extract statistics, and serialize the results:
+Here is a quick demonstration of creating a histogram, filling data, calculating statistics, and serializing to binary format:
 
 ```c
 #include <stdio.h>
 #include <histo/histo.h>
 
 int main(void) {
-    // 1. Create a uniform histogram: 100 bins from 0.0 to 100.0
-    // We enable sum_w2 tracking for statistical errors and exact online Welford moments.
+    // 1. Create a uniform histogram: 100 bins over [0.0, 100.0]
+    // Enable sum_w2 error tracking and exact online Welford statistics
     histo_t *h = histo_create_uniform(100, 0.0, 100.0, 
                                       HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
-    if (!h) return 1;
+    if (!h) {
+        fprintf(stderr, "Failed to allocate histogram\n");
+        return 1;
+    }
 
-    // 2. Ingest samples: unit weight and weighted
+    // 2. Ingest samples: unit weight and explicit weights
     histo_fill(h, 25.4);
-    histo_fill_w(h, 50.0, 2.5); // Fill value 50.0 with weight 2.5
+    histo_fill_w(h, 50.0, 2.5); // Fill coordinate 50.0 with weight 2.5
 
-    // 3. Batch ingestion from array
+    // 3. High-throughput batch ingestion from array
     double samples[3] = {12.0, 45.0, 88.0};
-    histo_fill_n(h, 3, samples, NULL); // NULL weights implies unit weights
+    histo_fill_n(h, 3, samples, NULL); // NULL weights implies unit weight (1.0)
 
-    // 4. Query statistics
-    double mean = 0.0, std_dev = 0.0, median = 0.0;
+    // 4. Query statistics and shape metrics
+    double mean = 0.0, std_dev = 0.0, median = 0.0, fwhm = 0.0;
     histo_mean(h, &mean);
     histo_std_dev(h, &std_dev);
     histo_median(h, &median);
-    printf("Mean: %.3f, Std Dev: %.3f, Median: %.3f\n", mean, std_dev, median);
+    histo_fwhm(h, &fwhm);
+    printf("Mean: %.3f | Std Dev: %.3f | Median: %.3f | FWHM: %.3f\n",
+           mean, std_dev, median, fwhm);
 
-    // 5. Binary serialization roundtrip
+    // 5. Binary serialization roundtrip (Canonical Little-Endian)
     void *buffer = NULL;
     size_t size = 0;
-    histo_serialize_binary(h, &buffer, &size);
-    histo_t *h_loaded = histo_deserialize_binary(buffer, size);
+    if (histo_serialize_binary(h, &buffer, &size) == HISTO_OK) {
+        histo_t *h_loaded = NULL;
+        if (histo_deserialize_binary(buffer, size, &h_loaded) == HISTO_OK) {
+            printf("Successfully reloaded histogram with %lu entries!\n",
+                   (unsigned long)histo_num_entries(h_loaded));
+            histo_destroy(h_loaded);
+        }
+        histo_free_buffer(buffer);
+    }
     
-    // 6. Clean teardown
-    histo_free_buffer(buffer);
-    histo_destroy(h_loaded);
+    // 6. Clean teardown (0 memory leaks)
     histo_destroy(h);
-    
     return 0;
 }
 ```
@@ -61,9 +76,11 @@ Compile with:
 gcc -O3 -std=c99 -Wall -Wextra -Iinclude example.c -Lbuild -lhisto -lm -o example
 ```
 
+---
+
 ## Integration with CMake
 
-You can easily integrate `libhisto` into your CMake project using `FetchContent` or `add_subdirectory`:
+Integrate `libhisto` into your CMake project using `FetchContent` or `add_subdirectory`:
 
 ### Using `FetchContent`
 ```cmake
@@ -84,87 +101,85 @@ add_subdirectory(path/to/libhisto)
 target_link_libraries(your_target PRIVATE libhisto::libhisto)
 ```
 
-## Core Concepts
+---
 
-- **Uniform vs. Variable Bins:** Uniform binning divides a range into equally sized segments, enabling blazing-fast O(1) bin lookups. Variable binning allows custom, monotonically increasing bin edges, utilizing a highly optimized O(log N) bisection binary search.
-- **`sum_w2` Statistical Uncertainties:** `libhisto` accurately tracks the sum of squared weights (`sum_w2`) for each bin. This provides reliable statistical error bars on your data and enables robust, division-free error propagation during histogram arithmetic (like multiplication and division).
-- **Exact Online Welford Moments:** When enabled, the library computes running mean and variance continuously as data streams in, without ever needing to store the individual samples or make a second pass. It natively supports negative weights and utilizes Welford's numerically stable algorithm to prevent precision loss and catastrophic cancellation.
+## Core Architectural Concepts
+
+- **Uniform vs. Variable Bins:**
+  - *Uniform Binning*: Divides range $[x_{\min}, x_{\max})$ into equal widths, enabling $O(1)$ lookups via boundary-guarded reciprocal multiplication.
+  - *Variable Binning*: Allows arbitrary monotonically increasing bin edges, utilizing an optimized $O(\log N)$ bisection binary search.
+- **Statistical Uncertainty (`sum_w2`):**
+  - Accurately tracks per-bin $\sum w_i^2$, providing statistical error bars ($\sigma_i = \sqrt{\sum w_i^2}$) and enabling division-free error propagation for histogram products and quotients.
+- **Exact Online Welford Moments:**
+  - When `HISTO_FLAG_EXACT_MOMENTS` is active, running mean and $M_2$ are updated in $O(1)$ on every fill without sample storage or bin discretization artifacts.
+- **Robust & Distribution Comparison Metrics:**
+  - Compute higher-order moments (skewness, kurtosis), robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and measure statistical distances ($\chi^2$, Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, Bhattacharyya) between histograms with matching geometry.
+
+---
 
 ## Performance Envelope
 
-Real measured benchmarks demonstrating `libhisto`'s throughput:
+Measured benchmarks on modern x86_64 architecture:
 
-- **Batch Ingestion:** ~93.1 Mops/s (10.7 ns/sample)
-- **Single Fill:** ~45.6 Mops/s (21.9 ns/op)
-- **Weighted Fill with sum_w2:** ~43.1 Mops/s (23.2 ns/op)
-- **Variable Bin Binary Search (100 bins):** ~22.2 Mops/s (45.0 ns/op)
-- **Binary Serialization:** ~13,500 serializations/sec (10k bins)
+| Operation | Throughput | Latency |
+| :--- | :--- | :--- |
+| **Batch Ingestion (`histo_fill_n`)** | ~93.1 Mops/s | 10.7 ns/sample |
+| **Single Fill (`histo_fill`)** | ~45.6 Mops/s | 21.9 ns/op |
+| **Weighted Fill + `sum_w2` (`histo_fill_w`)** | ~43.1 Mops/s | 23.2 ns/op |
+| **Variable Bin Lookup (100 bins)** | ~22.2 Mops/s | 45.0 ns/op |
+| **Binary Serialization (10k bins)** | ~13,500 saves/s | 74.0 µs/op |
+| **Quantile Scan / CDF Interpolation** | ~12.5 Mops/s | 80.0 ns/op |
 
-## Dependencies
+---
 
-- **Core Library:** Zero external dependencies (ISO C99 standard library only).
+## Dependencies & Requirements
+
+- **Core Library:** Zero external dependencies (strict ISO C99 standard library only: `math.h`, `stdint.h`, `stdbool.h`, `stdlib.h`, `string.h`).
 - **Build System:** CMake 3.15+ (Required).
-- **Documentation:** Doxygen 1.9+ & Graphviz (Optional, for generating HTML manual).
-- **Testing:** Unity (Bundled in `tests/vendor/unity`, for test runner).
+- **Testing:** Unity (Bundled in `tests/vendor/unity`).
+- **Documentation:** Doxygen 1.9+ & MathJax (Optional, for generating HTML manual).
 
-## Build Instructions & Targets
+---
 
-The build system relies on CMake. You can use standard CMake commands or the provided Makefile wrappers.
+## Build Targets & Development Guide
 
-- **Build library (`libhisto.a`):**
-  ```bash
-  make build
-  # or
-  cmake -B build -S . && cmake --build build
-  ```
-- **Run tests:**
-  ```bash
-  make test
-  # or
-  ctest --test-dir build --output-on-failure
-  ```
-- **Run tests with AddressSanitizer (ASan):**
-  ```bash
-  make test-asan
-  # or
-  cmake -B build-asan -S . -DLIBHISTO_ENABLE_ASAN=ON && cmake --build build-asan && ctest --test-dir build-asan --output-on-failure
-  ```
-- **Run tests with ThreadSanitizer (TSan):**
-  ```bash
-  make test-tsan
-  # or
-  cmake -B build-tsan -S . -DLIBHISTO_ENABLE_TSAN=ON && cmake --build build-tsan && ctest --test-dir build-tsan --output-on-failure
-  ```
-- **Run tests with MemorySanitizer (MSan) (Clang only):**
-  ```bash
-  make test-msan
-  # or
-  cmake -B build-msan -S . -DLIBHISTO_ENABLE_MSAN=ON && cmake --build build-msan && ctest --test-dir build-msan --output-on-failure
-  ```
-- **Run tests under Valgrind memcheck:**
-  ```bash
-  make memcheck
-  # or
-  make test-valgrind
-  ```
-- **Generate documentation:**
-  ```bash
-  make docs
-  # or
-  cmake --build build --target docs
-  # Output: build/docs/html/index.html
-  ```
-- **Run benchmarks:**
-  ```bash
-  ./build/bench/bench_histo
-  ```
-- **Run quickstart example:**
-  ```bash
-  ./build/examples/quickstart
-  ```
+Build and test using standard CMake or the provided `Makefile`:
+
+```bash
+# Build static library (libhisto.a)
+make build
+# or: cmake -B build -S . && cmake --build build
+
+# Run unit and integration test suite
+make test
+# or: ctest --test-dir build --output-on-failure
+
+# Run tests under AddressSanitizer (ASan) & UBSan
+make test-asan
+
+# Run tests under ThreadSanitizer (TSan)
+make test-tsan
+
+# Run tests under MemorySanitizer (MSan) (Clang only)
+make test-msan
+
+# Run tests under Valgrind Memcheck
+make memcheck
+
+# Run benchmark suite
+./build/bench/bench_histo
+
+# Run quickstart example
+./build/examples/quickstart
+
+# Generate HTML documentation (outputs to docs/html/index.html)
+make docs
+```
+
+---
 
 ## License and Author
 
-**License:** [MIT License](LICENSE)
+- **License:** [MIT License](LICENSE)
+- **Author:** Steffen Mueller
 
-**Author:** Steffen Mueller

@@ -1,25 +1,25 @@
 # libhisto User Manual & Architecture Reference {#mainpage}
 
-Welcome to **libhisto**! This guide will help you understand the core concepts, start building applications quickly, and dive into the advanced numerical algorithms that power the library.
+Welcome to **libhisto**! This guide covers the core concepts, user recipes, advanced statistical algorithms, and computational complexity characteristics of the library.
 
 ## 1. Introduction
 
-`libhisto` is a high-performance, portable, memory-safe 1D histogramming library implemented in ISO C99. Whether you're working on high-throughput scientific analysis, physical simulations, telemetry ingestion, or general statistical computing, `libhisto` is built to provide reliable, exact results at incredible speeds.
+`libhisto` is a high-performance, portable, memory-safe 1D histogramming library implemented in strict ISO C99. Designed for high-throughput scientific analysis, physical simulations, telemetry ingestion, and general statistical computing, `libhisto` provides mathematically exact results, division-free error propagation, and microsecond-level serialization.
 
 ### Key Architectural Pillars
-- **Zero-Allocation Ingestion**: Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`) perform zero heap allocations, achieving >30 Million fills/second.
-- **Strict ISO C99 & Memory Safety**: Defensive pointer checks on all public APIs, clear destructor ownership semantics (`histo_destroy`), and 100% leak-free ASan/UBSan verification.
-- **Deterministic Endian-Safe Wire Format**: Canonical 256-byte header with Little-Endian IEEE-754 data payloads for cross-platform serialization.
-- **Exact & Numerically Stable Statistics**: Online weighted Welford accumulation, division-free error propagation, and machine-epsilon boundary guards.
+- **Zero-Allocation Ingestion**: Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`) perform zero heap allocations in their hot paths, processing >90 Million fills/second in batch mode.
+- **Strict ISO C99 & Memory Safety**: Defensive pointer checks on all public APIs, clear destructor ownership semantics (`histo_destroy`, `histo_free_buffer`), and 100% leak-free ASan/UBSan/Valgrind verification.
+- **Deterministic Endian-Safe Wire Format**: Canonical 256-byte header with Little-Endian IEEE-754 data payloads and automatic version migration (`histo_migrate_binary`).
+- **Comprehensive Statistical Analysis**: Online weighted Welford accumulation, two-pass higher-order central moments, sub-bin parabolic peak mode estimation, robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and two-distribution comparison metrics (\f$\chi^2\f$, KS, Wasserstein-1D, KL divergence, Bhattacharyya).
 
 ---
 
 ## 2. Core Concepts: Binning Visualized
 
-Understanding how `libhisto` organizes data is crucial. We support two primary binning strategies:
+`libhisto` supports two distinct binning models configured at histogram creation:
 
-### Uniform Binning
-Uniform bins divide a range into equally sized intervals. This allows for blazing-fast O(1) mathematical lookups.
+### Uniform Binning (`HISTO_BIN_UNIFORM`)
+Uniform bins divide the domain \f$[x_{\min}, x_{\max})\f$ into \f$N\f$ equidistant intervals of width \f$\Delta = (x_{\max} - x_{\min}) / N\f$. Lookups execute in \f$O(1)\f$ time via boundary-guarded reciprocal multiplication.
 
 ```text
        [ Bin 0 )   [ Bin 1 )   [ Bin 2 )   [ Bin 3 )
@@ -27,8 +27,8 @@ Uniform bins divide a range into equally sized intervals. This allows for blazin
    0.0          2.5         5.0         7.5        10.0
 ```
 
-### Variable Binning
-Variable bins allow you to define custom boundaries. This is useful when you need higher resolution in specific regions. Lookups use an optimized O(log N) binary search.
+### Variable Binning (`HISTO_BIN_VARIABLE`)
+Variable binning allows arbitrary, strictly monotonic boundary edges \f$e_0 < e_1 < \dots < e_N\f$. Lookups execute in \f$O(\log N)\f$ time using an optimized bisection binary search.
 
 ```text
        [ B0 ) [B1)       [   Bin 2   )  [  Bin 3  )
@@ -40,15 +40,15 @@ Variable bins allow you to define custom boundaries. This is useful when you nee
 
 ## 3. Quickstart Walkthrough
 
-Here is a comprehensive 5-minute quickstart demonstrating the lifecycle of a histogram, from creation to teardown.
+The following self-contained C99 program illustrates creating a histogram, filling data, computing statistical moments, and performing a binary serialization roundtrip:
 
 ```c
 #include <stdio.h>
 #include <histo/histo.h>
 
 int main(void) {
-    // 1. Create a uniform histogram: 100 bins from 0.0 to 100.0
-    // We enable sum_w2 tracking for statistical errors and exact online Welford moments.
+    // 1. Create a uniform histogram: 100 bins over [0.0, 100.0]
+    // Enable sum_w2 error tracking and exact online Welford statistics
     histo_t *h = histo_create_uniform(100, 0.0, 100.0, 
                                       HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
     if (!h) {
@@ -58,54 +58,57 @@ int main(void) {
 
     // 2. Ingest individual samples (unit weight and weighted)
     histo_fill(h, 25.4);
-    histo_fill_w(h, 50.0, 2.5); // Fill value 50.0 with weight 2.5
+    histo_fill_w(h, 50.0, 2.5); // Fill coordinate 50.0 with weight 2.5
 
     // 3. Batch ingestion from array
     double samples[3] = {12.0, 45.0, 88.0};
     histo_fill_n(h, 3, samples, NULL); // NULL weights implies unit weights
 
-    // 4. Query statistics
-    double mean = 0.0, std_dev = 0.0, median = 0.0;
+    // 4. Query statistics and shape
+    double mean = 0.0, std_dev = 0.0, median = 0.0, fwhm = 0.0;
     histo_mean(h, &mean);
     histo_std_dev(h, &std_dev);
     histo_median(h, &median);
+    histo_fwhm(h, &fwhm);
 
-    printf("Mean: %.3f, Std Dev: %.3f, Median: %.3f\n", mean, std_dev, median);
+    printf("Mean: %.3f | Std Dev: %.3f | Median: %.3f | FWHM: %.3f\n", 
+           mean, std_dev, median, fwhm);
 
     // 5. Binary serialization roundtrip
     void *buffer = NULL;
     size_t size = 0;
-    histo_serialize_binary(h, &buffer, &size);
-    histo_t *h_loaded = histo_deserialize_binary(buffer, size);
+    if (histo_serialize_binary(h, &buffer, &size) == HISTO_OK) {
+        histo_t *h_loaded = NULL;
+        if (histo_deserialize_binary(buffer, size, &h_loaded) == HISTO_OK) {
+            printf("Reloaded histogram total weight: %.2f\n", histo_total_weight(h_loaded));
+            histo_destroy(h_loaded);
+        }
+        histo_free_buffer(buffer);
+    }
     
-    // 6. Clean teardown
-    histo_free_buffer(buffer);
-    histo_destroy(h_loaded);
+    // 6. Clean teardown (0 memory leaks)
     histo_destroy(h);
-
     return 0;
 }
 ```
 
 ---
 
-## 4. Common Recipes
+## 4. Practical Recipes
 
-### 4.1 Weighted Monte Carlo Events
-When processing Monte Carlo simulations, events often come with statistical weights. `libhisto` tracks the squared weights (`sum_w2`) to accurately report statistical errors.
+### 4.1 Weighted Monte Carlo Events & Uncertainties
+When processing Monte Carlo simulations, events typically have non-unit statistical weights. Enabling `HISTO_FLAG_TRACK_SUMW2` ensures that statistical errors are tracked per bin:
 
 ```c
-// Creating histogram with error tracking enabled
 histo_t *mc_hist = histo_create_uniform(50, -5.0, 5.0, HISTO_FLAG_TRACK_SUMW2);
 
-// Simulating loop over events
 for (size_t i = 0; i < num_events; ++i) {
     double value = get_event_value(i);
     double weight = get_event_weight(i);
     histo_fill_w(mc_hist, value, weight);
 }
 
-// Extracting bin 10 content and statistical error
+// Query bin content and error
 double content = 0.0, error = 0.0;
 histo_bin_content(mc_hist, 10, &content);
 histo_bin_error(mc_hist, 10, &error);
@@ -113,65 +116,148 @@ printf("Bin 10: %.3f +/- %.3f\n", content, error);
 ```
 
 ### 4.2 High-Throughput Batch Array Ingestion
-For maximum performance, ingest data in batches rather than calling `histo_fill` individually.
+For maximum performance with vectorized telemetry feeds or simulation outputs, ingest contiguous or strided memory buffers:
 
 ```c
 double values[1000];
 double weights[1000];
-// ... populate values and weights ...
+// Populate values and weights ...
 
-// Ingest 1000 weighted samples simultaneously
+// Contiguous batch ingestion
 histo_fill_n(h, 1000, values, weights);
+
+// Strided ingestion for Array-of-Structs (AoS) data layouts
+struct Particle {
+    double x, y, z;
+    double energy;
+    double weight;
+};
+struct Particle particles[500];
+
+histo_fill_strided(h, 500,
+                   &particles[0].energy, sizeof(struct Particle),
+                   &particles[0].weight, sizeof(struct Particle));
 ```
 
-### 4.3 Binary Save and Load
-You can serialize histograms to disk for later analysis. `libhisto` guarantees cross-platform compatibility.
+### 4.3 Binary Save, Load, and Version Migration
+Save histograms to files with portable Canonical Little-Endian encoding. Old binary formats (e.g. v1) are automatically migrated:
 
 ```c
-// Save to file
-void *buffer = NULL;
+// Saving to file
+void *buf = NULL;
 size_t size = 0;
-histo_serialize_binary(h, &buffer, &size);
+if (histo_serialize_binary(h, &buf, &size) == HISTO_OK) {
+    FILE *f = fopen("histogram.dat", "wb");
+    if (f) {
+        fwrite(buf, 1, size, f);
+        fclose(f);
+    }
+    histo_free_buffer(buf);
+}
 
-FILE *f = fopen("histogram.dat", "wb");
-fwrite(buffer, 1, size, f);
-fclose(f);
-histo_free_buffer(buffer);
+// Loading from file
+FILE *f = fopen("histogram.dat", "rb");
+if (f) {
+    fseek(f, 0, SEEK_END);
+    size_t file_size = (size_t)ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-// Load from file
-f = fopen("histogram.dat", "rb");
-fseek(f, 0, SEEK_END);
-size_t file_size = ftell(f);
-fseek(f, 0, SEEK_SET);
+    void *load_buf = malloc(file_size);
+    if (load_buf && fread(load_buf, 1, file_size, f) == file_size) {
+        histo_t *loaded = NULL;
+        if (histo_deserialize_binary(load_buf, file_size, &loaded) == HISTO_OK) {
+            printf("Loaded %u bins successfully\n", histo_nbins(loaded));
+            histo_destroy(loaded);
+        }
+    }
+    free(load_buf);
+    fclose(f);
+}
+```
 
-void *load_buf = malloc(file_size);
-fread(load_buf, 1, file_size, f);
-fclose(f);
+### 4.4 Higher-Order Moments & Peak/Shape Analysis
+Extract distribution asymmetry (skewness), tail heaviness (kurtosis), dominant peak width (FWHM), continuous peak coordinate, and Root Mean Square (RMS):
 
-histo_t *loaded_hist = histo_deserialize_binary(load_buf, file_size);
-free(load_buf);
+```c
+double skewness = 0.0, excess_kurtosis = 0.0;
+histo_skewness(h, &skewness);
+histo_excess_kurtosis(h, &excess_kurtosis);
+
+double peak_mode = 0.0, fwhm = 0.0, rms = 0.0;
+histo_mode_continuous(h, &peak_mode); // 3-point parabolic peak interpolation
+histo_fwhm(h, &fwhm);                 // Full Width at Half Maximum
+histo_rms(h, &rms);                   // Root Mean Square
+
+printf("Peak @ %.3f | FWHM: %.3f | Skewness: %.3f | Exc Kurtosis: %.3f | RMS: %.3f\n",
+       peak_mode, fwhm, skewness, excess_kurtosis, rms);
+```
+
+### 4.5 Robust Non-Parametric & Dispersion Statistics
+When dealing with heavy-tailed or outlier-prone distributions, robust location and dispersion metrics provide resistant estimators:
+
+```c
+double iqr = 0.0, mad = 0.0;
+histo_iqr(h, &iqr); // Interquartile Range (Q75 - Q25)
+histo_mad(h, &mad); // Median Absolute Deviation: median(|x - median|)
+
+double trimmed = 0.0, winsorized = 0.0;
+// 10% trimmed and Winsorized mean (between 10th and 90th percentiles)
+histo_trimmed_mean(h, 0.10, 0.90, &trimmed);
+histo_winsorized_mean(h, 0.10, 0.90, &winsorized);
+
+printf("IQR: %.3f | MAD: %.3f | 10%% Trimmed Mean: %.3f | Winsorized Mean: %.3f\n",
+       iqr, mad, trimmed, winsorized);
+```
+
+### 4.6 Comparing Distributions & Statistical Distances
+Compare two histograms with matching binning geometries using hypothesis tests and distance metrics:
+
+```c
+// 1. Chi-Square goodness-of-fit / compatibility
+double chi2 = 0.0;
+uint32_t ndf = 0;
+histo_cmp_chi2(h1, h2, &chi2, &ndf);
+
+// 2. Kolmogorov-Smirnov supremum CDF distance
+double ks_stat = 0.0;
+histo_cmp_ks(h1, h2, &ks_stat);
+
+// 3. 1D Wasserstein / Earth Mover's Distance (L1 distance between CDFs)
+double emd = 0.0;
+histo_cmp_wasserstein_1d(h1, h2, &emd);
+
+// 4. Kullback-Leibler divergence (D_KL(h1 || h2)) in nats
+double kl_div = 0.0;
+histo_cmp_kl_divergence(h1, h2, &kl_div);
+
+// 5. Bhattacharyya distance (-ln(BC))
+double bhatt_dist = 0.0;
+histo_cmp_bhattacharyya(h1, h2, &bhatt_dist);
+
+printf("Chi2/NDF: %.2f/%u | KS: %.4f | EMD: %.4f | KL: %.4f | Bhatt: %.4f\n",
+       chi2, ndf, ks_stat, emd, kl_div, bhatt_dist);
 ```
 
 ---
 
 ## 5. Numerical Algorithms & Statistical Formulations
 
-### 5.1 Boundary-Guarded Uniform Bin Lookup (O(1))
-For uniform binning over [min, max), naive floating-point division `(x - min) / width` is susceptible to floating-point truncation errors at exact bin boundaries. `libhisto` computes the provisional index via reciprocal multiplication:
+### 5.1 Boundary-Guarded Uniform Bin Lookup (\f$O(1)\f$)
+For uniform binning over \f$[x_{\min}, x_{\max})\f$, naive floating-point division `(x - min) / width` is susceptible to floating-point truncation errors at exact bin boundaries. `libhisto` computes the candidate provisional index via reciprocal multiplication:
 \f[
 i_{\text{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
 \f]
 Followed by dual neighbor verification against machine-precision boundary limits:
-- **Upper Guard**: If \f$ x \ge x_{\min} + (i_{\text{prov}} + 1) \Delta \f$, \f$ i = i_{\text{prov}} + 1 \f$.
-- **Lower Guard**: If \f$ x < x_{\min} + i_{\text{prov}} \Delta \f$, \f$ i = i_{\text{prov}} - 1 \f$.
-If \f$ \Delta^{-1} \f$ overflows to infinity on subnormal ranges, lookup falls back cleanly to division.
+- **Upper Guard**: If \f$ x \ge x_{\min} + (i_{\text{prov}} + 1) \Delta \f$, then \f$ i = i_{\text{prov}} + 1 \f$.
+- **Lower Guard**: If \f$ x < x_{\min} + i_{\text{prov}} \Delta \f$, then \f$ i = i_{\text{prov}} - 1 \f$.
+If \f$ \Delta^{-1} \f$ overflows to infinity on subnormal ranges, lookup falls back cleanly to robust division.
 
-### 5.2 Variable-Width Bisection Binary Search (O(log N))
+### 5.2 Variable-Width Bisection Binary Search (\f$O(\log N)\f$)
 For variable binning defined by monotonic edges \f$ e_0 < e_1 < \dots < e_N \f$, bin lookup uses bisection search on \f$ [0, N) \f$:
 - Invariant: \f$ x \in [e_i, e_{i+1}) \f$ with exact matching at \f$ e_0 = x_{\min} \f$ and \f$ e_N = x_{\max} \f$.
 - Guaranteed \f$ O(\log N) \f$ time and \f$ O(1) \f$ auxiliary space.
 
-### 5.3 Online Weighted Welford Statistics (O(1))
+### 5.3 Online Weighted Welford Statistics (\f$O(1)\f$)
 When `HISTO_FLAG_EXACT_MOMENTS` is enabled, running moments are accumulated without storing historical samples:
 \f[
 W_{\text{new}} = W_{\text{old}} + w_i
@@ -185,27 +271,51 @@ W_{\text{new}} = W_{\text{old}} + w_i
 \f[
 M_{2, \text{new}} = M_{2, \text{old}} + w_i \delta (x_i - \mu_{\text{new}})
 \f]
-Variance is extracted as \f$ \sigma^2 = M_2 / W \f$. The algorithm natively supports negative event weights and avoids variance underflow via \f$ M_2 \ge 0 \f$ clamping.
+Variance is extracted as \f$ \sigma^2 = M_2 / W \f$. The algorithm natively supports negative event weights and avoids variance underflow via \f$ M_2 = \max(0.0, M_2) \f$ clamping.
 
-### 5.4 Non-Empty Support Linear Quantile Interpolation (O(N))
+### 5.4 Higher-Order Central Moments & Shape Formulations (\f$O(N)\f$)
+For orders \f$ k \ge 2 \f$, central moments are computed using a two-pass algorithm over active bin centers:
+\f[
+M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
+\f]
+- **Skewness** (\f$ \gamma_1 \f$): \f$ \gamma_1 = \frac{M_3}{M_2^{3/2}} = \frac{M_3}{\sigma^3} \f$
+- **Kurtosis** (\f$ \beta_2 \f$): \f$ \beta_2 = \frac{M_4}{M_2^2} = \frac{M_4}{\sigma^4} \f$
+- **Excess Kurtosis** (\f$ \gamma_2 \f$): \f$ \gamma_2 = \beta_2 - 3.0 \f$ (equals 0.0 for normal distributions).
+
+### 5.5 Continuous Parabolic Peak Mode & FWHM (\f$O(N)\f$)
+- **Continuous Mode**: Identifies mode bin \f$ m \f$ having maximum weight \f$ w_m \f$. For uniform histograms, fits a parabola through \f$ (x_{m-1}, w_{m-1}), (x_m, w_m), (x_{m+1}, w_{m+1}) \f$:
+\f[
+\delta = \frac{1}{2} \frac{w_{m+1} - w_{m-1}}{2 w_m - w_{m-1} - w_{m+1}}, \quad x_{\text{mode}} = x_{c, m} + \delta \cdot \Delta
+\f]
+- **FWHM**: Scans outward from the mode bin to find the left and right crossings where \f$ w(x) = \frac{1}{2} w_{\text{max}} \f$, linearly interpolating between bin centers.
+
+### 5.6 Non-Empty Support Linear Quantile & Dispersion (\f$O(N)\f$)
 Quantile coordinates \f$ Q(p) = F^{-1}(p) \f$ for \f$ p \in [0.0, 1.0] \f$ are evaluated using continuous inverse CDF interpolation:
 - Targets cumulative mass \f$ T = p \cdot W_{\text{total}} \f$.
-- Locates bin \f$ i \f$ where \f$ \sum_{j=0}^{i-1} w_j < T \le \sum_{j=0}^i w_j \f$.
-- Computes within-bin linear coordinate:
+- Locates non-empty bin \f$ i \f$ where \f$ \sum_{j=0}^{i-1} w_j < T \le \sum_{j=0}^i w_j \f$.
+- Computes intra-bin linear coordinate:
 \f[
 Q(p) = \text{low}_i + \frac{T - \sum_{j=0}^{i-1} w_j}{w_i} (\text{high}_i - \text{low}_i)
 \f]
+- **MAD**: Evaluates median deviation \f$ d_i = |x_{c, i} - \text{median}| \f$, sorts weighted pairs in \f$ O(N \log N) \f$, and finds the 50th percentile of absolute deviations.
 
-### 5.5 Division-Free Error Propagation (O(N))
+### 5.7 Division-Free Error Propagation (\f$O(N)\f$)
 When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division (\f$ H = A / B \f$), statistical uncertainties are propagated without intermediate divisions:
 - **Product Uncertainty**:
 \f[
-\sigma_{A \cdot B}^2 = B^2 \sigma_A^2 + A^2 \sigma_B^2
+\text{sum\_w2}_{A \cdot B, i} = B_i^2 \, \text{sum\_w2}_{A, i} + A_i^2 \, \text{sum\_w2}_{B, i}
 \f]
 - **Quotient Uncertainty**:
 \f[
-\sigma_{A / B}^2 = \frac{B^2 \sigma_A^2 + A^2 \sigma_B^2}{B^4}
+\text{sum\_w2}_{A / B, i} = \frac{\text{sum\_w2}_{A, i} \, B_i^2 + \text{sum\_w2}_{B, i} \, A_i^2}{B_i^4}
 \f]
+
+### 5.8 Two-Distribution Comparison Metrics (\f$O(N)\f$)
+- **Weighted Chi-Square**: \f$ \chi^2 = \sum_{i} \frac{(w_{1,i} - w_{2,i})^2}{\sigma_{1,i}^2 + \sigma_{2,i}^2} \f$ with \f$ \text{NDF} \f$ matching the number of non-zero variance bins.
+- **Kolmogorov-Smirnov**: \f$ D = \max_i |F_1(x_i) - F_2(x_i)| \f$ over normalized empirical CDFs.
+- **1D Wasserstein (EMD)**: \f$ W_1 = \int |F_1(x) - F_2(x)| \, dx = \sum_i |F_1(x_i) - F_2(x_i)| \Delta x_i \f$.
+- **KL Divergence**: \f$ D_{\text{KL}}(P \parallel Q) = \sum_{i} P_i \ln \frac{P_i}{Q_i} \f$ (with \f$ \epsilon = 10^{-12} \f$ floor for zero target bins).
+- **Bhattacharyya Distance**: \f$ D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \f$.
 
 ---
 
@@ -213,42 +323,42 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 
 | Function | Time Complexity | Space Complexity | Description |
 | :--- | :--- | :--- | :--- |
-| `histo_create_uniform` | O(N) | O(N) | Allocates and zeroes N bins |
-| `histo_create_variable` | O(N) | O(N) | Validates edges and allocates N bins |
-| `histo_destroy` | O(1) | O(1) | Deallocates histogram and buffers |
-| `histo_clone` | O(N) | O(N) | Deep copies geometry, bins, and moments |
-| `histo_reset` | O(N) | O(1) | Zeroes all bins and resets accumulators |
-| `histo_find_bin` (Uniform) | O(1) | O(1) | Boundary-guarded reciprocal lookup |
-| `histo_find_bin` (Variable) | O(log N) | O(1) | Binary search over monotonic edges |
-| `histo_fill` / `histo_fill_w` (Uniform) | O(1) | O(1) | Constant-time bin increment |
+| `histo_create_uniform` | O(N) | O(N) | Allocates and zeroes N equidistant bins |
+| `histo_create_variable` | O(N) | O(N) | Validates monotonic edges and allocates N bins |
+| `histo_destroy` | O(1) | O(1) | Deallocates histogram structure and bin arrays |
+| `histo_clone` | O(N) | O(N) | Deep copies geometry, bin contents, and moments |
+| `histo_reset` | O(N) | O(1) | Zeroes all bins and resets statistical accumulators |
+| `histo_find_bin` (Uniform) | O(1) | O(1) | Boundary-guarded fast reciprocal lookup |
+| `histo_find_bin` (Variable) | O(log N) | O(1) | Monotonic bisection binary search |
+| `histo_fill` / `histo_fill_w` (Uniform) | O(1) | O(1) | Constant-time bin and accumulator increment |
 | `histo_fill` / `histo_fill_w` (Variable) | O(log N) | O(1) | Binary search + bin increment |
-| `histo_fill_n` / `histo_fill_strided` | O(K * L) | O(1) | Batch ingest K samples (L is lookup cost) |
+| `histo_fill_n` / `histo_fill_strided` | O(K * L) | O(1) | Batch ingest K samples (L = 1 or log N) |
 | `histo_fill_bin` | O(1) | O(1) | Direct indexed bin accumulation |
-| `histo_nbins` / `histo_bin_type` / `histo_range` | O(1) | O(1) | Header field accessor |
-| `histo_bin_bounds` / `histo_bin_center` | O(1) | O(1) | Boundary interval / midpoint query |
-| `histo_bin_content` / `histo_bin_error` / `histo_bin_sum_w2` | O(1) | O(1) | Bin value and uncertainty query |
-| `histo_total_weight` / `histo_n_fills` / counters | O(1) | O(1) | Summary accumulator accessors |
-| `histo_mean` / `histo_variance` (Exact Moments) | O(1) | O(1) | Direct return from Welford accumulator |
+| `histo_nbins` / `histo_bin_type` / `histo_range` | O(1) | O(1) | Header field query |
+| `histo_bin_bounds` / `histo_bin_center` | O(1) | O(1) | Boundary coordinate / midpoint calculation |
+| `histo_bin_content` / `histo_bin_error` / `histo_bin_sum_w2` | O(1) | O(1) | Bin content and statistical uncertainty query |
+| `histo_total_weight` / `histo_num_entries` / counters | O(1) | O(1) | Summary accumulator accessors |
+| `histo_mean` / `histo_variance` (Exact Moments) | O(1) | O(1) | Direct query from online Welford accumulators |
 | `histo_mean` / `histo_variance` (Two-Pass) | O(N) | O(1) | Two-pass bin-center moments calculation |
 | `histo_std_dev` | O(1) or O(N) | O(1) | Square root of variance |
 | `histo_central_moment` | O(N) | O(1) | Two-pass calculation of k-th central moment |
-| `histo_skewness` / `histo_kurtosis` / `histo_excess_kurtosis` | O(N) | O(1) | Standardized higher-order central moments |
-| `histo_mode_bin` | O(N) | O(1) | Scans for maximum weight bin |
+| `histo_skewness` / `histo_kurtosis` / `histo_excess_kurtosis` | O(N) | O(1) | Higher-order standardized moments |
+| `histo_mode_bin` | O(N) | O(1) | Linear scan for maximum weight bin |
 | `histo_mode_continuous` | O(N) | O(1) | 3-point parabolic peak vertex interpolation |
-| `histo_fwhm` | O(N) | O(1) | Full Width at Half Maximum edge crossing scan |
+| `histo_fwhm` | O(N) | O(1) | Full Width at Half Maximum linear edge crossings |
 | `histo_rms` | O(N) or O(1) | O(1) | Root Mean Square: sqrt(variance + mean^2) |
 | `histo_quantile` / `histo_median` | O(N) | O(1) | Single-pass cumulative CDF scan |
 | `histo_iqr` | O(N) | O(1) | Interquartile Range: Q75 - Q25 |
 | `histo_mad` | O(N log N) | O(N) | Median Absolute Deviation from median |
 | `histo_trimmed_mean` | O(N) | O(1) | Truncated mean across percentile interval |
 | `histo_winsorized_mean` | O(N) | O(1) | Outlier-clamped Winsorized mean |
+| `histo_integral` | O(M) | O(1) | Sum over M <= N bins |
+| `histo_get_stats` | O(N) | O(1) | Aggregates moments, range limits, and median |
 | `histo_cmp_chi2` | O(N) | O(1) | Weighted Chi-Square test statistic & NDF |
 | `histo_cmp_ks` | O(N) | O(1) | Kolmogorov-Smirnov maximum vertical CDF metric |
 | `histo_cmp_wasserstein_1d` | O(N) | O(1) | 1D Earth Mover's Distance / L1 CDF integral |
 | `histo_cmp_kl_divergence` | O(N) | O(1) | Kullback-Leibler relative entropy in nats |
 | `histo_cmp_bhattacharyya` | O(N) | O(1) | Bhattacharyya distance between distributions |
-| `histo_integral` | O(M) | O(1) | Sum over M <= N bins |
-| `histo_get_stats` | O(N) | O(1) | Aggregates moments, min/max, and median |
 | `histo_add` / `histo_subtract` | O(N) | O(1) | Element-wise vector arithmetic and moment update |
 | `histo_multiply` / `histo_divide` | O(N) | O(1) | Element-wise arithmetic + sum_w2 error propagation |
 | `histo_scale` | O(N) | O(1) | Linear scaling of all bins and moments |
@@ -256,9 +366,9 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 | `histo_rebin` | O(N) | O(N / k) | Allocates and merges adjacent uniform bins |
 | `histo_slice` | O(M) | O(M) | Allocates sub-range histogram of M bins |
 | `histo_cdf` | O(N) | O(N) | Allocates prefix-sum CDF histogram |
-| `histo_serialize_binary_size` | O(1) | O(1) | Header (256B) + bin payload size calculation |
+| `histo_serialize_binary_size` | O(1) | O(1) | Header (256B) + payload size calculation |
 | `histo_serialize_binary_into` | O(N) | O(1) | Encodes Little-Endian wire format into caller buffer |
 | `histo_serialize_binary` | O(N) | O(N) | Allocates buffer and encodes wire format |
 | `histo_deserialize_binary` | O(N) | O(N) | Decodes wire format into newly allocated histogram |
 | `histo_migrate_binary` | O(N) | O(N) | Migrates older binary format buffers to current version |
-| `histo_free_buffer` | O(1) | O(1) | Deallocates serialization buffer |
+| `histo_free_buffer` | O(1) | O(1) | Deallocates library-allocated serialization buffer |

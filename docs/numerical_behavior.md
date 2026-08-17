@@ -1,22 +1,23 @@
 # Design Specification: Numerical Behavior, Precision & Error Handling
 
-This document specifies the exact numerical semantics, IEEE-754 edge case policies, boundary conventions, and error-handling strategies for `libhisto`.
+This document specifies the exact numerical semantics, IEEE-754 floating-point edge case policies, boundary conventions, and error-handling strategies implemented in `libhisto`.
 
 ---
 
 ## 1. IEEE-754 Floating-Point Policies
 
-All floating-point coordinates, weights, and accumulators in `libhisto` utilize 64-bit double precision (`double`).
+All coordinates, weights, and statistical accumulators in `libhisto` utilize standard IEEE-754 64-bit double-precision floating-point numbers (`double`).
 
-### 1.1 Non-Finite & Special Values
-| Value | Single Fill (`histo_fill`/`histo_fill_w`) | Batch Fill (`histo_fill_n`/`histo_fill_strided`) | Range / Bin Query |
+### 1.1 Non-Finite & Special Values Matrix
+
+| Value / Condition | Single Fill (`histo_fill`/`histo_fill_w`) | Batch Fill (`histo_fill_n`/`histo_fill_strided`) | Range / Bin Query (`histo_find_bin`) |
 | :--- | :--- | :--- | :--- |
 | **`NaN`** (Quiet or Signaling) | Rejects indexing. Increments `n_nan`. Returns `HISTO_ERR_NON_FINITE`. Never mutates bins. | Increments `n_nan`. Skips sample and continues loop. Returns `HISTO_WARN_NON_FINITE`. | Returns `HISTO_ERR_NON_FINITE` and `*out_bin = -1`. |
 | **`+Infinity`** | Categorized as **overflow**. Increments `overflow_weight`, `overflow_sum_w2`, and `n_overflow`. | Ingests into overflow. | Returns `HISTO_OK` and `*out_bin = (int64_t)nbins`. |
 | **`-Infinity`** | Categorized as **underflow**. Increments `underflow_weight`, `underflow_sum_w2`, and `n_underflow`. | Ingests into underflow. | Returns `HISTO_OK` and `*out_bin = -1`. |
 | **`weight = NaN / ±Inf`** | Rejects fill; increments `n_nan`. Returns `HISTO_ERR_NON_FINITE`. | Increments `n_nan`. Skips sample; returns `HISTO_WARN_NON_FINITE`. | N/A |
 | **`-0.0` (Negative Zero)** | Treated identically to `+0.0` per IEEE-754 rules. | Treated identically to `+0.0`. | Mapped to matching interval containing $0.0$. |
-| **Subnormals (Denormals)** | Handled standardly without flushing to zero. | Handled standardly. | Standard interval lookup. |
+| **Subnormals (Denormals)** | Processed without flushing to zero. | Processed standardly. | Standard interval lookup. |
 
 ---
 
@@ -29,7 +30,7 @@ All floating-point coordinates, weights, and accumulators in `libhisto` utilize 
 - **Lower Edge Inclusivity**: If $x = x_{\min}$, $x$ belongs to bin $0$.
 - **Upper Edge Exclusivity**: If $x = x_{\max}$, $x$ is categorized as **overflow** ($x \ge x_{\max}$).
 
-### 2.2 Uniform Binning Lookup: Fast Reciprocal with Boundary Guard
+### 2.2 Uniform Binning: Reciprocal Multiplication with Boundary Guards
 Direct floating-point division `(int64_t)((x - min) / binsize)` can suffer from truncation error on exact boundaries (e.g. $x = 2/3$ evaluating to $1.9999999999999997 \to 1$ instead of $2$).
 
 `libhisto` utilizes the **boundary-guarded fast reciprocal algorithm**:
@@ -54,7 +55,7 @@ if (x >= h->max) {
     return HISTO_OK;
 }
 
-/* Fast O(1) candidate index using precomputed reciprocal (nbins / width) */
+/* Fast O(1) candidate index using precomputed reciprocal */
 int64_t idx = (int64_t)((x - h->min) * h->inv_binsize);
 
 /* Bounds clamping [0, nbins - 1] */
@@ -112,11 +113,44 @@ return low;
 
 ---
 
-## 3. Error Handling Architecture
+## 3. Numerical Guarding in Analytical Routines
 
-### 3.1 Warning Codes for Batch Operations
-- `HISTO_WARN_NON_FINITE` ($+1$): Returned by batch ingestion functions (`histo_fill_n`, `histo_fill_strided`) if one or more `NaN` or non-finite weights were skipped, while all valid finite samples were successfully ingested.
+### 3.1 Skewness & Kurtosis Zero-Variance Protection
+Higher-order moment calculations divide by $\sigma^3$ (skewness) and $\sigma^4$ (kurtosis). When all filled samples are identical or variance is zero ($\sigma^2 \le 0.0$), `libhisto` safely prevents division by zero and returns `HISTO_ERR_DIV_BY_ZERO`.
 
-### 3.2 Thread-Safety Guarantee
-- All read-only query and statistical functions (`histo_mean`, `histo_quantile`, `histo_bin_content`, etc.) accept `const histo_t *h` and perform **zero internal memory mutations**.
-- Distinct threads may safely read and query the same `histo_t` instance concurrently without synchronization.
+### 3.2 Parabolic Mode Peak Localization
+When estimating continuous mode via 3-point parabolic interpolation, the denominator is $\text{denom} = 2 w_m - w_{m-1} - w_{m+1}$.
+- If $\text{denom} \le 0.0$ (flat plateau or non-convex peak), the algorithm smoothly falls back to the mode bin center.
+- The sub-bin offset $\delta$ is clamped to $[-0.5, 0.5]$ to prevent the estimated peak from migrating outside the mode bin boundaries.
+
+### 3.3 FWHM Flank Search Boundary Fallbacks
+When searching for the half-maximum crossings on the left and right flanks of the dominant peak:
+- If the distribution does not drop below half-maximum on the left side before reaching the lower range boundary, $x_{\text{left}}$ defaults to $x_{\min}$.
+- If the distribution does not drop below half-maximum on the right side before reaching the upper range boundary, $x_{\text{right}}$ defaults to $x_{\max}$.
+- If the peak height is non-positive, $\text{FWHM} = 0.0$.
+
+### 3.4 Kullback-Leibler Divergence Singularity Protection
+In `histo_cmp_kl_divergence`, relative entropy is calculated as $\sum P_i \ln(P_i / Q_i)$.
+If $P_i > 0$ and $Q_i = 0$, evaluating $\ln(0)$ would produce $-\infty$. `libhisto` clamps empty target bins to a numerical regularization floor $\epsilon = 10^{-12}$, maintaining deterministic numerical bounds.
+
+### 3.5 Geometry Compatibility Verification
+All two-histogram functions (`histo_add`, `histo_subtract`, `histo_multiply`, `histo_divide`, `histo_cmp_chi2`, `histo_cmp_ks`, `histo_cmp_wasserstein_1d`, `histo_cmp_kl_divergence`, `histo_cmp_bhattacharyya`) strictly verify:
+1. `bin_type` match (`HISTO_BIN_UNIFORM` vs `HISTO_BIN_VARIABLE`).
+2. `nbins` equality.
+3. Matching domain range limits: $|a_{\min} - b_{\min}| \le 10^{-12}$ and $|a_{\max} - b_{\max}| \le 10^{-12}$.
+4. For variable bins, equality across all boundary edges: $|a_{\text{edges}, i} - b_{\text{edges}, i}| \le 10^{-12}$.
+
+If geometries mismatch, the functions immediately return `HISTO_ERR_INCOMPATIBLE` without modifying any destination buffers.
+
+---
+
+## 4. Error Handling Architecture & Thread Safety
+
+### 4.1 Return Code Conventions
+- `HISTO_OK` ($0$): Operation succeeded completely.
+- `HISTO_WARN_NON_FINITE` ($+1$): Batch operation succeeded for all finite entries, but non-finite (`NaN` / `Inf`) samples were encountered and skipped.
+- Negative return values (`HISTO_ERR_*`): Fatal error; operation aborted with zero state mutation.
+
+### 4.2 Thread-Safety Guarantees
+- All read-only query and analytical functions accept `const histo_t *h` and perform **zero internal memory mutations** or static state modifications.
+- Multiple threads may concurrently read, query, and compute statistics on the same `histo_t` instance without locks or synchronization.

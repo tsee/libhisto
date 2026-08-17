@@ -406,6 +406,87 @@ void test_robust_dispersion(void) {
     TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_winsorized_mean(NULL, 0.1, 0.9, &w_mean));
 }
 
+/* Test higher-order moments k=5, k=6 */
+void test_moments_higher_order_extended(void) {
+    histo_t *h = histo_create_uniform(5, -10.0, 10.0, HISTO_FLAG_NONE);
+    /* Symmetric distribution */
+    for (uint32_t i = 0; i < 5; ++i) {
+        histo_fill_bin(h, i, 10.0);
+    }
+
+    double m5 = 0.0, m6 = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h, 5, &m5));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, m5); /* Odd central moment of symmetric is 0 */
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_central_moment(h, 6, &m6));
+    TEST_ASSERT_TRUE(m6 > 0.0); /* Even central moment is positive */
+
+    histo_destroy(h);
+}
+
+/* Test trimmed and Winsorized mean edge cases: full range and single bin */
+void test_trimmed_and_winsorized_mean_edge_cases(void) {
+    histo_t *h = histo_create_uniform(4, 0.0, 40.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h, 0, 10.0);
+    histo_fill_bin(h, 1, 20.0);
+    histo_fill_bin(h, 2, 30.0);
+    histo_fill_bin(h, 3, 40.0);
+
+    double t_mean = 0.0, w_mean = 0.0, std_mean = 0.0;
+    histo_mean(h, &std_mean);
+
+    /* [0.0, 1.0] full range trim and winsorize should equal standard mean */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_trimmed_mean(h, 0.0, 1.0, &t_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, std_mean, t_mean);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_winsorized_mean(h, 0.0, 1.0, &w_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, std_mean, w_mean);
+
+    /* Single bin filled */
+    histo_t *h_single = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_NONE);
+    histo_fill_bin(h_single, 5, 100.0); /* center 55.0 */
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_trimmed_mean(h_single, 0.1, 0.9, &t_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 55.0, t_mean);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_winsorized_mean(h_single, 0.1, 0.9, &w_mean));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 55.0, w_mean);
+
+    histo_destroy(h);
+    histo_destroy(h_single);
+}
+
+/* Test mode continuous on variable bin histogram returns bin center */
+void test_mode_continuous_variable_bins(void) {
+    const double edges[] = {0.0, 2.0, 10.0, 50.0};
+    histo_t *h = histo_create_variable(3, edges, HISTO_FLAG_NONE);
+    histo_fill_bin(h, 1, 100.0); /* Bin 1 [2.0, 10.0) center 6.0 is dominant mode */
+
+    double mode = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mode_continuous(h, &mode));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 6.0, mode);
+
+    histo_destroy(h);
+}
+
+/* Test MAD with large bin count (> 256) exercising dynamic buffer allocation */
+void test_mad_large_bins(void) {
+    const uint32_t nbins = 500;
+    histo_t *h = histo_create_uniform(nbins, 0.0, 500.0, HISTO_FLAG_NONE);
+    TEST_ASSERT_NOT_NULL(h);
+
+    /* Symmetrically fill bins around center 250.0 */
+    for (uint32_t i = 0; i < nbins; ++i) {
+        histo_fill_bin(h, i, 1.0);
+    }
+
+    double mad = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mad(h, &mad));
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 125.0, mad);
+
+    histo_destroy(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_bin_queries);
@@ -416,5 +497,9 @@ int main(void) {
     RUN_TEST(test_robust_dispersion);
     RUN_TEST(test_quantile_and_median);
     RUN_TEST(test_get_stats);
+    RUN_TEST(test_moments_higher_order_extended);
+    RUN_TEST(test_trimmed_and_winsorized_mean_edge_cases);
+    RUN_TEST(test_mode_continuous_variable_bins);
+    RUN_TEST(test_mad_large_bins);
     return UNITY_END();
 }
