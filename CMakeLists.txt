@@ -126,7 +126,6 @@ if(LIBHISTO_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
-# Documentation
 if(LIBHISTO_BUILD_DOCS AND DOXYGEN_FOUND)
     set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
     set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
@@ -138,3 +137,74 @@ if(LIBHISTO_BUILD_DOCS AND DOXYGEN_FOUND)
         VERBATIM
     )
 endif()
+
+# ------------------------------------------------------------------------------
+# Installation, Export Targets & Packaging
+# ------------------------------------------------------------------------------
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+# Public Headers
+install(DIRECTORY include/histo
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.h"
+)
+
+# pkg-config file
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/libhisto.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libhisto.pc
+    @ONLY
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libhisto.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
+
+# CMake export configuration
+set(LIBHISTO_CMAKECONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/libhisto")
+
+install(EXPORT libhistoTargets
+    FILE libhistoTargets.cmake
+    NAMESPACE libhisto::
+    DESTINATION ${LIBHISTO_CMAKECONFIG_INSTALL_DIR}
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/libhistoConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libhistoConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libhistoConfig.cmake
+    INSTALL_DESTINATION ${LIBHISTO_CMAKECONFIG_INSTALL_DIR}
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/libhistoConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/libhistoConfigVersion.cmake
+    DESTINATION ${LIBHISTO_CMAKECONFIG_INSTALL_DIR}
+)
+
+# CPack Packaging configuration
+set(CPACK_PACKAGE_NAME "libhisto")
+set(CPACK_PACKAGE_VENDOR "libhisto Contributors")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "High-performance, memory-safe ISO C99 histogramming and statistical analysis library")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+endif()
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+    set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+endif()
+set(CPACK_GENERATOR "TGZ;DEB;RPM")
+set(CPACK_SOURCE_GENERATOR "TGZ")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Steffen Mueller <github@steffen-mueller.net>")
+set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+set(CPACK_RPM_PACKAGE_GROUP "Development/Libraries")
+include(CPack)
+

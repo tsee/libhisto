@@ -35,4 +35,14 @@ foreach(alias ${TOOL_ALIASES})
     )
 endforeach()
 
-install(TARGETS histo-cli RUNTIME DESTINATION bin)
+install(TARGETS histo-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+foreach(alias ${TOOL_ALIASES})
+    install(CODE "
+        execute_process(
+            COMMAND \${CMAKE_COMMAND} -E create_symlink histo \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${alias}\"
+        )
+    ")
+endforeach()
+
+

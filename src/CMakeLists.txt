@@ -39,8 +39,11 @@ endif()
 
 target_link_libraries(histo
     PUBLIC
-        histo_compiler_flags
+        $<BUILD_INTERFACE:histo_compiler_flags>
 )
+
+
+
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(histo PUBLIC m)
@@ -49,8 +52,17 @@ endif()
 target_include_directories(histo
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
-        $<INSTALL_INTERFACE:include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cJSON
 )
+
+install(TARGETS histo
+    EXPORT libhistoTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
