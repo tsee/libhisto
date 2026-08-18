@@ -1,9 +1,9 @@
-<map id="/home/steffenm/.gemini/antigravity/brain/81fb6100&#45;ac08&#45;424c&#45;9dc1&#45;96975bd5ba7d/.system_generated/worktrees/subagent&#45;Data&#45;Scientist&#45;&#45;&#45;Numerical&#45;Optimization&#45;Expert&#45;self&#45;d2a28293/include/histo/types.h" name="/home/steffenm/.gemini/antigravity/brain/81fb6100&#45;ac08&#45;424c&#45;9dc1&#45;96975bd5ba7d/.system_generated/worktrees/subagent&#45;Data&#45;Scientist&#45;&#45;&#45;Numerical&#45;Optimization&#45;Expert&#45;self&#45;d2a28293/include/histo/types.h">
-<area shape="rect" id="Node000001" title="Core types and enumerations for libhisto." alt="" coords="6,5,270,135"/>
-<area shape="rect" id="Node000002" title=" " alt="" coords="5,183,79,211"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="91,134,63,172,59,169,86,137"/>
-<area shape="rect" id="Node000003" title=" " alt="" coords="103,183,173,211"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="140,133,140,169,136,166,136,137"/>
-<area shape="rect" id="Node000004" title=" " alt="" coords="197,183,279,211"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="191,133,221,171,216,171,188,138"/>
+<map id="/home/steffenm/src/libhisto/include/histo/types.h" name="/home/steffenm/src/libhisto/include/histo/types.h">
+<area shape="rect" id="Node000001" title="Core types and enumerations for libhisto." alt="" coords="58,5,218,67"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,115,79,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="108,66,69,106,65,102,104,69"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="103,115,173,143"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="140,66,140,100,136,98,136,69"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="197,115,279,143"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="172,65,215,105,210,105,170,70"/>
 </map>
