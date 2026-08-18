@@ -80,7 +80,15 @@ histo fill --2d --xbins 100 --xmin -10 --xmax 10 --ybins 100 --ymin -10 --ymax 1
 - `--2d`: Enable 2D bivariate ingestion mode.
 - `--xbins <N>`, `--xmin <val>`, `--xmax <val>`: X axis grid configuration.
 - `--ybins <N>`, `--ymin <val>`, `--ymax <val>`: Y axis grid configuration.
-- `--delimiter, -d <char>`: Column delimiter (auto-detects whitespace, commas, tabs by default).
+- `--delimiter, -d <char>`: Column delimiter (optional override; default: auto-detection).
 - `--xcol <N>`, `--ycol <N>`, `--wcol <N>`: 1-based column indices for $X$, $Y$, and optional weight $W$.
 - `--binary, -b`: Emit Format V3 Little-Endian binary blob instead of JSON.
+
+### Delimiter Auto-Detection Heuristic
+When parsing tabular streams without an explicit `--delimiter` flag:
+1. The parser peeks at the initial non-empty, non-comment line.
+2. It counts candidate separator occurrences (`,`, `\t`, `;`, `|`).
+3. If a structured separator appears at least once, the candidate with the highest frequency is chosen as the active field delimiter.
+4. If no structured delimiter is present, the parser defaults to standard contiguous whitespace tokenization (`isspace`).
+
 
