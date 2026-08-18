@@ -99,4 +99,11 @@
 - [x] **I9** Terminal Heatmap & 2D CLI Tooling Integration (`histo-plot`, `histo-stats`, `histo-fill`)
 - [x] **I10** 2D Unit & Integration Tests, ASan/UBSan & Valgrind Verification (`test_histo2d`, `test_histo2d_stats`, `test_histo2d_serialization`)
 
+## Phase J: Architectural Consolidation & Shared Internals
+- [x] **J1** Shared Internal Primitives Header (`src/internal_common.h`): Consolidate fast single-cycle endian `bswap` intrinsics and 64-byte aligned allocators.
+- [x] **J2** Unified Bin Lookup Math: Harmonized guarded uniform reciprocal indexing and monotonic binary search between 1D (`src/histo.c`) and 2D (`src/internal_2d.h`).
+- [x] **J3** Encapsulated 1D Raw Bin Population (`histo_set_raw_bin_contents`) for 2D projections, slices, and profiles.
+- [x] **J4** Production Little-Endian Binary Serialization & Deserialization for DDSketch (`src/sketch.c`, `tests/unit/test_sketch.c`).
+- [x] **J5** Doxygen Status Docstring Consistency across all public headers (`include/histo/histo2d.h`, `include/histo/histo.h`).
+
 
