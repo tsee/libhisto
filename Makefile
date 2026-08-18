@@ -1,4 +1,4 @@
-.PHONY: all build test test-all test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-doc-examples test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 
@@ -10,10 +10,14 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-fuzz test-tsan memcheck docs
+test-all: test-asan test-doc-examples test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
-	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), MEMCHECK & DOCS PASSED"
+	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
+
+test-doc-examples: build
+	python3 tests/scripts/test_doc_examples.py --source-dir . --build-dir $(BUILD_DIR) --verbose
+
 
 test-asan:
 	cmake -B $(BUILD_DIR)-asan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON -DLIBHISTO_ENABLE_FUZZING=ON

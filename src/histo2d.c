@@ -620,7 +620,7 @@ static void histo2d_compute_grid_moments(const histo2d_t *h,
             double w = h->bins[histo2d_linear_index(ix, iy, ny)];
             if (w <= 0.0) continue;
 
-            double cx, cy;
+            double cx = 0.0, cy = 0.0;
             histo2d_bin_center(h, ix, iy, &cx, &cy);
 
             sum_w += w;
@@ -650,8 +650,9 @@ static void histo2d_compute_grid_moments(const histo2d_t *h,
             double w = h->bins[histo2d_linear_index(ix, iy, ny)];
             if (w <= 0.0) continue;
 
-            double cx, cy;
+            double cx = 0.0, cy = 0.0;
             histo2d_bin_center(h, ix, iy, &cx, &cy);
+
 
             double dx = cx - mx;
             double dy = cy - my;

@@ -115,6 +115,11 @@ histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN, initial_guess, &opts, &res);
 Fit arbitrary non-linear user functions with finite-difference or analytical gradients:
 
 ```c
+#include <stdio.h>
+#include <math.h>
+#include <histo/histo.h>
+#include <histo/fit.h>
+
 // User function callback: f(x; p0, p1) = p0 * sin(p1 * x)
 static double my_sine_model(double x, const double *p, void *userdata) {
     (void)userdata;
@@ -128,15 +133,24 @@ static void my_sine_gradient(double x, const double *p, double *grad, void *user
     grad[1] = p[0] * x * cos(p[1] * x);
 }
 
-// ...
-histo_fit_options_t opts;
-histo_fit_options_init(&opts);
-opts.grad_fn = my_sine_gradient; // Or NULL for automatic central finite differences
+int main(void) {
+    histo_t *h = histo_create_uniform(20, 0.0, 10.0, HISTO_FLAG_NONE);
+    for (int i = 0; i < 100; ++i) histo_fill(h, (double)i * 0.1);
 
-double initial_params[2] = {10.0, 0.1};
-histo_fit_result_t *res = NULL;
-histo_fit_custom(h, my_sine_model, 2, initial_params, &opts, &res);
+    histo_fit_options_t opts;
+    histo_fit_options_init(&opts);
+    opts.grad_fn = my_sine_gradient; // Or NULL for automatic central finite differences
+
+    double initial_params[2] = {10.0, 0.1};
+    histo_fit_result_t *res = NULL;
+    histo_fit_custom(h, my_sine_model, 2, initial_params, &opts, &res);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+    return 0;
+}
 ```
+
 
 ---
 

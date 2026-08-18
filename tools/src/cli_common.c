@@ -87,51 +87,99 @@ cli_input_format_t cli_detect_stream_format(FILE *fp) {
     return CLI_INPUT_TEXT_NUMBERS;
 }
 
-histo_status_t cli_read_histogram_from_stream(FILE *fp, histo_t **out_h) {
-    if (!fp || !out_h) return HISTO_ERR_INVALID_ARG;
-    *out_h = NULL;
+histo_status_t cli_read_any_histogram_from_stream(FILE *fp, histo_t **out_1d, histo2d_t **out_2d) {
+    if (!fp || (!out_1d && !out_2d)) return HISTO_ERR_INVALID_ARG;
+    if (out_1d) *out_1d = NULL;
+    if (out_2d) *out_2d = NULL;
 
     cli_input_format_t fmt = cli_detect_stream_format(fp);
     if (fmt == CLI_INPUT_BINARY_HISTO) {
-        /* Read 256-byte header first to determine payload size */
         uint8_t header[256];
         size_t nread = fread(header, 1, sizeof(header), fp);
         if (nread < sizeof(header)) {
             return HISTO_ERR_DESERIALIZATION;
         }
-        /* Parse payload size */
-        uint32_t flags = (uint32_t)header[0x0C] | ((uint32_t)header[0x0D] << 8) |
-                         ((uint32_t)header[0x0E] << 16) | ((uint32_t)header[0x0F] << 24);
-        uint32_t nbins = (uint32_t)header[0x10] | ((uint32_t)header[0x11] << 8) |
-                         ((uint32_t)header[0x12] << 16) | ((uint32_t)header[0x13] << 24);
-        size_t payload_size = (size_t)nbins * sizeof(double);
-        if (flags & 0x01) { /* Variable edges */
-            payload_size += (size_t)(nbins + 1) * sizeof(double);
-        }
-        if (flags & 0x02) { /* Sum_w2 */
-            payload_size += (size_t)nbins * sizeof(double);
-        }
 
-        size_t total_size = sizeof(header) + payload_size;
-        uint8_t *full_buf = (uint8_t *)malloc(total_size);
-        if (!full_buf) return HISTO_ERR_NOMEM;
+        uint16_t version = (uint16_t)header[0x08] | ((uint16_t)header[0x09] << 8);
+        if (version == 3) {
+            /* 2D Histogram */
+            uint32_t flags = (uint32_t)header[0x0C] | ((uint32_t)header[0x0D] << 8) |
+                             ((uint32_t)header[0x0E] << 16) | ((uint32_t)header[0x0F] << 24);
+            uint32_t nx = (uint32_t)header[0x10] | ((uint32_t)header[0x11] << 8) |
+                          ((uint32_t)header[0x12] << 16) | ((uint32_t)header[0x13] << 24);
+            uint32_t ny = (uint32_t)header[0x14] | ((uint32_t)header[0x15] << 8) |
+                          ((uint32_t)header[0x16] << 16) | ((uint32_t)header[0x17] << 24);
 
-        memcpy(full_buf, header, sizeof(header));
-        if (payload_size > 0) {
-            size_t payload_read = fread(full_buf + sizeof(header), 1, payload_size, fp);
-            if (payload_read < payload_size) {
+            size_t payload_size = 0;
+            if (flags & 0x01) payload_size += (size_t)(nx + 1) * sizeof(double);
+            if (flags & 0x02) payload_size += (size_t)(ny + 1) * sizeof(double);
+            size_t total_cells = (size_t)nx * (size_t)ny;
+            payload_size += total_cells * sizeof(double);
+            if (flags & 0x04) payload_size += total_cells * sizeof(double);
+            payload_size += 9 * sizeof(double);
+            if (flags & 0x04) payload_size += 9 * sizeof(double);
+            payload_size += 9 * sizeof(uint64_t);
+
+            size_t total_size = sizeof(header) + payload_size;
+            uint8_t *full_buf = (uint8_t*)malloc(total_size);
+            if (!full_buf) return HISTO_ERR_NOMEM;
+
+            memcpy(full_buf, header, sizeof(header));
+            if (payload_size > 0) {
+                size_t payload_read = fread(full_buf + sizeof(header), 1, payload_size, fp);
+                if (payload_read < payload_size) {
+                    free(full_buf);
+                    return HISTO_ERR_DESERIALIZATION;
+                }
+            }
+
+            if (out_2d) {
+                histo_status_t st = histo2d_deserialize_binary(full_buf, total_size, out_2d);
                 free(full_buf);
-                return HISTO_ERR_DESERIALIZATION;
+                return st;
+            } else {
+                free(full_buf);
+                return HISTO_ERR_INVALID_ARG;
+            }
+        } else {
+            /* 1D Histogram (v1 or v2) */
+            uint32_t flags = (uint32_t)header[0x0C] | ((uint32_t)header[0x0D] << 8) |
+                             ((uint32_t)header[0x0E] << 16) | ((uint32_t)header[0x0F] << 24);
+            uint32_t nbins = (uint32_t)header[0x10] | ((uint32_t)header[0x11] << 8) |
+                             ((uint32_t)header[0x12] << 16) | ((uint32_t)header[0x13] << 24);
+            size_t payload_size = (size_t)nbins * sizeof(double);
+            if (flags & 0x01) { /* Variable edges */
+                payload_size += (size_t)(nbins + 1) * sizeof(double);
+            }
+            if (flags & 0x02) { /* Sum_w2 */
+                payload_size += (size_t)nbins * sizeof(double);
+            }
+
+            size_t total_size = sizeof(header) + payload_size;
+            uint8_t *full_buf = (uint8_t *)malloc(total_size);
+            if (!full_buf) return HISTO_ERR_NOMEM;
+
+            memcpy(full_buf, header, sizeof(header));
+            if (payload_size > 0) {
+                size_t payload_read = fread(full_buf + sizeof(header), 1, payload_size, fp);
+                if (payload_read < payload_size) {
+                    free(full_buf);
+                    return HISTO_ERR_DESERIALIZATION;
+                }
+            }
+
+            if (out_1d) {
+                histo_status_t st = histo_deserialize_binary(full_buf, total_size, out_1d);
+                free(full_buf);
+                return st;
+            } else {
+                free(full_buf);
+                return HISTO_ERR_INVALID_ARG;
             }
         }
-
-        histo_status_t st = histo_deserialize_binary(full_buf, total_size, out_h);
-        free(full_buf);
-        return st;
     }
 
     if (fmt == CLI_INPUT_JSON_HISTO) {
-        /* Read entire JSON document up to closing brace */
         size_t cap = 4096;
         size_t len = 0;
         char *buf = (char *)malloc(cap);
@@ -162,134 +210,61 @@ histo_status_t cli_read_histogram_from_stream(FILE *fp, histo_t **out_h) {
             }
         }
         buf[len] = '\0';
-        histo_status_t st = histo_deserialize_json(buf, out_h);
-        free(buf);
-        return st;
+
+        if (strstr(buf, "\"libhisto2d") != NULL || strstr(buf, "\"nx\"") != NULL) {
+            if (out_2d) {
+                histo_status_t st = histo2d_deserialize_json(buf, out_2d);
+                free(buf);
+                return st;
+            } else {
+                free(buf);
+                return HISTO_ERR_INVALID_ARG;
+            }
+        } else {
+            if (out_1d) {
+                histo_status_t st = histo_deserialize_json(buf, out_1d);
+                free(buf);
+                return st;
+            } else {
+                free(buf);
+                return HISTO_ERR_INVALID_ARG;
+            }
+        }
     }
 
     return HISTO_ERR_DESERIALIZATION;
+}
+
+histo_status_t cli_read_any_histogram_from_file(const char *path, histo_t **out_1d, histo2d_t **out_2d) {
+    if (!path) return HISTO_ERR_INVALID_ARG;
+    FILE *fp = NULL;
+    if (strcmp(path, "-") == 0) {
+        fp = stdin;
+    } else {
+        fp = fopen(path, "rb");
+        if (!fp) return HISTO_ERR_INVALID_ARG;
+    }
+
+    histo_status_t st = cli_read_any_histogram_from_stream(fp, out_1d, out_2d);
+    if (fp != stdin) {
+        fclose(fp);
+    }
+    return st;
+}
+
+histo_status_t cli_read_histogram_from_stream(FILE *fp, histo_t **out_h) {
+    return cli_read_any_histogram_from_stream(fp, out_h, NULL);
 }
 
 histo_status_t cli_read_histogram_from_file(const char *path, histo_t **out_h) {
-    if (!path || !out_h) return HISTO_ERR_INVALID_ARG;
-    FILE *fp = NULL;
-    if (strcmp(path, "-") == 0) {
-        fp = stdin;
-    } else {
-        fp = fopen(path, "rb");
-        if (!fp) return HISTO_ERR_INVALID_ARG;
-    }
-
-    histo_status_t st = cli_read_histogram_from_stream(fp, out_h);
-    if (fp != stdin) {
-        fclose(fp);
-    }
-    return st;
+    return cli_read_any_histogram_from_file(path, out_h, NULL);
 }
 
 histo_status_t cli_read_histo2d_from_stream(FILE *fp, histo2d_t **out_h) {
-    if (!fp || !out_h) return HISTO_ERR_INVALID_ARG;
-    *out_h = NULL;
-
-    cli_input_format_t fmt = cli_detect_stream_format(fp);
-    if (fmt == CLI_INPUT_BINARY_HISTO) {
-        uint8_t header[256];
-        size_t nread = fread(header, 1, sizeof(header), fp);
-        if (nread < sizeof(header)) {
-            return HISTO_ERR_DESERIALIZATION;
-        }
-
-        /* Check if format version is 3 (2D) */
-        uint16_t version = (uint16_t)header[0x08] | ((uint16_t)header[0x09] << 8);
-        if (version != 3) {
-            return HISTO_ERR_DESERIALIZATION;
-        }
-
-        uint32_t flags = (uint32_t)header[0x0C] | ((uint32_t)header[0x0D] << 8) |
-                         ((uint32_t)header[0x0E] << 16) | ((uint32_t)header[0x0F] << 24);
-        uint32_t nx = (uint32_t)header[0x10] | ((uint32_t)header[0x11] << 8) |
-                      ((uint32_t)header[0x12] << 16) | ((uint32_t)header[0x13] << 24);
-        uint32_t ny = (uint32_t)header[0x14] | ((uint32_t)header[0x15] << 8) |
-                      ((uint32_t)header[0x16] << 16) | ((uint32_t)header[0x17] << 24);
-
-        size_t payload_size = 0;
-        if (flags & 0x01) payload_size += (size_t)(nx + 1) * sizeof(double);
-        if (flags & 0x02) payload_size += (size_t)(ny + 1) * sizeof(double);
-        size_t total_cells = (size_t)nx * (size_t)ny;
-        payload_size += total_cells * sizeof(double);
-        if (flags & 0x04) payload_size += total_cells * sizeof(double);
-        payload_size += 9 * sizeof(double);
-        if (flags & 0x04) payload_size += 9 * sizeof(double);
-        payload_size += 9 * sizeof(uint64_t);
-
-        size_t total_size = sizeof(header) + payload_size;
-        uint8_t *full_buf = (uint8_t*)malloc(total_size);
-        if (!full_buf) return HISTO_ERR_NOMEM;
-
-        memcpy(full_buf, header, sizeof(header));
-        if (payload_size > 0) {
-            size_t payload_read = fread(full_buf + sizeof(header), 1, payload_size, fp);
-            if (payload_read < payload_size) {
-                free(full_buf);
-                return HISTO_ERR_DESERIALIZATION;
-            }
-        }
-
-        histo_status_t st = histo2d_deserialize_binary(full_buf, total_size, out_h);
-        free(full_buf);
-        return st;
-    }
-
-    if (fmt == CLI_INPUT_JSON_HISTO) {
-        size_t cap = 4096;
-        size_t len = 0;
-        char *buf = (char*)malloc(cap);
-        if (!buf) return HISTO_ERR_NOMEM;
-
-        int ch;
-        int brace_depth = 0;
-        bool started = false;
-        while ((ch = fgetc(fp)) != EOF) {
-            if (len + 2 >= cap) {
-                cap *= 2;
-                char *new_buf = (char*)realloc(buf, cap);
-                if (!new_buf) {
-                    free(buf);
-                    return HISTO_ERR_NOMEM;
-                }
-                buf = new_buf;
-            }
-            buf[len++] = (char)ch;
-            if (ch == '{') {
-                brace_depth++;
-                started = true;
-            } else if (ch == '}') {
-                brace_depth--;
-                if (started && brace_depth == 0) break;
-            }
-        }
-        buf[len] = '\0';
-        histo_status_t st = histo2d_deserialize_json(buf, out_h);
-        free(buf);
-        return st;
-    }
-
-    return HISTO_ERR_DESERIALIZATION;
+    return cli_read_any_histogram_from_stream(fp, NULL, out_h);
 }
 
 histo_status_t cli_read_histo2d_from_file(const char *path, histo2d_t **out_h) {
-    if (!path || !out_h) return HISTO_ERR_INVALID_ARG;
-    FILE *fp = NULL;
-    if (strcmp(path, "-") == 0) {
-        fp = stdin;
-    } else {
-        fp = fopen(path, "rb");
-        if (!fp) return HISTO_ERR_INVALID_ARG;
-    }
-
-    histo_status_t st = cli_read_histo2d_from_stream(fp, out_h);
-    if (fp != stdin) {
-        fclose(fp);
-    }
-    return st;
+    return cli_read_any_histogram_from_file(path, NULL, out_h);
 }
+

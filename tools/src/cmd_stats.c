@@ -226,23 +226,22 @@ int cmd_stats_main(int argc, char **argv) {
 
     int status = 0;
     for (int f = 0; f < nfiles; ++f) {
-        /* Try 2D first, then 1D */
-        histo2d_t *h2d = NULL;
-        if (cli_read_histo2d_from_file(files[f], &h2d) == HISTO_OK) {
-            print_histo2d_stats(h2d, fmt);
-            histo2d_destroy(h2d);
-            continue;
-        }
-
         histo_t *h = NULL;
-        if (cli_read_histogram_from_file(files[f], &h) == HISTO_OK) {
-            print_histogram_stats(h, fmt);
-            histo_destroy(h);
+        histo2d_t *h2d = NULL;
+        if (cli_read_any_histogram_from_file(files[f], &h, &h2d) == HISTO_OK) {
+            if (h2d) {
+                print_histo2d_stats(h2d, fmt);
+                histo2d_destroy(h2d);
+            } else if (h) {
+                print_histogram_stats(h, fmt);
+                histo_destroy(h);
+            }
         } else {
             fprintf(stderr, "Error: Failed to read histogram from '%s'\n", files[f]);
             status = 1;
         }
     }
+
 
     return status;
 }
