@@ -115,11 +115,15 @@
 
 ---
 
-## Phase L: Security Fuzzing Expansion & Seed Corpora
-- [x] **L1** Format V3 2D binary deserialization fuzz harness (`tests/fuzz/fuzz_deserialize_2d_binary.c`).
-- [x] **L2** 2D JSON deserialization fuzz harness (`tests/fuzz/fuzz_deserialize_2d_json.c`).
-- [x] **L3** Non-linear curve fitting engine fuzz harness (`tests/fuzz/fuzz_fit.c`).
-- [x] **L4** Seed corpus expansion (`tests/fuzz/corpus/binary_2d/`, `tests/fuzz/corpus/json_2d/`, `tests/fuzz/corpus/fit/`) and corpus generator updates.
-- [x] **L5** Verified 100% leak-free under ASan and Valgrind (`make test-all`).
+---
+
+## Phase M: Release Packaging & CLI Toolkit Extensions
+- [x] **M1** Repository hygiene: Prune merged subagent branches and detached worktrees.
+- [x] **M2** Release packaging: Add CMake package export (`libhistoConfig.cmake`, `libhistoTargets.cmake`), `pkg-config` (`libhisto.pc`), and CPack release generators (`.tar.gz`, `.deb`, `.rpm`).
+- [x] **M3** CLI Toolkit Extensions Specification (`docs/design_cli_extensions.md`): Binned curve fitting (`histo fit` with formula header and parameter table) and 2D stream ingestion (`histo fill --2d`).
+- [ ] **M4** Implement `histo-fit` CLI tool (`tools/src/cmd_fit.c`) and CLI multi-call alias.
+- [ ] **M5** Implement `histo-fill --2d` multi-column coordinate parser (`tools/src/cmd_fill.c`).
+- [ ] **M6** CLI integration test suite additions (`tests/integration/test_cli.c`), docs updates, and sanitizer verification.
+
 
 
