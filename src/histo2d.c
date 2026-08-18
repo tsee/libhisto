@@ -332,6 +332,12 @@ histo_status_t histo2d_fill_n(histo2d_t *h, size_t n,
                 return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
             }
 #endif
+#ifdef LIBHISTO_ENABLE_NEON
+            if (histo_simd_has_neon()) {
+                had_nan = histo2d_fill_uniform_w2_neon(h, x, y, weights, n);
+                return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
+            }
+#endif
         } else {
 #ifdef LIBHISTO_ENABLE_AVX512
             if (histo_simd_has_avx512()) {
@@ -345,8 +351,15 @@ histo_status_t histo2d_fill_n(histo2d_t *h, size_t n,
                 return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
             }
 #endif
+#ifdef LIBHISTO_ENABLE_NEON
+            if (histo_simd_has_neon()) {
+                had_nan = histo2d_fill_uniform_neon(h, x, y, n);
+                return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
+            }
+#endif
         }
     }
+
 
 
     for (size_t i = 0; i < n; ++i) {

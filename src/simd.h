@@ -8,8 +8,10 @@
 
 bool histo2d_fill_uniform_avx2(histo2d_t *h, const double *x, const double *y, size_t n);
 bool histo2d_fill_uniform_avx512(histo2d_t *h, const double *x, const double *y, size_t n);
+bool histo2d_fill_uniform_neon(histo2d_t *h, const double *x, const double *y, size_t n);
 bool histo2d_fill_uniform_w2_avx2(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n);
 bool histo2d_fill_uniform_w2_avx512(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n);
+bool histo2d_fill_uniform_w2_neon(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n);
 
 #ifdef __cplusplus
 extern "C" {

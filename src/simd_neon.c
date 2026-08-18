@@ -1,5 +1,6 @@
 #include "simd.h"
 #include "internal.h"
+#include "internal_2d.h"
 #include "simd_neon_bridge.h"
 #include <math.h>
 
@@ -360,4 +361,110 @@ bool histo_fill_uniform_w2_neon(histo_t *h, const double *x, const double *weigh
     return had_non_finite;
 }
 
+bool histo2d_fill_uniform_neon(histo2d_t *h, const double *x, const double *y, size_t n) {
+    size_t i = 0;
+    bool had_non_finite = false;
+    double min_x = h->x_axis.min;
+    double max_x = h->x_axis.max;
+    double inv_dx = h->x_axis.inv_binsize;
+    uint32_t nx = h->x_axis.nbins;
+
+    double min_y = h->y_axis.min;
+    double max_y = h->y_axis.max;
+    double inv_dy = h->y_axis.inv_binsize;
+    uint32_t ny = h->y_axis.nbins;
+
+    float64x2_t v_min_x = vdupq_n_f64(min_x);
+    float64x2_t v_max_x = vdupq_n_f64(max_x);
+    float64x2_t v_inv_dx = vdupq_n_f64(inv_dx);
+    float64x2_t v_nx_minus_1 = vdupq_n_f64((double)(nx - 1));
+
+    float64x2_t v_min_y = vdupq_n_f64(min_y);
+    float64x2_t v_max_y = vdupq_n_f64(max_y);
+    float64x2_t v_inv_dy = vdupq_n_f64(inv_dy);
+    float64x2_t v_ny_minus_1 = vdupq_n_f64((double)(ny - 1));
+
+    float64x2_t v_zero = vdupq_n_f64(0.0);
+
+    /* Process 4 coordinate pairs per iteration (2x 128-bit NEON vectors) */
+    for (; i + 3 < n; i += 4) {
+        float64x2_t v_x0 = vld1q_f64(&x[i]);
+        float64x2_t v_x1 = vld1q_f64(&x[i + 2]);
+        float64x2_t v_y0 = vld1q_f64(&y[i]);
+        float64x2_t v_y1 = vld1q_f64(&y[i + 2]);
+
+        /* Boundary and NaN checks */
+        uint64x2_t bad_x0 = vorrq_u64(vorrq_u64(vcltq_f64(v_x0, v_min_x), vcgeq_f64(v_x0, v_max_x)), vmvnq_u64(vceqq_f64(v_x0, v_x0)));
+        uint64x2_t bad_x1 = vorrq_u64(vorrq_u64(vcltq_f64(v_x1, v_min_x), vcgeq_f64(v_x1, v_max_x)), vmvnq_u64(vceqq_f64(v_x1, v_x1)));
+        uint64x2_t bad_y0 = vorrq_u64(vorrq_u64(vcltq_f64(v_y0, v_min_y), vcgeq_f64(v_y0, v_max_y)), vmvnq_u64(vceqq_f64(v_y0, v_y0)));
+        uint64x2_t bad_y1 = vorrq_u64(vorrq_u64(vcltq_f64(v_y1, v_min_y), vcgeq_f64(v_y1, v_max_y)), vmvnq_u64(vceqq_f64(v_y1, v_y1)));
+
+        uint64x2_t bad0 = vorrq_u64(bad_x0, bad_y0);
+        uint64x2_t bad1 = vorrq_u64(bad_x1, bad_y1);
+        uint64x2_t bad_comb = vorrq_u64(bad0, bad1);
+
+        uint64_t bad_any = vgetq_lane_u64(bad_comb, 0) | vgetq_lane_u64(bad_comb, 1);
+
+        if (bad_any != 0) {
+            for (size_t j = 0; j < 4; ++j) {
+                if (histo2d_fill(h, x[i + j], y[i + j]) == HISTO_ERR_NON_FINITE) {
+                    had_non_finite = true;
+                }
+            }
+        } else {
+            float64x2_t v_idx_x0 = vminq_f64(vmaxq_f64(vrndmq_f64(vmulq_f64(vsubq_f64(v_x0, v_min_x), v_inv_dx)), v_zero), v_nx_minus_1);
+            float64x2_t v_idx_x1 = vminq_f64(vmaxq_f64(vrndmq_f64(vmulq_f64(vsubq_f64(v_x1, v_min_x), v_inv_dx)), v_zero), v_nx_minus_1);
+            float64x2_t v_idx_y0 = vminq_f64(vmaxq_f64(vrndmq_f64(vmulq_f64(vsubq_f64(v_y0, v_min_y), v_inv_dy)), v_zero), v_ny_minus_1);
+            float64x2_t v_idx_y1 = vminq_f64(vmaxq_f64(vrndmq_f64(vmulq_f64(vsubq_f64(v_y1, v_min_y), v_inv_dy)), v_zero), v_ny_minus_1);
+
+            double idx_x_arr[4];
+            double idx_y_arr[4];
+            vst1q_f64(&idx_x_arr[0], v_idx_x0);
+            vst1q_f64(&idx_x_arr[2], v_idx_x1);
+            vst1q_f64(&idx_y_arr[0], v_idx_y0);
+            vst1q_f64(&idx_y_arr[2], v_idx_y1);
+
+            for (size_t j = 0; j < 4; ++j) {
+                int64_t ix = (int64_t)idx_x_arr[j];
+                int64_t iy = (int64_t)idx_y_arr[j];
+                double vx = x[i + j];
+                double vy = y[i + j];
+
+                if (ix + 1 < (int64_t)nx && vx >= min_x + (double)(ix + 1) * h->x_axis.binsize) ix++;
+                if (ix > 0 && vx < min_x + (double)ix * h->x_axis.binsize) ix--;
+
+                if (iy + 1 < (int64_t)ny && vy >= min_y + (double)(iy + 1) * h->y_axis.binsize) iy++;
+                if (iy > 0 && vy < min_y + (double)iy * h->y_axis.binsize) iy--;
+
+                size_t idx = histo2d_linear_index((uint32_t)ix, (uint32_t)iy, ny);
+                h->bins[idx] += 1.0;
+                h->total_weight += 1.0;
+                h->n_fills++;
+            }
+            h->guards[HISTO2D_REGION_CENTER].weight += 4.0;
+            h->guards[HISTO2D_REGION_CENTER].count += 4;
+        }
+    }
+
+    /* Remainder tail */
+    for (; i < n; ++i) {
+        if (histo2d_fill(h, x[i], y[i]) == HISTO_ERR_NON_FINITE) {
+            had_non_finite = true;
+        }
+    }
+    return had_non_finite;
+}
+
+bool histo2d_fill_uniform_w2_neon(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n) {
+    size_t i = 0;
+    bool had_non_finite = false;
+    for (; i < n; ++i) {
+        if (histo2d_fill_w(h, x[i], y[i], weights[i]) == HISTO_ERR_NON_FINITE) {
+            had_non_finite = true;
+        }
+    }
+    return had_non_finite;
+}
+
 #endif /* LIBHISTO_ENABLE_NEON */
+

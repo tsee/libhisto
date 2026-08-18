@@ -238,13 +238,78 @@ void test_simd_dispatch_equivalence_2d(void) {
     histo2d_destroy(h_batch);
 }
 
+void test_neon_2d_uniform_in_range(void) {
+#ifdef LIBHISTO_ENABLE_NEON
+    const size_t n = 64;
+    double x[64], y[64];
+    for (size_t i = 0; i < n; ++i) {
+        x[i] = 2.0 + (double)i * 1.5;
+        y[i] = 1.0 + (double)i * 1.2;
+    }
+
+    histo2d_t *h_scalar = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0, 0);
+    histo2d_t *h_neon = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0, 0);
+
+    for (size_t i = 0; i < n; ++i) {
+        histo2d_fill(h_scalar, x[i], y[i]);
+    }
+
+    bool non_finite = histo2d_fill_uniform_neon(h_neon, x, y, n);
+    TEST_ASSERT_FALSE(non_finite);
+
+    assert_histograms_2d_equal(h_scalar, h_neon);
+
+    histo2d_destroy(h_scalar);
+    histo2d_destroy(h_neon);
+#else
+    TEST_IGNORE_MESSAGE("NEON not enabled");
+#endif
+}
+
+void test_neon_2d_out_of_range_and_specials(void) {
+#ifdef LIBHISTO_ENABLE_NEON
+    const size_t n = 40;
+    double x[40], y[40];
+    for (size_t i = 0; i < n; ++i) {
+        x[i] = 50.0;
+        y[i] = 50.0;
+    }
+    x[5] = -10.0; y[5] = 50.0;
+    x[10] = 150.0; y[10] = 50.0;
+    x[15] = 50.0; y[15] = -20.0;
+    x[20] = 50.0; y[20] = 180.0;
+    x[25] = NAN; y[25] = 50.0;
+    x[30] = 50.0; y[30] = INFINITY;
+
+    histo2d_t *h_scalar = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0, 0);
+    histo2d_t *h_neon = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0, 0);
+
+    for (size_t i = 0; i < n; ++i) {
+        histo2d_fill(h_scalar, x[i], y[i]);
+    }
+
+    bool non_finite = histo2d_fill_uniform_neon(h_neon, x, y, n);
+    TEST_ASSERT_TRUE(non_finite);
+
+    assert_histograms_2d_equal(h_scalar, h_neon);
+
+    histo2d_destroy(h_scalar);
+    histo2d_destroy(h_neon);
+#else
+    TEST_IGNORE_MESSAGE("NEON not enabled");
+#endif
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_neon_uniform_in_range);
     RUN_TEST(test_neon_exact_edges);
     RUN_TEST(test_neon_out_of_range_and_specials);
     RUN_TEST(test_neon_weighted_w2);
+    RUN_TEST(test_neon_2d_uniform_in_range);
+    RUN_TEST(test_neon_2d_out_of_range_and_specials);
     RUN_TEST(test_simd_dispatch_equivalence);
     RUN_TEST(test_simd_dispatch_equivalence_2d);
     return UNITY_END();
 }
+

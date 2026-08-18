@@ -83,5 +83,12 @@ bool histo_fill_uniform_neon(histo_t *h, const double *x, size_t n) {
 bool histo_fill_uniform_w2_neon(histo_t *h, const double *x, const double *weights, size_t n) {
     (void)h; (void)x; (void)weights; (void)n; return false;
 }
+bool histo2d_fill_uniform_neon(histo2d_t *h, const double *x, const double *y, size_t n) {
+    (void)h; (void)x; (void)y; (void)n; return false;
+}
+bool histo2d_fill_uniform_w2_neon(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n) {
+    (void)h; (void)x; (void)y; (void)weights; (void)n; return false;
+}
 #endif
+
 
