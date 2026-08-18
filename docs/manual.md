@@ -409,7 +409,7 @@ M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
 ### 5.6 Non-Empty Support Linear Quantile & Dispersion (\f$O(N)\f$)
 Quantile coordinates \f$ Q(p) = F^{-1}(p) \f$ for \f$ p \in [0.0, 1.0] \f$ are evaluated using continuous inverse CDF interpolation:
 - Targets cumulative mass \f$ T = p \cdot W_{\text{total}} \f$.
-- Locates non-empty bin \f$ i \f$ where \f$ \sum_{j=0}^{i-1} w_j < T \le \sum_{j=0}^i w_j \f$.
+- Locates non-empty bin \f$ i \f$ where \f$ \sum_{j=0}^{i-1} w_j < T <= \sum_{j=0}^i w_j \f$.
 - Computes intra-bin linear coordinate:
 \f[
 Q(p) = \text{low}_i + \frac{T - \sum_{j=0}^{i-1} w_j}{w_i} (\text{high}_i - \text{low}_i)
@@ -437,7 +437,7 @@ When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division
 ### 5.9 DDSketch Bounded Relative-Error Quantile Sketch (\f$O(1)\f$ insertion)
 The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et al. (VLDB 2019). It guarantees a relative error bound \f$\alpha\f$ for any quantile query:
 - **Logarithmic Mapping**: \f$ k = \lceil \log_{\gamma}(|x|) \rceil = \lceil \frac{\ln |x|}{\ln \gamma} \rceil \f$ where \f$\gamma = \frac{1 + \alpha}{1 - \alpha}\f$.
-- **Quantile Reconstruction**: For bin index \f$k\f$, the representative value is \f$\hat{q} = \frac{2 \gamma^k}{1 + \gamma}\f$, bounding the relative error by \f$|q - \hat{q}| \le \alpha \cdot q\f$.
+- **Quantile Reconstruction**: For bin index \f$k\f$, the representative value is \f$\hat{q} = \frac{2 \gamma^k}{1 + \gamma}\f$, bounding the relative error by \f$|q - \hat{q}| <= \alpha \cdot q\f$.
 - **Collapsing Circular Buffer**: Positive and negative values are tracked in independent circular stores. When \f$k_{\max} - k_{\min} \ge \text{max\_bins}\f$, lower bins are collapsed into a single boundary bin to enforce strict memory bounds \f$O(\text{max\_bins})\f$.
 - **Mergeability**: Distributed sketches created with the same \f$\alpha\f$ can be merged exactly in \f$O(\text{max\_bins})\f$ time.
 
@@ -541,3 +541,32 @@ Benchmark measurements conducted on **Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz m
 | `histo_sketch_reset` | O(B) | O(1) | Resets circular stores and summary counters |
 | `histo_sketch_serialize_binary` | O(B) | O(B) | Encodes sketch to binary buffer |
 | `histo_sketch_deserialize_binary` | O(B) | O(B) | Decodes sketch from binary buffer |
+
+---
+
+## 9. Curve Fitting & Non-Linear Regression Engine
+
+`libhisto` includes a dedicated curve fitting engine in `histo/fit.h` for parameter estimation across 1D histograms.
+
+### Key Capabilities
+- **Built-in Parametric Models**: Gaussian peaks, Exponential decay with baseline, Polynomials ($d <= 10$), Breit-Wigner / Cauchy-Lorentz resonance peaks, and Power Law distributions.
+- **Custom User Models**: Arbitrary function callbacks `histo_fit_fn` with user context pointers and optional analytical gradient callbacks `histo_fit_grad_fn` (or automatic finite-difference fallback).
+- **Levenberg-Marquardt & Linear Least Squares**: Direct Cholesky solution for polynomials, and adaptive damping LM optimizer for non-linear models.
+- **Poisson MLE**: Cash deviance ($-2\ln\lambda$) for sparse and low-count histograms.
+- **Box Constraints & Freezing**: Parameter lower/upper bounds and fixed parameter masks.
+- **Diagnostics**: Parameter errors ($\sqrt{\text{Cov}_{ii}}$), covariance matrix, correlation matrix, reduced $\chi^2$, $p$-values, AIC, and BIC.
+
+For complete mathematical derivations and user recipes, see [`docs/curve_fitting_guide.md`](curve_fitting_guide.md).
+
+### Computational Complexity: Curve Fitting
+
+| Function | Time Complexity | Auxiliary Space | Notes |
+| :--- | :--- | :--- | :--- |
+| `histo_fit_options_init` | O(1) | O(1) | Initializes default optimizer options |
+| `histo_fit_estimate_initial_params` | O(N) | O(1) | Statistical moment-based heuristic estimation |
+| `histo_fit_model` (Linear LS) | O(N * P + P^3) | O(P^2) | Direct single-pass Cholesky polynomial solver |
+| `histo_fit_model` / `histo_fit_custom` (LM) | O(I * (N * P + P^3)) | O(N * P + P^2) | Levenberg-Marquardt non-linear least squares |
+| `histo_fit_eval` / `_custom` | O(P) | O(1) | Model evaluation at coordinate x |
+| `histo_fit_result_destroy` | O(1) | O(1) | Frees result arrays and container |
+| `histo_fit_chi2_p_value` | O(1) | O(1) | Regularized incomplete gamma evaluation |
+

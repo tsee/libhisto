@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['total_5fweight_0',['total_weight',['../structhisto__stats.html#a5547119a12e422410b9033bfb206dc48',1,'histo_stats']]]
+  ['fixed_5fparams_0',['fixed_params',['../structhisto__fit__options.html#a9a813b10742679e2ef2364506f074cfd',1,'histo_fit_options']]],
+  ['ftol_1',['ftol',['../structhisto__fit__options.html#ac059ac2ac7d814b1b967338febef0776',1,'histo_fit_options']]]
 ];

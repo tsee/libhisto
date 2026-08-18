@@ -72,3 +72,15 @@
 - [x] **G1** Coverage-guided & standalone fuzzing harnesses (`fuzz_deserialize_binary`, `fuzz_deserialize_json`, `fuzz_sketch_binary`, `fuzz_fill`)
 - [x] **G2** Modern CMake integration (`LIBHISTO_ENABLE_FUZZING`, LLVM `libFuzzer` Clang support & portable standalone mutation engine)
 - [x] **G3** Curated seed corpora in `tests/fuzz/corpus/`, corpus generator tool, and 100% leak-free ASan/UBSan verification
+
+---
+
+## Phase H: Curve Fitting & Non-Linear Regression Engine
+- [x] **H1** Modular architecture & public C API (`include/histo/fit.h`, `src/fit.c`)
+- [x] **H2** Built-in parametric models (Gaussian, Exponential, Polynomial up to degree 10, Breit-Wigner, Power Law) & custom user callback support
+- [x] **H3** Levenberg-Marquardt optimizer with adaptive damping and Direct Linear Least Squares for polynomials
+- [x] **H4** Objective loss functions: Weighted Chi-Square, Unweighted Least Squares, and Poisson MLE (Cash / Baker-Cousins deviance)
+- [x] **H5** Parameter box constraints, fixed parameter freezing, and automatic moment-based initial guess heuristics
+- [x] **H6** Comprehensive fit result diagnostics: covariance & correlation matrices, parameter errors, reduced Chi2, p-values (Gamma CDF), AIC, and BIC
+- [x] **H7** Unit and stress test suite (`tests/unit/test_fit.c`) with 100% leak-free ASan/UBSan and Valgrind verification
+- [x] **H8** Mathematical user guide (`docs/curve_fitting_guide.md`) and user manual updates (`docs/manual.md`)
