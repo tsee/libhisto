@@ -40,5 +40,9 @@ var index =
     [ "6. Performance Envelope &amp; Mechanical Sympathy", "index.html#autotoc_md36", [
       [ "Mechanical Sympathy Principles", "index.html#autotoc_md37", null ]
     ] ],
-    [ "7. Algorithmic Complexity Reference Table", "index.html#autotoc_md39", null ]
+    [ "7. Algorithmic Complexity Reference Table", "index.html#autotoc_md39", null ],
+    [ "9. Curve Fitting &amp; Non-Linear Regression Engine", "index.html#autotoc_md41", [
+      [ "Key Capabilities", "index.html#autotoc_md42", null ],
+      [ "Computational Complexity: Curve Fitting", "index.html#autotoc_md43", null ]
+    ] ]
 ];

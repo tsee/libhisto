@@ -26,6 +26,24 @@ var NAVTREE =
 [
   [ "libhisto", "index.html", [
     [ "libhisto User Manual &amp; Architecture Reference", "index.html", "index" ],
+    [ "Curve Fitting &amp; Non-Linear Regression Guide", "curve_fitting_guide.html", [
+      [ "1. Mathematical Formulations &amp; Algorithms", "curve_fitting_guide.html#autotoc_md45", [
+        [ "1.1 Chi-Square Minimization (Weighted Least Squares)", "curve_fitting_guide.html#autotoc_md46", null ],
+        [ "1.2 Binned Poisson Maximum Likelihood Estimation (Cash / Baker-Cousins Deviance)", "curve_fitting_guide.html#autotoc_md47", null ],
+        [ "1.3 Levenberg-Marquardt (LM) Optimizer", "curve_fitting_guide.html#autotoc_md48", null ],
+        [ "1.4 Direct Linear Least Squares for Polynomials", "curve_fitting_guide.html#autotoc_md49", null ]
+      ] ],
+      [ "2. Covariance Matrix &amp; Goodness of Fit", "curve_fitting_guide.html#autotoc_md51", [
+        [ "2.1 Covariance &amp; Parameter Standard Errors", "curve_fitting_guide.html#autotoc_md52", null ],
+        [ "2.2 Goodness-of-Fit Diagnostics", "curve_fitting_guide.html#autotoc_md53", null ]
+      ] ],
+      [ "3. Practical Usage &amp; C99 Code Examples", "curve_fitting_guide.html#autotoc_md55", [
+        [ "3.1 Gaussian Resonance Peak Fit", "curve_fitting_guide.html#autotoc_md56", null ],
+        [ "3.2 Polynomial Background Fit with Sub-range", "curve_fitting_guide.html#autotoc_md57", null ],
+        [ "3.3 Custom Parametric Model with Analytical Gradient", "curve_fitting_guide.html#autotoc_md58", null ]
+      ] ],
+      [ "4. Failure Modes &amp; Remediation", "curve_fitting_guide.html#autotoc_md60", null ]
+    ] ],
     [ "Data Structures", "annotated.html", [
       [ "Data Structures", "annotated.html", "annotated_dup" ],
       [ "Data Structure Index", "classes.html", null ],
@@ -50,7 +68,8 @@ var NAVTREE =
 
 var NAVTREEINDEX =
 [
-"annotated.html"
+"annotated.html",
+"types_8h.html#a1b261f0cbcb57b9b811d32352ef32f55aa80657441128d72cba7bc363cf37d1db"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';
