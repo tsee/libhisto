@@ -183,7 +183,7 @@ target_link_libraries(your_target PRIVATE libhisto::libhisto)
 - **SIMD Vector Acceleration:**
   - `histo_fill_n` dynamically selects AVX-512 or AVX2 vectorized execution paths when supported by the host CPU, computing candidate bin indices, branchless boundary guards, and parallel memory increments in vectorized batches.
 - **DDSketch Dynamic Quantile Sketches:**
-  - Unbounded-range streaming quantile estimator with provable relative error bound $\alpha$. Uses logarithmic binning ($k = \lceil \log_\gamma \vert x \vert \rceil$ with $\gamma = \frac{1+\alpha}{1-\alpha}$) and dense circular buffer collapsing to enforce bounded memory $O(\text{max\_bins})$.
+  - Unbounded-range streaming quantile estimator with provable relative error bound $\alpha$. Uses logarithmic binning ($k = \lceil \log_\gamma \vert x \vert \rceil$ with $\gamma = \frac{1+\alpha}{1-\alpha}$) and dense circular buffer collapsing to enforce bounded memory $O(B)$ (where $B$ is the `max_bins` limit).
 - **Statistical Uncertainty (`sum_w2`):**
   - Accurately tracks per-bin $\sum w_i^2$, providing statistical error bars ($\sigma_i = \sqrt{\sum w_i^2}$) and enabling division-free error propagation for histogram products and quotients.
 - **Exact Online Welford Moments:**
@@ -213,7 +213,7 @@ Benchmark measurements conducted on **Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz m
 ### Mechanical Sympathy & Engineering Principles
 
 1. **Zero Heap Allocation in Ingestion Hot Path:** Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`, `histo_sketch_insert`) execute with zero heap allocation overhead, operating directly on pre-allocated cache-line aligned memory.
-2. **Reciprocal Multiplication (`FMUL`) instead of Division (`FDIV`):** For uniform binning, bin coordinate lookup evaluates `(x - min) * inv_binsize` using precomputed reciprocal multiplication (latency $\approx 3$–$4$ cycles) rather than expensive floating-point division instructions (latency $\approx 14$–$20$ cycles).
+2. **Reciprocal Multiplication (`FMUL`) instead of Division (`FDIV`):** For uniform binning, bin coordinate lookup evaluates `(x - min) * inv_binsize` using precomputed reciprocal multiplication (latency $\approx 3$--$4$ cycles) rather than expensive floating-point division instructions (latency $\approx 14$--$20$ cycles).
 3. **Branchless SIMD Ingestion Kernels:** Vectorized batch ingestion utilizes AVX-512 / AVX2 instructions with FMA to transform coordinate blocks in parallel, applying vector min/max clamping and vectorized non-finite checks.
 4. **Division-Free Statistical Error Propagation:** Algebraic expansions for arithmetic operations propagate $\sum w^2$ without intermediate floating-point divisions, eliminating NaN singularities and CPU pipeline stalls on empty bins.
 5. **Strict 8-Byte Alignment & Cache-Conscious Data Structures:** Internal structures feature explicit 8-byte alignment padding and contiguous cache layouts, maximizing L1d/L2 cache hit ratios.
@@ -319,7 +319,7 @@ cat data.bin | histo-plot --sparkline --style=ascii --no-stats
    - Computes comprehensive summary reports including exact central moments (skewness, kurtosis), robust dispersion (IQR, MAD, trimmed/Winsorized means), and sub-bin continuous peak mode. Emits human-readable tables, TSV, or machine-readable JSON (`-f json`).
 
 4. **`histo-cmp`**:
-   - Compares two distributions and reports weighted Chi-Square ($\chi^2/\text{ndf}$), Kolmogorov-Smirnov supremum distance ($D$), 1D Wasserstein Earth Mover's Distance ($W_1$), Kullback-Leibler divergence ($D_{\text{KL}}$), and Bhattacharyya distance.
+   - Compares two distributions and reports weighted Chi-Square ($\chi^2/\mathrm{ndf}$), Kolmogorov-Smirnov supremum distance ($D$), 1D Wasserstein Earth Mover's Distance ($W_1$), Kullback-Leibler divergence ($D_{\mathrm{KL}}$), and Bhattacharyya distance.
 
 
 
