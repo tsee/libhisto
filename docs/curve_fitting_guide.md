@@ -1,4 +1,4 @@
-# Curve Fitting & Non-Linear Regression Guide
+# Curve Fitting & Non-Linear Regression Guide {#curve_fitting_guide}
 
 `libhisto` provides a high-performance, modular curve fitting and regression engine in `histo/fit.h`. It supports built-in parametric models (Gaussian, Exponential, Polynomial, Breit-Wigner, Power Law) and arbitrary user-defined models with analytical or finite-difference gradients.
 
@@ -8,39 +8,49 @@
 
 ### 1.1 Chi-Square Minimization (Weighted Least Squares)
 
-For a histogram with $N$ bins, bin centers $x_i$, observed contents $y_i$, and variances $\sigma_i^2$, the Chi-Square objective function is:
+For a histogram with \f$N\f$ bins, bin centers \f$x_i\f$, observed contents \f$y_i\f$, and variances \f$\sigma_i^2\f$, the Chi-Square objective function is:
 
-$$\chi^2(\mathbf{p}) = \sum_{i=1}^N \frac{(y_i - f(x_i; \mathbf{p}))^2}{\sigma_i^2}$$
+\f[
+\chi^2(\mathbf{p}) = \sum_{i=1}^N \frac{(y_i - f(x_i; \mathbf{p}))^2}{\sigma_i^2}
+\f]
 
 where:
-- When sum-of-weights-squared tracking (`HISTO_FLAG_TRACK_SUMW2`) is enabled, $\sigma_i^2 = \sum w_i^2$.
-- For unweighted Poisson counts, $\sigma_i^2 = \max(y_i, 1.0)$.
-- For unweighted least squares (`HISTO_FIT_LOSS_UNWEIGHTED_LS`), $\sigma_i = 1.0$, and the covariance matrix is scaled post-fit by $s^2 = \chi^2 / \text{ndf}$.
+- When sum-of-weights-squared tracking (`HISTO_FLAG_TRACK_SUMW2`) is enabled, \f$\sigma_i^2 = \sum w_i^2\f$.
+- For unweighted Poisson counts, \f$\sigma_i^2 = \max(y_i, 1.0)\f$.
+- For unweighted least squares (`HISTO_FIT_LOSS_UNWEIGHTED_LS`), \f$\sigma_i = 1.0\f$, and the covariance matrix is scaled post-fit by \f$s^2 = \chi^2 / \text{ndf}\f$.
 
 ### 1.2 Binned Poisson Maximum Likelihood Estimation (Cash / Baker-Cousins Deviance)
 
-For low-count or sparse Poisson histograms where Gaussian approximations ($\sigma_i \approx \sqrt{y_i}$) break down, `libhisto` provides the Cash Poisson deviance statistic:
+For low-count or sparse Poisson histograms where Gaussian approximations (\f$\sigma_i \approx \sqrt{y_i}\f$) break down, `libhisto` provides the Cash Poisson deviance statistic:
 
-$$-2 \ln \lambda(\mathbf{p}) = 2 \sum_{i=1}^N \left[ f(x_i; \mathbf{p}) - y_i + y_i \ln\left(\frac{y_i}{f(x_i; \mathbf{p})}\right) \right]$$
+\f[
+-2 \ln \lambda(\mathbf{p}) = 2 \sum_{i=1}^N \left[ f(x_i; \mathbf{p}) - y_i + y_i \ln\left(\frac{y_i}{f(x_i; \mathbf{p})}\right) \right]
+\f]
 
-with the convention $0 \ln(0 / f) \equiv 0$. The gradient and Fisher Information (approximate Hessian) used in Levenberg-Marquardt iterations are:
+with the convention \f$0 \ln(0 / f) \equiv 0\f$. The gradient and Fisher Information (approximate Hessian) used in Levenberg-Marquardt iterations are:
 
-$$\nabla [-2\ln\lambda] = 2 \sum_{i=1}^N \left(1 - \frac{y_i}{f(x_i; \mathbf{p})}\right) \nabla f(x_i; \mathbf{p})$$
+\f[
+\nabla [-2\ln\lambda] = 2 \sum_{i=1}^N \left(1 - \frac{y_i}{f(x_i; \mathbf{p})}\right) \nabla f(x_i; \mathbf{p})
+\f]
 
-$$\mathbf{H} \approx 2 \sum_{i=1}^N \frac{1}{f(x_i; \mathbf{p})} \nabla f(x_i; \mathbf{p}) \nabla f(x_i; \mathbf{p})^T$$
+\f[
+\mathbf{H} \approx 2 \sum_{i=1}^N \frac{1}{f(x_i; \mathbf{p})} \nabla f(x_i; \mathbf{p}) \nabla f(x_i; \mathbf{p})^T
+\f]
 
 ### 1.3 Levenberg-Marquardt (LM) Optimizer
 
-The Levenberg-Marquardt algorithm adaptively interpolates between Gradient Descent (when far from the optimum) and Gauss-Newton optimization (near the optimum). At iteration $k$, the step $\Delta \mathbf{p}$ is solved from:
+The Levenberg-Marquardt algorithm adaptively interpolates between Gradient Descent (when far from the optimum) and Gauss-Newton optimization (near the optimum). At iteration \f$k\f$, the step \f$\Delta \mathbf{p}\f$ is solved from:
 
-$$\left(\mathbf{J}^T \mathbf{W} \mathbf{J} + \lambda \operatorname{diag}(\mathbf{J}^T \mathbf{W} \mathbf{J})\right) \Delta \mathbf{p} = \mathbf{J}^T \mathbf{W} (\mathbf{y} - \mathbf{f}(\mathbf{p}))$$
+\f[
+\left(\mathbf{J}^T \mathbf{W} \mathbf{J} + \lambda \operatorname{diag}(\mathbf{J}^T \mathbf{W} \mathbf{J})\right) \Delta \mathbf{p} = \mathbf{J}^T \mathbf{W} (\mathbf{y} - \mathbf{f}(\mathbf{p}))
+\f]
 
-- **Damping parameter $\lambda$**: Updated via the Marquardt-Nielsen gain ratio $\rho = \frac{S(\mathbf{p}) - S(\mathbf{p} + \Delta \mathbf{p})}{L(\mathbf{0}) - L(\Delta \mathbf{p})}$. When $\rho > 0.75$, $\lambda$ is decreased; when $\rho < 0.25$, $\lambda$ is increased and the step is rejected.
-- **System Solver**: Solved via Cholesky decomposition ($\mathbf{L} \mathbf{L}^T$) with positive-definite diagonal ridge regularization.
+- **Damping parameter \f$\lambda\f$**: Updated via the Marquardt-Nielsen gain ratio \f$\rho = \frac{S(\mathbf{p}) - S(\mathbf{p} + \Delta \mathbf{p})}{L(\mathbf{0}) - L(\Delta \mathbf{p})}\f$. When \f$\rho > 0.75\f$, \f$\lambda\f$ is decreased; when \f$\rho < 0.25\f$, \f$\lambda\f$ is increased and the step is rejected.
+- **System Solver**: Solved via Cholesky decomposition (\f$\mathbf{L} \mathbf{L}^T\f$) with positive-definite diagonal ridge regularization.
 
 ### 1.4 Direct Linear Least Squares for Polynomials
 
-For polynomial models of degree $d \le 10$ under $\chi^2$ loss without non-linear bounds, the normal equations $\mathbf{X}^T \mathbf{W} \mathbf{X} \mathbf{c} = \mathbf{X}^T \mathbf{W} \mathbf{y}$ are solved directly in a single exact pass via Cholesky decomposition without requiring initial guesses or iterations.
+For polynomial models of degree \f$d \le 10\f$ under \f$\chi^2\f$ loss without non-linear bounds, the normal equations \f$\mathbf{X}^T \mathbf{W} \mathbf{X} \mathbf{c} = \mathbf{X}^T \mathbf{W} \mathbf{y}\f$ are solved directly in a single exact pass via Cholesky decomposition without requiring initial guesses or iterations.
 
 ---
 
@@ -48,28 +58,36 @@ For polynomial models of degree $d \le 10$ under $\chi^2$ loss without non-linea
 
 ### 2.1 Covariance & Parameter Standard Errors
 
-The parameter covariance matrix $\mathbf{C} \in \mathbb{R}^{P \times P}$ is obtained from the inverse of the curvature matrix:
+The parameter covariance matrix \f$\mathbf{C} \in \mathbb{R}^{P \times P}\f$ is obtained from the inverse of the curvature matrix:
 
-$$\mathbf{C} = \left(\mathbf{J}^T \mathbf{W} \mathbf{J}\right)^{-1}$$
+\f[
+\mathbf{C} = \left(\mathbf{J}^T \mathbf{W} \mathbf{J}\right)^{-1}
+\f]
 
-The estimated standard error for parameter $j$ is:
+The estimated standard error for parameter \f$j\f$ is:
 
-$$\sigma_{p_j} = \sqrt{C_{jj}}$$
+\f[
+\sigma_{p_j} = \sqrt{C_{jj}}
+\f]
 
 The parameter correlation matrix is:
 
-$$R_{jk} = \frac{C_{jk}}{\sigma_{p_j} \sigma_{p_k}}$$
+\f[
+R_{jk} = \frac{C_{jk}}{\sigma_{p_j} \sigma_{p_k}}
+\f]
 
 ### 2.2 Goodness-of-Fit Diagnostics
 
-- **Degrees of Freedom (NDF)**: $\text{ndf} = N_{\text{bins}} - N_{\text{free\_params}}$.
-- **Reduced $\chi^2$**: $\chi^2_\nu = \chi^2 / \text{ndf}$. A good fit typically has $\chi^2_\nu \approx 1.0$.
-- **$p$-Value**: Upper-tail probability from the Chi-Square distribution:
-  $$p = P\left(X \ge \chi^2_{\text{obs}} \mid \text{ndf}\right) = \frac{\Gamma(\text{ndf}/2, \chi^2/2)}{\Gamma(\text{ndf}/2)}$$
+- **Degrees of Freedom (NDF)**: \f$\text{ndf} = N_{\text{bins}} - N_{\text{free\_params}}\f$.
+- **Reduced \f$\chi^2\f$**: \f$\chi^2_\nu = \chi^2 / \text{ndf}\f$. A good fit typically has \f$\chi^2_\nu \approx 1.0\f$.
+- **p-Value**: Upper-tail probability from the Chi-Square distribution:
+  \f[
+  p = P\left(X \ge \chi^2_{\text{obs}} \mid \text{ndf}\right) = \frac{\Gamma(\text{ndf}/2, \chi^2/2)}{\Gamma(\text{ndf}/2)}
+  \f]
   Computed via regularized incomplete gamma functions.
 - **Information Criteria**:
-  - Akaike Information Criterion: $\text{AIC} = 2k - 2\ln L$.
-  - Bayesian Information Criterion: $\text{BIC} = k \ln N - 2\ln L$.
+  - Akaike Information Criterion: \f$\text{AIC} = 2k - 2\ln L\f$.
+  - Bayesian Information Criterion: \f$\text{BIC} = k \ln N - 2\ln L\f$.
 
 ---
 
@@ -170,5 +188,5 @@ void fit_custom_example(histo_t *h) {
 | :--- | :--- | :--- |
 | **Singular Hessian Matrix (`HISTO_FIT_ERR_SINGULAR`)** | Parameters are degenerate or linearly dependent (e.g. amplitude of zero component). | Freeze unneeded parameters using `opts.fixed_params` or add tighter box constraints. |
 | **Local Minimum Trapping** | Initial guess is too far from true global basin. | Use `histo_fit_estimate_initial_params` or provide physically motivated initial guesses. |
-| **Divergence (`HISTO_FIT_ERR_DIVERGENCE`)** | Model evaluated outside domain (e.g. $x - x_0 \le 0$ for power law or $\sigma \le 0$ for Gaussian). | Set box constraints with `opts.lower_bounds` and `opts.upper_bounds`. |
+| **Divergence (`HISTO_FIT_ERR_DIVERGENCE`)** | Model evaluated outside domain (e.g. \f$x - x_0 \le 0\f$ for power law or \f$\sigma \le 0\f$ for Gaussian). | Set box constraints with `opts.lower_bounds` and `opts.upper_bounds`. |
 | **Under-constrained Fit (`ndf <= 0`)** | Number of bins in fit range is less than or equal to free parameters. | Broaden fit range `[opts.range_min, opts.range_max]` or increase histogram binning resolution. |

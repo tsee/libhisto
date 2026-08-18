@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['sketch_2eh_0',['sketch.h',['../sketch_8h.html',1,'']]]
+  ['manual_2emd_0',['manual.md',['../manual_8md.html',1,'']]]
 ];

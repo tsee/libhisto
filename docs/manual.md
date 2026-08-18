@@ -12,7 +12,7 @@ Welcome to **libhisto**! This guide covers the core concepts, user recipes, adva
 - **DDSketch Dynamic Quantile Sketches**: Fully dynamic, bounded relative-error online quantile sketches (`include/histo/sketch.h`) with logarithmic dynamic binning, circular collapsing buffers, and mergeability across distributed streams.
 - **Strict ISO C99 & Memory Safety**: Defensive pointer checks on all public APIs, clear destructor ownership semantics (`histo_destroy`, `histo_sketch_destroy`, `histo_free_buffer`), and 100% leak-free ASan/UBSan/Valgrind verification.
 - **Deterministic Endian-Safe Wire Format**: Canonical 256-byte header with Little-Endian IEEE-754 data payloads, lossless JSON serialization, and automatic version migration (`histo_migrate_binary`).
-- **Comprehensive Statistical Analysis**: Online weighted Welford accumulation, two-pass higher-order central moments, sub-bin parabolic peak mode estimation, robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and two-distribution comparison metrics (\f$\chi^2\f$, KS, Wasserstein-1D, KL divergence, Bhattacharyya).
+- **Comprehensive Statistical Analysis**: Online weighted Welford accumulation, two-pass higher-order central moments, sub-bin parabolic peak mode estimation, robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and two-distribution comparison metrics (\f$chi^2\f$, KS, Wasserstein-1D, KL divergence, Bhattacharyya).
 - **Unix CLI & Terminal Visualization**: Rich command-line toolkit (`histo-fill`, `histo-plot`, `histo-stats`, `histo-cmp`) supporting ANSI TrueColor gradients, 1/8th Unicode fractional blocks, compact single-line sparklines (`-S, --sparkline`), and live streaming `--watch` mode.
 
 ---
@@ -362,11 +362,11 @@ cat data.bin | histo-plot --sparkline --style=ascii --no-stats
 ### 5.1 Boundary-Guarded Uniform Bin Lookup (\f$O(1)\f$)
 For uniform binning over \f$[x_{\min}, x_{\max})\f$, naive floating-point division `(x - min) / width` is susceptible to floating-point truncation errors at exact bin boundaries. `libhisto` computes the candidate provisional index via reciprocal multiplication:
 \f[
-i_{\text{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
+i_{{prov}} = \lfloor (x - x_{\min}) \cdot \Delta^{-1} \rfloor
 \f]
 Followed by dual neighbor verification against machine-precision boundary limits:
-- **Upper Guard**: If \f$ x \ge x_{\min} + (i_{\text{prov}} + 1) \Delta \f$, then \f$ i = i_{\text{prov}} + 1 \f$.
-- **Lower Guard**: If \f$ x < x_{\min} + i_{\text{prov}} \Delta \f$, then \f$ i = i_{\text{prov}} - 1 \f$.
+- **Upper Guard**: If \f$ x \ge x_{\min} + (i_{{prov}} + 1) \Delta \f$, then \f$ i = i_{{prov}} + 1 \f$.
+- **Lower Guard**: If \f$ x < x_{\min} + i_{{prov}} \Delta \f$, then \f$ i = i_{{prov}} - 1 \f$.
 If \f$ \Delta^{-1} \f$ overflows to infinity on subnormal ranges, lookup falls back cleanly to robust division.
 
 ### 5.2 Variable-Width Bisection Binary Search (\f$O(\log N)\f$)
@@ -377,23 +377,23 @@ For variable binning defined by monotonic edges \f$ e_0 < e_1 < \dots < e_N \f$,
 ### 5.3 Online Weighted Welford Statistics (\f$O(1)\f$)
 When `HISTO_FLAG_EXACT_MOMENTS` is enabled, running moments are accumulated without storing historical samples:
 \f[
-W_{\text{new}} = W_{\text{old}} + w_i
+W_{{new}} = W_{{old}} + w_i
 \f]
 \f[
-\delta = x_i - \mu_{\text{old}}
+\delta = x_i - \mu_{{old}}
 \f]
 \f[
-\mu_{\text{new}} = \mu_{\text{old}} + \frac{w_i}{W_{\text{new}}} \delta
+\mu_{{new}} = \mu_{{old}} + \frac{w_i}{W_{{new}}} \delta
 \f]
 \f[
-M_{2, \text{new}} = M_{2, \text{old}} + w_i \delta (x_i - \mu_{\text{new}})
+M_{2, {new}} = M_{2, {old}} + w_i \delta (x_i - \mu_{{new}})
 \f]
 Variance is extracted as \f$ \sigma^2 = M_2 / W \f$. The algorithm natively supports negative event weights and avoids variance underflow via \f$ M_2 = \max(0.0, M_2) \f$ clamping.
 
 ### 5.4 Higher-Order Central Moments & Shape Formulations (\f$O(N)\f$)
 For orders \f$ k \ge 2 \f$, central moments are computed using a two-pass algorithm over active bin centers:
 \f[
-M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
+M_k = \frac{1}{W_{{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
 \f]
 - **Skewness** (\f$ \gamma_1 \f$): \f$ \gamma_1 = \frac{M_3}{M_2^{3/2}} = \frac{M_3}{\sigma^3} \f$
 - **Kurtosis** (\f$ \beta_2 \f$): \f$ \beta_2 = \frac{M_4}{M_2^2} = \frac{M_4}{\sigma^4} \f$
@@ -402,49 +402,49 @@ M_k = \frac{1}{W_{\text{total}}} \sum_{i=0}^{N-1} w_i (x_{c, i} - \mu)^k
 ### 5.5 Continuous Parabolic Peak Mode & FWHM (\f$O(N)\f$)
 - **Continuous Mode**: Identifies mode bin \f$ m \f$ having maximum weight \f$ w_m \f$. For uniform histograms, fits a parabola through \f$ (x_{m-1}, w_{m-1}), (x_m, w_m), (x_{m+1}, w_{m+1}) \f$:
 \f[
-\delta = \frac{1}{2} \frac{w_{m+1} - w_{m-1}}{2 w_m - w_{m-1} - w_{m+1}}, \quad x_{\text{mode}} = x_{c, m} + \delta \cdot \Delta
+\delta = \frac{1}{2} \frac{w_{m+1} - w_{m-1}}{2 w_m - w_{m-1} - w_{m+1}}, \quad x_{{mode}} = x_{c, m} + \delta \cdot \Delta
 \f]
-- **FWHM**: Scans outward from the mode bin to find the left and right crossings where \f$ w(x) = \frac{1}{2} w_{\text{max}} \f$, linearly interpolating between bin centers.
+- **FWHM**: Scans outward from the mode bin to find the left and right crossings where \f$ w(x) = \frac{1}{2} w_{{max}} \f$, linearly interpolating between bin centers.
 
 ### 5.6 Non-Empty Support Linear Quantile & Dispersion (\f$O(N)\f$)
 Quantile coordinates \f$ Q(p) = F^{-1}(p) \f$ for \f$ p \in [0.0, 1.0] \f$ are evaluated using continuous inverse CDF interpolation:
-- Targets cumulative mass \f$ T = p \cdot W_{\text{total}} \f$.
+- Targets cumulative mass \f$ T = p \cdot W_{{total}} \f$.
 - Locates non-empty bin \f$ i \f$ where \f$ \sum_{j=0}^{i-1} w_j < T <= \sum_{j=0}^i w_j \f$.
 - Computes intra-bin linear coordinate:
 \f[
-Q(p) = \text{low}_i + \frac{T - \sum_{j=0}^{i-1} w_j}{w_i} (\text{high}_i - \text{low}_i)
+Q(p) = {low}_i + \frac{T - \sum_{j=0}^{i-1} w_j}{w_i} ({high}_i - {low}_i)
 \f]
-- **MAD**: Evaluates median deviation \f$ d_i = |x_{c, i} - \text{median}| \f$, sorts weighted pairs in \f$ O(N \log N) \f$, and finds the 50th percentile of absolute deviations.
+- **MAD**: Evaluates median deviation \f$ d_i = |x_{c, i} - {median}| \f$, sorts weighted pairs in \f$ O(N \log N) \f$, and finds the 50th percentile of absolute deviations.
 
 ### 5.7 Division-Free Error Propagation (\f$O(N)\f$)
 When combining histograms via multiplication (\f$ H = A \cdot B \f$) or division (\f$ H = A / B \f$), statistical uncertainties are propagated without intermediate divisions:
 - **Product Uncertainty**:
 \f[
-\text{sum\_w2}_{A \cdot B, i} = B_i^2 \, \text{sum\_w2}_{A, i} + A_i^2 \, \text{sum\_w2}_{B, i}
+{sum\_w2}_{A \cdot B, i} = B_i^2 \, {sum\_w2}_{A, i} + A_i^2 \, {sum\_w2}_{B, i}
 \f]
 - **Quotient Uncertainty**:
 \f[
-\text{sum\_w2}_{A / B, i} = \frac{\text{sum\_w2}_{A, i} \, B_i^2 + \text{sum\_w2}_{B, i} \, A_i^2}{B_i^4}
+{sum\_w2}_{A / B, i} = \frac{{sum\_w2}_{A, i} \, B_i^2 + {sum\_w2}_{B, i} \, A_i^2}{B_i^4}
 \f]
 
 ### 5.8 Two-Distribution Comparison Metrics (\f$O(N)\f$)
-- **Weighted Chi-Square**: \f$ \chi^2 = \sum_{i} \frac{(w_{1,i} - w_{2,i})^2}{\sigma_{1,i}^2 + \sigma_{2,i}^2} \f$ with \f$ \text{NDF} \f$ matching the number of non-zero variance bins.
+- **Weighted Chi-Square**: \f$ chi^2 = \sum_{i} \frac{(w_{1,i} - w_{2,i})^2}{\sigma_{1,i}^2 + \sigma_{2,i}^2} \f$ with \f$ {NDF} \f$ matching the number of non-zero variance bins.
 - **Kolmogorov-Smirnov**: \f$ D = \max_i |F_1(x_i) - F_2(x_i)| \f$ over normalized empirical CDFs.
 - **1D Wasserstein (EMD)**: \f$ W_1 = \int |F_1(x) - F_2(x)| \, dx = \sum_i |F_1(x_i) - F_2(x_i)| \Delta x_i \f$.
-- **KL Divergence**: \f$ D_{\text{KL}}(P \parallel Q) = \sum_{i} P_i \ln \frac{P_i}{Q_i} \f$ (with \f$ \epsilon = 10^{-12} \f$ floor for zero target bins).
-- **Bhattacharyya Distance**: \f$ D_B(P, Q) = -\ln \sum_i \sqrt{P_i Q_i} \f$.
+- **KL Divergence**: \f$ D_{{KL}}(P \parallel Q) = \sum_{i} P_i ln \frac{P_i}{Q_i} \f$ (with \f$ \epsilon = 10^{-12} \f$ floor for zero target bins).
+- **Bhattacharyya Distance**: \f$ D_B(P, Q) = -ln \sum_i sqrt{P_i Q_i} \f$.
 
 ### 5.9 DDSketch Bounded Relative-Error Quantile Sketch (\f$O(1)\f$ insertion)
 The `histo_sketch_t` provides a fully dynamic quantile sketch based on Masson et al. (VLDB 2019). It guarantees a relative error bound \f$\alpha\f$ for any quantile query:
-- **Logarithmic Mapping**: \f$ k = \lceil \log_{\gamma}(|x|) \rceil = \lceil \frac{\ln |x|}{\ln \gamma} \rceil \f$ where \f$\gamma = \frac{1 + \alpha}{1 - \alpha}\f$.
+- **Logarithmic Mapping**: \f$ k = \lceil \log_{\gamma}(|x|) \rceil = \lceil \frac{ln |x|}{ln \gamma} \rceil \f$ where \f$\gamma = \frac{1 + \alpha}{1 - \alpha}\f$.
 - **Quantile Reconstruction**: For bin index \f$k\f$, the representative value is \f$\hat{q} = \frac{2 \gamma^k}{1 + \gamma}\f$, bounding the relative error by \f$|q - \hat{q}| <= \alpha \cdot q\f$.
-- **Collapsing Circular Buffer**: Positive and negative values are tracked in independent circular stores. When \f$k_{\max} - k_{\min} \ge \text{max\_bins}\f$, lower bins are collapsed into a single boundary bin to enforce strict memory bounds \f$O(\text{max\_bins})\f$.
-- **Mergeability**: Distributed sketches created with the same \f$\alpha\f$ can be merged exactly in \f$O(\text{max\_bins})\f$ time.
+- **Collapsing Circular Buffer**: Positive and negative values are tracked in independent circular stores. When \f$k_{\max} - k_{\min} \ge {max\_bins}\f$, lower bins are collapsed into a single boundary bin to enforce strict memory bounds \f$O({max\_bins})\f$.
+- **Mergeability**: Distributed sketches created with the same \f$\alpha\f$ can be merged exactly in \f$O({max\_bins})\f$ time.
 
 ### 5.10 SIMD Vector Acceleration Architecture (\f$O(N)\f$)
 `histo_fill_n` evaluates batch coordinate arrays using vectorized hardware pipelines:
 - **Runtime CPUID Dispatch**: On x86_64 architectures, CPUID dynamically selects AVX-512 (8-wide double vectors) or AVX2/FMA (4-wide double vectors).
-- **Vectorized Indexing**: Coordinates are loaded via unaligned SIMD loads (`_mm256_loadu_pd` / `_mm512_loadu_pd`), subtracted from \f$x_{\min}\f$, and multiplied by \f$\text{inv\_binsize}\f$ using FMA.
+- **Vectorized Indexing**: Coordinates are loaded via unaligned SIMD loads (`_mm256_loadu_pd` / `_mm512_loadu_pd`), subtracted from \f$x_{\min}\f$, and multiplied by \f${inv\_binsize}\f$ using FMA.
 - **Branchless Masking**: Out-of-range (< min, >= max) and NaN/Inf coordinates are detected via SIMD comparison masks (`_mm256_cmp_pd`, `_mm512_cmp_pd_mask`). Valid blocks execute in direct vectorized pipelines; edge cases fall back to scalar handlers.
 - **Cross-Platform Fallback**: On ARM and non-x86 architectures, the pipeline compiles clean, portable scalar/auto-vectorized loops ready for NEON optimization.
 
@@ -552,11 +552,11 @@ Benchmark measurements conducted on **Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz m
 - **Built-in Parametric Models**: Gaussian peaks, Exponential decay with baseline, Polynomials ($d <= 10$), Breit-Wigner / Cauchy-Lorentz resonance peaks, and Power Law distributions.
 - **Custom User Models**: Arbitrary function callbacks `histo_fit_fn` with user context pointers and optional analytical gradient callbacks `histo_fit_grad_fn` (or automatic finite-difference fallback).
 - **Levenberg-Marquardt & Linear Least Squares**: Direct Cholesky solution for polynomials, and adaptive damping LM optimizer for non-linear models.
-- **Poisson MLE**: Cash deviance ($-2\ln\lambda$) for sparse and low-count histograms.
+- **Poisson MLE**: Cash deviance ($-2ln(lambda)$) for sparse and low-count histograms.
 - **Box Constraints & Freezing**: Parameter lower/upper bounds and fixed parameter masks.
-- **Diagnostics**: Parameter errors ($\sqrt{\text{Cov}_{ii}}$), covariance matrix, correlation matrix, reduced $\chi^2$, $p$-values, AIC, and BIC.
+- **Diagnostics**: Parameter errors ($sqrt{{Cov}_{ii}}$), covariance matrix, correlation matrix, reduced $chi^2$, $p$-values, AIC, and BIC.
 
-For complete mathematical derivations and user recipes, see [`docs/curve_fitting_guide.md`](curve_fitting_guide.md).
+For complete mathematical derivations and user recipes, see [`docs/curve_fitting_guide.md`](@ref curve_fitting_guide).
 
 ### Computational Complexity: Curve Fitting
 

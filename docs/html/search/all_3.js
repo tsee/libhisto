@@ -12,7 +12,9 @@ var searchData=
   ['4_208_202_20terminal_20visualization_20sparklines_20histo_20plot_9',['4.8.2 Terminal Visualization &amp;amp; Sparklines (&lt;span class=&quot;tt&quot;&gt;histo-plot&lt;/span&gt;)',['../index.html#autotoc_md22',1,'']]],
   ['4_208_20unix_20cli_20toolkit_10',['4.8 Unix CLI Toolkit',['../index.html#autotoc_md20',1,'']]],
   ['4_20binary_20save_20load_20json_20serialization_20and_20version_20migration_11',['4.4 Binary Save, Load, JSON Serialization, and Version Migration',['../index.html#autotoc_md16',1,'']]],
-  ['4_20higher_20order_20central_20moments_20shape_20formulations_2030_12',['5.4 Higher-Order Central Moments &amp;amp; Shape Formulations ( \\(O(N)\\))',['../index.html#autotoc_md28',1,'']]],
-  ['4_20insertion_13',['5.9 DDSketch Bounded Relative-Error Quantile Sketch ( \\(O(1)\\) insertion)',['../index.html#autotoc_md33',1,'']]],
-  ['4_20practical_20recipes_14',['4. Practical Recipes',['../index.html#autotoc_md12',1,'']]]
+  ['4_20direct_20linear_20least_20squares_20for_20polynomials_12',['1.4 Direct Linear Least Squares for Polynomials',['../curve_fitting_guide.html#autotoc_md49',1,'']]],
+  ['4_20failure_20modes_20remediation_13',['4. Failure Modes &amp;amp; Remediation',['../curve_fitting_guide.html#autotoc_md60',1,'']]],
+  ['4_20higher_20order_20central_20moments_20shape_20formulations_2030_14',['5.4 Higher-Order Central Moments &amp;amp; Shape Formulations ( \\(O(N)\\))',['../index.html#autotoc_md28',1,'']]],
+  ['4_20insertion_15',['5.9 DDSketch Bounded Relative-Error Quantile Sketch ( \\(O(1)\\) insertion)',['../index.html#autotoc_md33',1,'']]],
+  ['4_20practical_20recipes_16',['4. Practical Recipes',['../index.html#autotoc_md12',1,'']]]
 ];
