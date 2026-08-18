@@ -29,3 +29,4 @@ vgcore.*
 
 # Documentation build output
 docs/html/
+__pycache__/
