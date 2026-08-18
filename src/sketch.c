@@ -251,19 +251,224 @@ double histo_sketch_max(const histo_sketch_t *s) { return s ? (s->num_entries > 
 double histo_sketch_total_weight(const histo_sketch_t *s) { return s ? s->total_weight : 0.0; }
 uint64_t histo_sketch_num_entries(const histo_sketch_t *s) { return s ? s->num_entries : 0; }
 
+#include "internal_common.h"
+
+#define HISTO_SKETCH_MAGIC "\x89LSKET\n\0"
+#define HISTO_SKETCH_MAGIC_LEN 8
+#define HISTO_SKETCH_HEADER_SIZE 128
+#define HISTO_SKETCH_FORMAT_VERSION 1
+
 histo_status_t histo_sketch_serialize_binary(const histo_sketch_t *s, void **out_buffer, size_t *out_size) {
     if (!s || !out_buffer || !out_size) return HISTO_ERR_INVALID_ARG;
-    
-    // Very basic serialization format for testing (alpha, max_bins, min, max, total_weight, num_entries, zero, pos_min, pos_max, neg_min, neg_max, + weights)
-    // For production, a robust schema is required.
-    *out_buffer = malloc(1024);
-    *out_size = 1024;
+
+    uint32_t pos_has = (s->pos.counts != NULL) ? 1 : 0;
+    uint32_t pos_num = (pos_has && s->pos.max_k >= s->pos.min_k) ? (uint32_t)(s->pos.max_k - s->pos.min_k + 1) : 0;
+    if (pos_num > s->max_bins) pos_num = s->max_bins;
+
+    uint32_t neg_has = (s->neg.counts != NULL) ? 1 : 0;
+    uint32_t neg_num = (neg_has && s->neg.max_k >= s->neg.min_k) ? (uint32_t)(s->neg.max_k - s->neg.min_k + 1) : 0;
+    if (neg_num > s->max_bins) neg_num = s->max_bins;
+
+    size_t total_size = HISTO_SKETCH_HEADER_SIZE + ((size_t)pos_num + (size_t)neg_num) * sizeof(double);
+    uint8_t *buf = (uint8_t *)calloc(1, total_size);
+    if (!buf) return HISTO_ERR_NOMEM;
+
+    /* Magic & Version */
+    memcpy(buf, HISTO_SKETCH_MAGIC, HISTO_SKETCH_MAGIC_LEN);
+    uint32_t ver = histo_htole32(HISTO_SKETCH_FORMAT_VERSION);
+    uint32_t hdr_sz = histo_htole32(HISTO_SKETCH_HEADER_SIZE);
+    memcpy(buf + 8, &ver, 4);
+    memcpy(buf + 12, &hdr_sz, 4);
+
+    /* Parameters */
+    double alpha_le = histo_dtole(s->alpha);
+    double gamma_le = histo_dtole(s->gamma);
+    double log_gamma_le = histo_dtole(s->log_gamma);
+    uint32_t max_bins_le = histo_htole32(s->max_bins);
+    uint32_t flags_le = 0;
+    memcpy(buf + 16, &alpha_le, 8);
+    memcpy(buf + 24, &gamma_le, 8);
+    memcpy(buf + 32, &log_gamma_le, 8);
+    memcpy(buf + 40, &max_bins_le, 4);
+    memcpy(buf + 44, &flags_le, 4);
+
+    /* Summaries */
+    double zero_le = histo_dtole(s->zero_count);
+    double tot_w_le = histo_dtole(s->total_weight);
+    uint64_t entries_le = histo_htole64(s->num_entries);
+    double min_v_le = histo_dtole(s->min_val);
+    double max_v_le = histo_dtole(s->max_val);
+    memcpy(buf + 48, &zero_le, 8);
+    memcpy(buf + 56, &tot_w_le, 8);
+    memcpy(buf + 64, &entries_le, 8);
+    memcpy(buf + 72, &min_v_le, 8);
+    memcpy(buf + 80, &max_v_le, 8);
+
+    /* Pos Store metadata */
+    int32_t pos_min_k_le = (int32_t)histo_htole32((uint32_t)s->pos.min_k);
+    int32_t pos_max_k_le = (int32_t)histo_htole32((uint32_t)s->pos.max_k);
+    uint32_t pos_has_le = histo_htole32(pos_has);
+    uint32_t pos_num_le = histo_htole32(pos_num);
+    memcpy(buf + 88, &pos_min_k_le, 4);
+    memcpy(buf + 92, &pos_max_k_le, 4);
+    memcpy(buf + 96, &pos_has_le, 4);
+    memcpy(buf + 100, &pos_num_le, 4);
+
+    /* Neg Store metadata */
+    int32_t neg_min_k_le = (int32_t)histo_htole32((uint32_t)s->neg.min_k);
+    int32_t neg_max_k_le = (int32_t)histo_htole32((uint32_t)s->neg.max_k);
+    uint32_t neg_has_le = histo_htole32(neg_has);
+    uint32_t neg_num_le = histo_htole32(neg_num);
+    memcpy(buf + 104, &neg_min_k_le, 4);
+    memcpy(buf + 108, &neg_max_k_le, 4);
+    memcpy(buf + 112, &neg_has_le, 4);
+    memcpy(buf + 116, &neg_num_le, 4);
+
+    /* Pos Payload */
+    size_t offset = HISTO_SKETCH_HEADER_SIZE;
+    if (pos_has && pos_num > 0) {
+        for (uint32_t i = 0; i < pos_num; ++i) {
+            int32_t k = s->pos.min_k + (int32_t)i;
+            double w = s->pos.counts[(k % (int32_t)s->pos.max_bins + (int32_t)s->pos.max_bins) % (int32_t)s->pos.max_bins];
+            double w_le = histo_dtole(w);
+            memcpy(buf + offset, &w_le, sizeof(double));
+            offset += sizeof(double);
+        }
+    }
+
+    /* Neg Payload */
+    if (neg_has && neg_num > 0) {
+        for (uint32_t i = 0; i < neg_num; ++i) {
+            int32_t k = s->neg.min_k + (int32_t)i;
+            double w = s->neg.counts[(k % (int32_t)s->neg.max_bins + (int32_t)s->neg.max_bins) % (int32_t)s->neg.max_bins];
+            double w_le = histo_dtole(w);
+            memcpy(buf + offset, &w_le, sizeof(double));
+            offset += sizeof(double);
+        }
+    }
+
+    *out_buffer = buf;
+    *out_size = total_size;
     return HISTO_OK;
 }
 
 histo_status_t histo_sketch_deserialize_binary(const void *buffer, size_t size, histo_sketch_t **out_sketch) {
-    (void)size;
     if (!buffer || !out_sketch) return HISTO_ERR_INVALID_ARG;
-    *out_sketch = histo_sketch_create(0.01, 1024);
+    if (size < HISTO_SKETCH_HEADER_SIZE) return HISTO_ERR_DESERIALIZATION;
+
+    const uint8_t *buf = (const uint8_t *)buffer;
+
+    /* Verify Magic */
+    if (memcmp(buf, HISTO_SKETCH_MAGIC, HISTO_SKETCH_MAGIC_LEN) != 0) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    /* Verify Version & Header Size */
+    uint32_t ver, hdr_sz;
+    memcpy(&ver, buf + 8, 4);
+    memcpy(&hdr_sz, buf + 12, 4);
+    ver = histo_le32toh(ver);
+    hdr_sz = histo_le32toh(hdr_sz);
+    if (ver != HISTO_SKETCH_FORMAT_VERSION || hdr_sz != HISTO_SKETCH_HEADER_SIZE) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    /* Parameters */
+    double alpha_le;
+    uint32_t max_bins_le;
+    memcpy(&alpha_le, buf + 16, 8);
+    memcpy(&max_bins_le, buf + 40, 4);
+    double alpha = histo_letoh_d(alpha_le);
+    uint32_t max_bins = histo_le32toh(max_bins_le);
+
+    if (alpha <= 0.0 || alpha >= 1.0 || max_bins == 0 || max_bins > MAX_BINS_LIMIT) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    /* Store metadata */
+    int32_t pos_min_k, pos_max_k, neg_min_k, neg_max_k;
+    uint32_t pos_has, pos_num, neg_has, neg_num;
+    memcpy(&pos_min_k, buf + 88, 4);
+    memcpy(&pos_max_k, buf + 92, 4);
+    memcpy(&pos_has, buf + 96, 4);
+    memcpy(&pos_num, buf + 100, 4);
+    memcpy(&neg_min_k, buf + 104, 4);
+    memcpy(&neg_max_k, buf + 108, 4);
+    memcpy(&neg_has, buf + 112, 4);
+    memcpy(&neg_num, buf + 116, 4);
+
+    pos_min_k = (int32_t)histo_le32toh((uint32_t)pos_min_k);
+    pos_max_k = (int32_t)histo_le32toh((uint32_t)pos_max_k);
+    pos_has = histo_le32toh(pos_has);
+    pos_num = histo_le32toh(pos_num);
+    neg_min_k = (int32_t)histo_le32toh((uint32_t)neg_min_k);
+    neg_max_k = (int32_t)histo_le32toh((uint32_t)neg_max_k);
+    neg_has = histo_le32toh(neg_has);
+    neg_num = histo_le32toh(neg_num);
+
+    size_t expected_size = HISTO_SKETCH_HEADER_SIZE + ((size_t)pos_num + (size_t)neg_num) * sizeof(double);
+    if (size < expected_size) {
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    histo_sketch_t *s = histo_sketch_create(alpha, max_bins);
+    if (!s) return HISTO_ERR_NOMEM;
+
+    /* Summaries */
+    double zero_le, tot_w_le, min_v_le, max_v_le;
+    uint64_t entries_le;
+    memcpy(&zero_le, buf + 48, 8);
+    memcpy(&tot_w_le, buf + 56, 8);
+    memcpy(&entries_le, buf + 64, 8);
+    memcpy(&min_v_le, buf + 72, 8);
+    memcpy(&max_v_le, buf + 80, 8);
+
+    s->zero_count = histo_letoh_d(zero_le);
+    s->total_weight = histo_letoh_d(tot_w_le);
+    s->num_entries = histo_le64toh(entries_le);
+    s->min_val = histo_letoh_d(min_v_le);
+    s->max_val = histo_letoh_d(max_v_le);
+
+    /* Read Pos Counts */
+    size_t offset = HISTO_SKETCH_HEADER_SIZE;
+    if (pos_has && pos_num > 0) {
+        s->pos.counts = (double *)calloc(s->pos.max_bins, sizeof(double));
+        if (!s->pos.counts) {
+            histo_sketch_destroy(s);
+            return HISTO_ERR_NOMEM;
+        }
+        s->pos.min_k = pos_min_k;
+        s->pos.max_k = pos_max_k;
+        for (uint32_t i = 0; i < pos_num; ++i) {
+            double w_le;
+            memcpy(&w_le, buf + offset, sizeof(double));
+            offset += sizeof(double);
+            double w = histo_letoh_d(w_le);
+            int32_t k = pos_min_k + (int32_t)i;
+            s->pos.counts[(k % (int32_t)s->pos.max_bins + (int32_t)s->pos.max_bins) % (int32_t)s->pos.max_bins] = w;
+        }
+    }
+
+    /* Read Neg Counts */
+    if (neg_has && neg_num > 0) {
+        s->neg.counts = (double *)calloc(s->neg.max_bins, sizeof(double));
+        if (!s->neg.counts) {
+            histo_sketch_destroy(s);
+            return HISTO_ERR_NOMEM;
+        }
+        s->neg.min_k = neg_min_k;
+        s->neg.max_k = neg_max_k;
+        for (uint32_t i = 0; i < neg_num; ++i) {
+            double w_le;
+            memcpy(&w_le, buf + offset, sizeof(double));
+            offset += sizeof(double);
+            double w = histo_letoh_d(w_le);
+            int32_t k = neg_min_k + (int32_t)i;
+            s->neg.counts[(k % (int32_t)s->neg.max_bins + (int32_t)s->neg.max_bins) % (int32_t)s->neg.max_bins] = w;
+        }
+    }
+
+    *out_sketch = s;
     return HISTO_OK;
 }
+

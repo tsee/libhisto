@@ -53,70 +53,18 @@ struct histo {
     double           stats_mean;         /* Online running mean (Welford) */
     double           stats_M2;           /* Online running sum of squared differences (Welford) */
 };
+#include "internal_common.h"
 
-/* Endian conversion helpers for canonical Little-Endian serialization */
-static inline uint16_t histo_htole16(uint16_t val) {
-#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return (uint16_t)((val << 8) | (val >> 8));
-#else
-    return val;
-#endif
-}
-
-static inline uint32_t histo_htole32(uint32_t val) {
-#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return (uint32_t)(((val & 0x000000FFu) << 24) |
-                      ((val & 0x0000FF00u) << 8)  |
-                      ((val & 0x00FF0000u) >> 8)  |
-                      ((val & 0xFF000000u) >> 24));
-#else
-    return val;
-#endif
-}
-
-static inline uint64_t histo_htole64(uint64_t val) {
-#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return (((val & 0x00000000000000FFULL) << 56) |
-            ((val & 0x000000000000FF00ULL) << 40) |
-            ((val & 0x0000000000FF0000ULL) << 24) |
-            ((val & 0x00000000FF000000ULL) << 8)  |
-            ((val & 0x000000FF00000000ULL) >> 8)  |
-            ((val & 0x0000FF0000000000ULL) >> 24) |
-            ((val & 0x00FF000000000000ULL) >> 40) |
-            ((val & 0xFF00000000000000ULL) >> 56));
-#else
-    return val;
-#endif
-}
-
-static inline uint16_t histo_le16toh(uint16_t val) { return histo_htole16(val); }
-static inline uint32_t histo_le32toh(uint32_t val) { return histo_htole32(val); }
-static inline uint64_t histo_le64toh(uint64_t val) { return histo_htole64(val); }
-
-static inline uint64_t histo_double_to_bits(double d) {
-    uint64_t bits;
-    memcpy(&bits, &d, sizeof(bits));
-    return bits;
-}
-
-static inline double histo_bits_to_double(uint64_t bits) {
-    double d;
-    memcpy(&d, &bits, sizeof(d));
-    return d;
-}
-
-static inline double histo_dtole(double d) {
-    uint64_t bits = histo_htole64(histo_double_to_bits(d));
-    return histo_bits_to_double(bits);
-}
-
-static inline double histo_letoh_d(double d) {
-    uint64_t bits = histo_le64toh(histo_double_to_bits(d));
-    return histo_bits_to_double(bits);
-}
+/**
+ * @brief Safely populates raw bin contents and uncertainties for a newly allocated histogram.
+ *
+ * Used by 2D projection, slice, profile, and transformation routines.
+ */
+histo_status_t histo_set_raw_bin_contents(histo_t *h, const double *bins, const double *sum_w2);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* LIBHISTO_INTERNAL_H */
+

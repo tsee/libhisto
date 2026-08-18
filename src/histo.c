@@ -63,16 +63,16 @@ histo_t* histo_create_uniform(uint32_t nbins, double min, double max, uint32_t f
     h->inv_binsize = isfinite(inv) ? inv : 0.0;
     h->bin_edges = NULL;
 
-    h->bins = (double *)calloc(nbins, sizeof(double));
+    h->bins = (double *)histo_alloc_aligned(nbins * sizeof(double));
     if (!h->bins) {
         free(h);
         return NULL;
     }
 
     if (flags & HISTO_FLAG_TRACK_SUMW2) {
-        h->sum_w2 = (double *)calloc(nbins, sizeof(double));
+        h->sum_w2 = (double *)histo_alloc_aligned(nbins * sizeof(double));
         if (!h->sum_w2) {
-            free(h->bins);
+            histo_free_aligned(h->bins);
             free(h);
             return NULL;
         }
@@ -123,7 +123,7 @@ histo_t* histo_create_variable(uint32_t nbins, const double *edges, uint32_t fla
     }
     memcpy(h->bin_edges, edges, (nbins + 1) * sizeof(double));
 
-    h->bins = (double *)calloc(nbins, sizeof(double));
+    h->bins = (double *)histo_alloc_aligned(nbins * sizeof(double));
     if (!h->bins) {
         free(h->bin_edges);
         free(h);
@@ -131,9 +131,9 @@ histo_t* histo_create_variable(uint32_t nbins, const double *edges, uint32_t fla
     }
 
     if (flags & HISTO_FLAG_TRACK_SUMW2) {
-        h->sum_w2 = (double *)calloc(nbins, sizeof(double));
+        h->sum_w2 = (double *)histo_alloc_aligned(nbins * sizeof(double));
         if (!h->sum_w2) {
-            free(h->bins);
+            histo_free_aligned(h->bins);
             free(h->bin_edges);
             free(h);
             return NULL;
@@ -153,16 +153,17 @@ void histo_destroy(histo_t *h) {
         return;
     }
     if (h->bins) {
-        free(h->bins);
+        histo_free_aligned(h->bins);
     }
     if (h->sum_w2) {
-        free(h->sum_w2);
+        histo_free_aligned(h->sum_w2);
     }
     if (h->bin_edges) {
         free(h->bin_edges);
     }
     free(h);
 }
+
 
 histo_t* histo_clone(const histo_t *src, bool empty) {
     if (!src) {
@@ -255,26 +256,9 @@ static inline void histo_update_welford(histo_t *h, double x, double w) {
 
 
 static inline void histo_fill_uniform_unchecked(histo_t *h, double x, double w, bool has_w2) {
-    int64_t idx;
-    if (h->inv_binsize > 0.0) {
-        idx = (int64_t)((x - h->min) * h->inv_binsize);
-    } else {
-        idx = (int64_t)((x - h->min) / h->binsize);
-    }
-    
+    int64_t idx = histo_lookup_uniform_bin(x, h->min, h->max, h->nbins, h->binsize, h->inv_binsize);
     if (idx < 0) idx = 0;
-    else if ((uint32_t)idx >= h->nbins) idx = h->nbins - 1;
-
-    if (idx + 1 < (int64_t)h->nbins) {
-        if (x >= h->min + (double)(idx + 1) * h->binsize) {
-            idx++;
-        }
-    }
-    if (idx > 0) {
-        if (x < h->min + (double)idx * h->binsize) {
-            idx--;
-        }
-    }
+    else if ((uint32_t)idx >= h->nbins) idx = (int64_t)h->nbins - 1;
 
     h->bins[idx] += w;
     h->total_weight += w;
@@ -293,66 +277,40 @@ histo_status_t histo_find_bin(const histo_t *h, double x, int64_t *out_bin) {
         *out_bin = -1;
         return HISTO_ERR_NON_FINITE;
     }
-    if (x < h->min) {
-        *out_bin = -1;
-        return HISTO_OK;
-    }
-    if (x >= h->max) {
-        *out_bin = (int64_t)h->nbins;
-        return HISTO_OK;
-    }
 
     if (h->bin_type == HISTO_BIN_UNIFORM) {
-        int64_t idx = 0;
-        if (h->inv_binsize > 0.0) {
-            idx = (int64_t)((x - h->min) * h->inv_binsize);
-        } else if (h->binsize > 0.0) {
-            idx = (int64_t)((x - h->min) / h->binsize);
-        }
-
-        if (idx < 0) {
-            idx = 0;
-        } else if ((uint32_t)idx >= h->nbins) {
-            idx = (int64_t)h->nbins - 1;
-        }
-
-
-        /* Boundary Guard 1: Verify against upper neighboring bin boundary */
-        if (idx + 1 < (int64_t)h->nbins) {
-            double next_lower = h->min + (double)(idx + 1) * h->binsize;
-            if (x >= next_lower) {
-                idx++;
-            }
-        }
-
-        /* Boundary Guard 2: Verify against current bin boundary */
-        if (idx > 0) {
-            double curr_lower = h->min + (double)idx * h->binsize;
-            if (x < curr_lower) {
-                idx--;
-            }
-        }
-
-        *out_bin = idx;
+        *out_bin = histo_lookup_uniform_bin(x, h->min, h->max, h->nbins, h->binsize, h->inv_binsize);
         return HISTO_OK;
     } else {
-        /* Variable binning binary search */
-        uint32_t low = 0;
-        uint32_t high = h->nbins;
-
-        while (low < high) {
-            uint32_t mid = low + (high - low) / 2;
-            if (x >= h->bin_edges[mid + 1]) {
-                low = mid + 1;
-            } else {
-                high = mid;
-            }
-        }
-
-        *out_bin = (int64_t)low;
+        *out_bin = histo_lookup_variable_bin(x, h->bin_edges, h->nbins);
         return HISTO_OK;
     }
 }
+
+histo_status_t histo_set_raw_bin_contents(histo_t *h, const double *bins, const double *sum_w2) {
+    if (!h || !bins) return HISTO_ERR_INVALID_ARG;
+
+    double tot_w = 0.0;
+    double tot_w2 = 0.0;
+
+    for (uint32_t i = 0; i < h->nbins; ++i) {
+        h->bins[i] = bins[i];
+        tot_w += bins[i];
+        if (h->sum_w2 && sum_w2) {
+            h->sum_w2[i] = sum_w2[i];
+            tot_w2 += sum_w2[i];
+        }
+    }
+
+    h->total_weight = tot_w;
+    if (h->sum_w2) {
+        h->total_sum_w2 = tot_w2;
+    }
+    h->n_fills = h->nbins;
+
+    return HISTO_OK;
+}
+
 
 histo_status_t histo_fill_w(histo_t *h, double x, double weight) {
     if (!h) {

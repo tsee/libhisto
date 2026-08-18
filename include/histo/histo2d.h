@@ -572,7 +572,7 @@ histo_status_t histo2d_rebin(const histo2d_t *src, uint32_t factor_x, uint32_t f
  * @param[in,out] dst   Destination 2D histogram.
  * @param[in]     src   Source 2D histogram.
  * @param[in]     scale Multiplier for source histogram.
- * @return HISTO_OK on success, or HISTO_ERR_DIMENSION_MISMATCH if geometries differ.
+ * @return HISTO_OK on success, or HISTO_ERR_INCOMPATIBLE if geometries differ.
  */
 histo_status_t histo2d_add(histo2d_t *dst, const histo2d_t *src, double scale);
 
@@ -614,14 +614,14 @@ histo_status_t histo2d_divide(histo2d_t *dst, const histo2d_t *src);
  * @param[out] buf      Destination preallocated memory buffer.
  * @param[in]  buf_size Size of destination buffer in bytes.
  * @param[out] out_size Actual bytes written (or required size if buffer too small).
- * @return HISTO_OK on success, or HISTO_ERR_BUFFER_TOO_SMALL.
+ * @return HISTO_OK on success, or HISTO_ERR_SERIALIZATION.
  */
 histo_status_t histo2d_serialize_binary(const histo2d_t *h, void *buf,
                                         size_t buf_size, size_t *out_size);
 
 /**
  * @brief Serializes 2D histogram, allocating buffer dynamically.
- * Caller owns *out_buf and must free() it.
+ * Caller owns *out_buf and must free it with histo_free_buffer().
  *
  * @param[in]  h        2D histogram handle.
  * @param[out] out_buf  Pointer to allocated binary buffer.
@@ -656,7 +656,7 @@ histo_status_t histo2d_serialize_json(const histo2d_t *h, char *buf,
 
 /**
  * @brief Serializes 2D histogram to newly allocated JSON string.
- * Caller owns *out_str and must free() it.
+ * Caller owns *out_str and must free it with histo_free_buffer().
  *
  * @param[in]  h       2D histogram handle.
  * @param[out] out_str Output JSON string pointer.
@@ -665,6 +665,7 @@ histo_status_t histo2d_serialize_json(const histo2d_t *h, char *buf,
  */
 histo_status_t histo2d_serialize_json_alloc(const histo2d_t *h, char **out_str,
                                             size_t *out_size);
+
 
 /**
  * @brief Deserializes 2D histogram from JSON string.

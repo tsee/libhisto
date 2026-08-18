@@ -72,31 +72,13 @@ struct histo2d {
     double                   stats_C_xy;     /**< Running sum of co-deviations for (X, Y) */
 };
 
-/* 64-byte aligned memory allocation helper */
+/* 64-byte aligned memory allocation helpers */
 static inline void* histo2d_alloc_aligned(size_t size) {
-    void *ptr = NULL;
-#if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 200112L)
-    if (posix_memalign(&ptr, 64, size) != 0) {
-        return NULL;
-    }
-#elif defined(_MSC_VER)
-    ptr = _aligned_malloc(size, 64);
-#else
-    ptr = malloc(size);
-#endif
-    if (ptr) {
-        memset(ptr, 0, size);
-    }
-    return ptr;
+    return histo_alloc_aligned(size);
 }
 
 static inline void histo2d_free_aligned(void *ptr) {
-    if (!ptr) return;
-#if defined(_MSC_VER)
-    _aligned_free(ptr);
-#else
-    free(ptr);
-#endif
+    histo_free_aligned(ptr);
 }
 
 /**
@@ -107,37 +89,18 @@ static inline size_t histo2d_linear_index(uint32_t ix, uint32_t iy, uint32_t ny)
 }
 
 /**
- * @brief Axis bin lookup: returns [0, nbins - 1] for in-range, -1 for underflow, nbins for overflow.
+ * @brief Axis bin lookup: returns [0, nbins - 1] for in-range, -1 for underflow, nbins for overflow, -2 for non-finite.
  */
 static inline int64_t histo2d_axis_find_bin(const histo2d_axis_internal_t *axis, double val) {
-    if (isnan(val)) return -2;
-    if (val < axis->min) return -1;
-    if (val >= axis->max) return (int64_t)axis->nbins;
-
+    if (!axis) return -2;
     if (axis->bin_type == HISTO_BIN_UNIFORM) {
-        double diff = val - axis->min;
-        int64_t idx = (int64_t)floor(diff * axis->inv_binsize);
-        if (idx < 0) idx = 0;
-        if (idx >= (int64_t)axis->nbins) idx = (int64_t)axis->nbins - 1;
-        return idx;
+        return histo_lookup_uniform_bin(val, axis->min, axis->max, axis->nbins,
+                                        axis->binsize, axis->inv_binsize);
     } else {
-        /* Binary search on monotonic bin edges */
-        uint32_t low = 0;
-        uint32_t high = axis->nbins;
-        const double *edges = axis->bin_edges;
-        while (low < high) {
-            uint32_t mid = low + ((high - low) >> 1);
-            if (val >= edges[mid + 1]) {
-                low = mid + 1;
-            } else if (val < edges[mid]) {
-                high = mid;
-            } else {
-                return (int64_t)mid;
-            }
-        }
-        return (int64_t)(low < axis->nbins ? low : axis->nbins - 1);
+        return histo_lookup_variable_bin(val, axis->bin_edges, axis->nbins);
     }
 }
+
 
 /**
  * @brief Classifies a 2D coordinate (x, y) into one of the 9 regions.

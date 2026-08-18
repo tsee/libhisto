@@ -787,15 +787,6 @@ histo_status_t histo2d_get_stats(const histo2d_t *h, histo2d_stats_t *out_stats)
     return HISTO_OK;
 }
 
-static inline void histo_set_bin_values(histo_t *h, uint32_t bin, double val, double w2) {
-    if (!h || bin >= h->nbins) return;
-    h->bins[bin] = val;
-    if (h->sum_w2) h->sum_w2[bin] = w2;
-    h->total_weight += val;
-    if (h->sum_w2) h->total_sum_w2 += w2;
-    h->n_fills++;
-}
-
 histo_status_t histo2d_project_x(const histo2d_t *h, histo_t **out_h1d) {
     if (!h || !out_h1d) return HISTO_ERR_INVALID_ARG;
 
@@ -810,6 +801,15 @@ histo_status_t histo2d_project_x(const histo2d_t *h, histo_t **out_h1d) {
     uint32_t nx = h->x_axis.nbins;
     uint32_t ny = h->y_axis.nbins;
 
+    double *proj_w = (double *)malloc(nx * sizeof(double));
+    double *proj_w2 = (double *)malloc(nx * sizeof(double));
+    if (!proj_w || !proj_w2) {
+        free(proj_w);
+        free(proj_w2);
+        histo_destroy(h1);
+        return HISTO_ERR_NOMEM;
+    }
+
     for (uint32_t ix = 0; ix < nx; ++ix) {
         double sum_w = 0.0;
         double sum_w2 = 0.0;
@@ -818,9 +818,13 @@ histo_status_t histo2d_project_x(const histo2d_t *h, histo_t **out_h1d) {
             sum_w += h->bins[idx];
             if (h->sum_w2) sum_w2 += h->sum_w2[idx];
         }
-
-        histo_set_bin_values(h1, ix, sum_w, sum_w2);
+        proj_w[ix] = sum_w;
+        proj_w2[ix] = sum_w2;
     }
+
+    histo_set_raw_bin_contents(h1, proj_w, proj_w2);
+    free(proj_w);
+    free(proj_w2);
 
     *out_h1d = h1;
     return HISTO_OK;
@@ -840,6 +844,15 @@ histo_status_t histo2d_project_y(const histo2d_t *h, histo_t **out_h1d) {
     uint32_t nx = h->x_axis.nbins;
     uint32_t ny = h->y_axis.nbins;
 
+    double *proj_w = (double *)malloc(ny * sizeof(double));
+    double *proj_w2 = (double *)malloc(ny * sizeof(double));
+    if (!proj_w || !proj_w2) {
+        free(proj_w);
+        free(proj_w2);
+        histo_destroy(h1);
+        return HISTO_ERR_NOMEM;
+    }
+
     for (uint32_t iy = 0; iy < ny; ++iy) {
         double sum_w = 0.0;
         double sum_w2 = 0.0;
@@ -848,9 +861,13 @@ histo_status_t histo2d_project_y(const histo2d_t *h, histo_t **out_h1d) {
             sum_w += h->bins[idx];
             if (h->sum_w2) sum_w2 += h->sum_w2[idx];
         }
-
-        histo_set_bin_values(h1, iy, sum_w, sum_w2);
+        proj_w[iy] = sum_w;
+        proj_w2[iy] = sum_w2;
     }
+
+    histo_set_raw_bin_contents(h1, proj_w, proj_w2);
+    free(proj_w);
+    free(proj_w2);
 
     *out_h1d = h1;
     return HISTO_OK;
@@ -873,6 +890,15 @@ histo_status_t histo2d_slice_x(const histo2d_t *h, uint32_t iy_min, uint32_t iy_
     uint32_t nx = h->x_axis.nbins;
     uint32_t ny = h->y_axis.nbins;
 
+    double *slice_w = (double *)malloc(nx * sizeof(double));
+    double *slice_w2 = (double *)malloc(nx * sizeof(double));
+    if (!slice_w || !slice_w2) {
+        free(slice_w);
+        free(slice_w2);
+        histo_destroy(h1);
+        return HISTO_ERR_NOMEM;
+    }
+
     for (uint32_t ix = 0; ix < nx; ++ix) {
         double sum_w = 0.0;
         double sum_w2 = 0.0;
@@ -881,9 +907,13 @@ histo_status_t histo2d_slice_x(const histo2d_t *h, uint32_t iy_min, uint32_t iy_
             sum_w += h->bins[idx];
             if (h->sum_w2) sum_w2 += h->sum_w2[idx];
         }
-
-        histo_set_bin_values(h1, ix, sum_w, sum_w2);
+        slice_w[ix] = sum_w;
+        slice_w2[ix] = sum_w2;
     }
+
+    histo_set_raw_bin_contents(h1, slice_w, slice_w2);
+    free(slice_w);
+    free(slice_w2);
 
     *out_h1d = h1;
     return HISTO_OK;
@@ -905,6 +935,15 @@ histo_status_t histo2d_slice_y(const histo2d_t *h, uint32_t ix_min, uint32_t ix_
 
     uint32_t ny = h->y_axis.nbins;
 
+    double *slice_w = (double *)malloc(ny * sizeof(double));
+    double *slice_w2 = (double *)malloc(ny * sizeof(double));
+    if (!slice_w || !slice_w2) {
+        free(slice_w);
+        free(slice_w2);
+        histo_destroy(h1);
+        return HISTO_ERR_NOMEM;
+    }
+
     for (uint32_t iy = 0; iy < ny; ++iy) {
         double sum_w = 0.0;
         double sum_w2 = 0.0;
@@ -913,9 +952,13 @@ histo_status_t histo2d_slice_y(const histo2d_t *h, uint32_t ix_min, uint32_t ix_
             sum_w += h->bins[idx];
             if (h->sum_w2) sum_w2 += h->sum_w2[idx];
         }
-
-        histo_set_bin_values(h1, iy, sum_w, sum_w2);
+        slice_w[iy] = sum_w;
+        slice_w2[iy] = sum_w2;
     }
+
+    histo_set_raw_bin_contents(h1, slice_w, slice_w2);
+    free(slice_w);
+    free(slice_w2);
 
     *out_h1d = h1;
     return HISTO_OK;
@@ -935,6 +978,15 @@ histo_status_t histo2d_profile_x(const histo2d_t *h, histo_t **out_profile_1d) {
     uint32_t nx = h->x_axis.nbins;
     uint32_t ny = h->y_axis.nbins;
 
+    double *prof_w = (double *)malloc(nx * sizeof(double));
+    double *prof_w2 = (double *)malloc(nx * sizeof(double));
+    if (!prof_w || !prof_w2) {
+        free(prof_w);
+        free(prof_w2);
+        histo_destroy(h1);
+        return HISTO_ERR_NOMEM;
+    }
+
     for (uint32_t ix = 0; ix < nx; ++ix) {
         double sum_w = 0.0;
         double sum_wy = 0.0;
@@ -952,7 +1004,8 @@ histo_status_t histo2d_profile_x(const histo2d_t *h, histo_t **out_profile_1d) {
         }
 
         if (sum_w <= 0.0) {
-            histo_set_bin_values(h1, ix, 0.0, 0.0);
+            prof_w[ix] = 0.0;
+            prof_w2[ix] = 0.0;
             continue;
         }
 
@@ -978,8 +1031,13 @@ histo_status_t histo2d_profile_x(const histo2d_t *h, histo_t **out_profile_1d) {
         double n_eff = (sum_w2 > 0.0) ? ((sum_w * sum_w) / sum_w2) : sum_w;
         double sem = (n_eff > 1.0) ? sqrt(var_y / n_eff) : sqrt(var_y);
 
-        histo_set_bin_values(h1, ix, mean_y, sem * sem);
+        prof_w[ix] = mean_y;
+        prof_w2[ix] = sem * sem;
     }
+
+    histo_set_raw_bin_contents(h1, prof_w, prof_w2);
+    free(prof_w);
+    free(prof_w2);
 
     *out_profile_1d = h1;
     return HISTO_OK;
@@ -999,6 +1057,15 @@ histo_status_t histo2d_profile_y(const histo2d_t *h, histo_t **out_profile_1d) {
     uint32_t nx = h->x_axis.nbins;
     uint32_t ny = h->y_axis.nbins;
 
+    double *prof_w = (double *)malloc(ny * sizeof(double));
+    double *prof_w2 = (double *)malloc(ny * sizeof(double));
+    if (!prof_w || !prof_w2) {
+        free(prof_w);
+        free(prof_w2);
+        histo_destroy(h1);
+        return HISTO_ERR_NOMEM;
+    }
+
     for (uint32_t iy = 0; iy < ny; ++iy) {
         double sum_w = 0.0;
         double sum_wx = 0.0;
@@ -1016,7 +1083,8 @@ histo_status_t histo2d_profile_y(const histo2d_t *h, histo_t **out_profile_1d) {
         }
 
         if (sum_w <= 0.0) {
-            histo_set_bin_values(h1, iy, 0.0, 0.0);
+            prof_w[iy] = 0.0;
+            prof_w2[iy] = 0.0;
             continue;
         }
 
@@ -1042,12 +1110,18 @@ histo_status_t histo2d_profile_y(const histo2d_t *h, histo_t **out_profile_1d) {
         double n_eff = (sum_w2 > 0.0) ? ((sum_w * sum_w) / sum_w2) : sum_w;
         double sem = (n_eff > 1.0) ? sqrt(var_x / n_eff) : sqrt(var_x);
 
-        histo_set_bin_values(h1, iy, mean_x, sem * sem);
+        prof_w[iy] = mean_x;
+        prof_w2[iy] = sem * sem;
     }
+
+    histo_set_raw_bin_contents(h1, prof_w, prof_w2);
+    free(prof_w);
+    free(prof_w2);
 
     *out_profile_1d = h1;
     return HISTO_OK;
 }
+
 
 
 /* -------------------------------------------------------------------------
