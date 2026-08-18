@@ -311,11 +311,14 @@ int cmd_fill_main(int argc, char **argv) {
             out_file = argv[++i];
         } else if (strncmp(arg, "--output-file=", 14) == 0) {
             out_file = arg + 14;
-        } else if (strncmp(arg, "--emit-every=", 13) == 0) {
-            emit_every = (uint64_t)strtoull(arg + 13, NULL, 10);
-        } else if (strncmp(arg, "--emit-interval=", 16) == 0) {
-            emit_interval = atof(arg + 16);
+        } else if (strncmp(arg, "--emit-every=", 13) == 0 || strcmp(arg, "--emit-every") == 0) {
+            const char *val = (strncmp(arg, "--emit-every=", 13) == 0) ? arg + 13 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) emit_every = (uint64_t)strtoull(val, NULL, 10);
+        } else if (strncmp(arg, "--emit-interval=", 16) == 0 || strcmp(arg, "--emit-interval") == 0) {
+            const char *val = (strncmp(arg, "--emit-interval=", 16) == 0) ? arg + 16 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) emit_interval = atof(val);
         } else if (strncmp(arg, "--edges=", 8) == 0) {
+
             const char *p = arg + 8;
             size_t edge_cap = 16;
             var_edges = (double *)malloc(edge_cap * sizeof(double));
@@ -367,6 +370,9 @@ int cmd_fill_main(int argc, char **argv) {
         double *x_samples = NULL, *y_samples = NULL, *w_samples = NULL;
         size_t count_2d = 0, cap_2d = 0;
         bool auto_range_2d = (!has_xmin || !has_xmax || !has_ymin || !has_ymax || auto_range);
+        uint64_t sample_count_2d = 0;
+        double last_emit_time_2d = cli_get_time_sec();
+
 
         histo2d_t *h2 = NULL;
         if (!auto_range_2d) {
@@ -437,10 +443,17 @@ int cmd_fill_main(int argc, char **argv) {
                     count_2d++;
                 } else {
                     histo2d_fill_w(h2, vx, vy, vw);
+                    sample_count_2d++;
+                    if ((emit_every > 0 && sample_count_2d % emit_every == 0) ||
+                        (emit_interval > 0.0 && (cli_get_time_sec() - last_emit_time_2d) >= emit_interval)) {
+                        emit_histo2d(h2, out_format, out_fp);
+                        last_emit_time_2d = cli_get_time_sec();
+                    }
                 }
             }
             if (in_fp != stdin) fclose(in_fp);
         }
+
 
         if (auto_range_2d) {
             if (count_2d == 0) {

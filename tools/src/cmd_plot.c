@@ -542,12 +542,19 @@ int cmd_plot_main(int argc, char **argv) {
         cli_input_format_t fmt = cli_detect_stream_format(in_fp);
         if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO) {
             histo2d_t *h2d = NULL;
-            if (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
-                render_histo2d_heatmap(h2d, term_width, use_color, title);
-                histo2d_destroy(h2d);
-            } else {
-                histo_t *h = NULL;
-                if (watch_mode) {
+            if (watch_mode) {
+                while (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
+                    if (clear_screen) {
+                        printf("\033[2J\033[H");
+                    } else {
+                        printf("\033[H");
+                    }
+                    render_histo2d_heatmap(h2d, term_width, use_color, title);
+                    histo2d_destroy(h2d);
+                    h2d = NULL;
+                }
+                if (!h2d) {
+                    histo_t *h = NULL;
                     while (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
                         if (clear_screen) {
                             printf("\033[2J\033[H");
@@ -558,7 +565,13 @@ int cmd_plot_main(int argc, char **argv) {
                         histo_destroy(h);
                         h = NULL;
                     }
+                }
+            } else {
+                if (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
+                    render_histo2d_heatmap(h2d, term_width, use_color, title);
+                    histo2d_destroy(h2d);
                 } else {
+                    histo_t *h = NULL;
                     if (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
                         render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
                         histo_destroy(h);
@@ -568,6 +581,7 @@ int cmd_plot_main(int argc, char **argv) {
                 }
             }
         } else {
+
             /* Raw numbers / text: ingest into auto-ranged histogram on the fly */
             char line[2048];
             size_t count = 0, cap = 1024;
