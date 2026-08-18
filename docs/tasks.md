@@ -106,4 +106,20 @@
 - [x] **J4** Production Little-Endian Binary Serialization & Deserialization for DDSketch (`src/sketch.c`, `tests/unit/test_sketch.c`).
 - [x] **J5** Doxygen Status Docstring Consistency across all public headers (`include/histo/histo2d.h`, `include/histo/histo.h`).
 
+---
+
+## Phase K: 2D SIMD Vector Acceleration
+- [x] **K1** Implement runtime-detected AVX2 and AVX-512 vector acceleration for 2D Uniform-Uniform grids (`histo2d_fill_uniform_avx2`, `histo2d_fill_uniform_avx512` and `w2` variants in `src/simd_avx2.c`, `src/simd_avx512.c`).
+- [x] **K2** Wire `histo2d_fill_n` dispatch in `src/histo2d.c` with 9-region guard zone clamping.
+- [x] **K3** 2D SIMD equivalence tests (`tests/unit/test_simd.c`) and micro-benchmarks (`bench/bench_main.c`).
+
+---
+
+## Phase L: Security Fuzzing Expansion & Seed Corpora
+- [x] **L1** Format V3 2D binary deserialization fuzz harness (`tests/fuzz/fuzz_deserialize_2d_binary.c`).
+- [x] **L2** 2D JSON deserialization fuzz harness (`tests/fuzz/fuzz_deserialize_2d_json.c`).
+- [x] **L3** Non-linear curve fitting engine fuzz harness (`tests/fuzz/fuzz_fit.c`).
+- [x] **L4** Seed corpus expansion (`tests/fuzz/corpus/binary_2d/`, `tests/fuzz/corpus/json_2d/`, `tests/fuzz/corpus/fit/`) and corpus generator updates.
+- [x] **L5** Verified 100% leak-free under ASan and Valgrind (`make test-all`).
+
 
