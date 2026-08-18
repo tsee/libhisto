@@ -121,9 +121,10 @@
 - [x] **M1** Repository hygiene: Prune merged subagent branches and detached worktrees.
 - [x] **M2** Release packaging: Add CMake package export (`libhistoConfig.cmake`, `libhistoTargets.cmake`), `pkg-config` (`libhisto.pc`), and CPack release generators (`.tar.gz`, `.deb`, `.rpm`).
 - [x] **M3** CLI Toolkit Extensions Specification (`docs/design_cli_extensions.md`): Binned curve fitting (`histo fit` with formula header and parameter table) and 2D stream ingestion (`histo fill --2d`).
-- [ ] **M4** Implement `histo-fit` CLI tool (`tools/src/cmd_fit.c`) and CLI multi-call alias.
-- [ ] **M5** Implement `histo-fill --2d` multi-column coordinate parser (`tools/src/cmd_fill.c`).
-- [ ] **M6** CLI integration test suite additions (`tests/integration/test_cli.c`), docs updates, and sanitizer verification.
+- [x] **M4** Implement `histo-fit` CLI tool (`tools/src/cmd_fit.c`) and CLI multi-call alias.
+- [x] **M5** Implement `histo-fill --2d` multi-column coordinate parser with delimiter auto-detection (`tools/src/cmd_fill.c`).
+- [x] **M6** CLI integration test suite additions (`tests/integration/test_cli.c`), docs updates, and sanitizer verification.
+
 
 
 

@@ -495,7 +495,10 @@ int cmd_plot_main(int argc, char **argv) {
             watch_mode = true;
         } else if (strcmp(arg, "--clear") == 0) {
             clear_screen = true;
+        } else if (strcmp(arg, "--2d") == 0) {
+            /* 2D stream plotting is auto-detected */
         } else if (strncmp(arg, "--title=", 8) == 0) {
+
             title = arg + 8;
         } else if (arg[0] == '-' && arg[1] != '\0') {
             fprintf(stderr, "Unknown option '%s'. Run 'histo-plot --help' for usage.\n", arg);

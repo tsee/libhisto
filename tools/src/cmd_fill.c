@@ -1,4 +1,5 @@
 #include "cli_common.h"
+#include "histo/histo2d.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,25 +10,33 @@
 static void print_fill_usage(void) {
     printf("Usage: histo-fill [OPTIONS] [FILE...]\n");
     printf("       histo fill [OPTIONS] [FILE...]\n\n");
-    printf("Reads streaming data, aggregates into a histogram, and emits the serialized result.\n\n");
-    printf("Geometry Options:\n");
+    printf("Reads streaming data, aggregates into a histogram (1D or 2D), and emits the serialized result.\n\n");
+    printf("1D Geometry Options:\n");
     printf("  -n, --bins=<N>           Number of uniform bins (default: 50)\n");
     printf("      --min=<X>            Lower boundary (required unless --auto-range)\n");
     printf("      --max=<X>            Upper boundary (required unless --auto-range)\n");
     printf("      --edges=<E0,E1,...>  Variable bin edges (comma-separated)\n");
     printf("      --auto-range         Buffer input to determine min/max automatically\n\n");
-    printf("Input Parsing Options:\n");
+    printf("2D Geometry Options:\n");
+    printf("      --2d                 Enable 2D bivariate histogramming mode\n");
+    printf("      --xbins=<N>          Number of bins along X axis (default: 50)\n");
+    printf("      --xmin=<X>, --xmax=<X> X axis bounds\n");
+    printf("      --ybins=<N>          Number of bins along Y axis (default: 50)\n");
+    printf("      --ymin=<Y>, --ymax=<Y> Y axis bounds\n\n");
+    printf("Input Parsing & Columns:\n");
     printf("  -w, --weights            Input contains weights: reads 'x weight' pairs\n");
     printf("      --value-col=<COL>    1-based column for sample coordinate (default: 1)\n");
-    printf("      --weights-col=<COL>  1-based column for sample weight (default: 2)\n");
-    printf("      --delimiter=<CHAR>   Field delimiter character (default: whitespace)\n");
+    printf("      --xcol=<COL>         1-based column for X coordinate in 2D mode (default: 1)\n");
+    printf("      --ycol=<COL>         1-based column for Y coordinate in 2D mode (default: 2)\n");
+    printf("      --weights-col=<COL>  1-based column for sample weight (default: 2 for 1D, 3 for 2D)\n");
+    printf("  -d, --delimiter=<CHAR>   Field delimiter character (default: auto-detect comma/tab/semicolon/space)\n");
     printf("      --binary-f64         Read raw Little-Endian double binary stream\n");
     printf("      --merge              Read and add/merge incoming serialized histograms\n\n");
     printf("Histogram Features & Transformations:\n");
     printf("      --sumw2              Enable sum_w2 error tracking (default: ON)\n");
     printf("      --no-sumw2           Disable sum_w2 error tracking\n");
     printf("      --exact-moments      Enable online exact Welford moments\n");
-    printf("      --rebin=<FACTOR>     Rebin uniform histogram by integer factor\n");
+    printf("      --rebin=<FACTOR>     Rebin uniform histogram by integer factor (1D only)\n");
     printf("      --slice=<MIN:MAX>    Slice bin sub-range [MIN, MAX]\n");
     printf("      --cdf                Generate Cumulative Distribution Function (CDF)\n");
     printf("      --normalize=<AREA>   Scale histogram total weight to target area\n\n");
@@ -37,6 +46,21 @@ static void print_fill_usage(void) {
     printf("      --emit-every=<N>     Emit intermediate snapshot every N samples\n");
     printf("      --emit-interval=<S>  Emit intermediate snapshot every S seconds\n");
     printf("  -h, --help               Show this help message\n");
+}
+
+static char auto_detect_delimiter(const char *line) {
+    int commas = 0, tabs = 0, semicolons = 0, pipes = 0;
+    for (const char *p = line; *p; ++p) {
+        if (*p == ',') commas++;
+        else if (*p == '\t') tabs++;
+        else if (*p == ';') semicolons++;
+        else if (*p == '|') pipes++;
+    }
+    if (commas > 0 && commas >= tabs && commas >= semicolons && commas >= pipes) return ',';
+    if (tabs > 0 && tabs >= semicolons && tabs >= pipes) return '\t';
+    if (semicolons > 0 && semicolons >= pipes) return ';';
+    if (pipes > 0) return '|';
+    return ' ';
 }
 
 static histo_status_t emit_histogram(const histo_t *h, const char *fmt, FILE *out_fp,
@@ -118,14 +142,71 @@ static histo_status_t emit_histogram(const histo_t *h, const char *fmt, FILE *ou
     return status;
 }
 
+static histo_status_t emit_histo2d(const histo2d_t *h2, const char *fmt, FILE *out_fp) {
+    if (!h2 || !out_fp) return HISTO_ERR_INVALID_ARG;
+    histo_status_t status = HISTO_OK;
+
+    if (strcmp(fmt, "binary") == 0 || strcmp(fmt, "bin") == 0) {
+        void *buf = NULL;
+        size_t size = 0;
+        status = histo2d_serialize_binary_alloc(h2, &buf, &size);
+        if (status == HISTO_OK) {
+            fwrite(buf, 1, size, out_fp);
+            fflush(out_fp);
+            histo_free_buffer(buf);
+        }
+    } else if (strcmp(fmt, "json") == 0) {
+        char *json = NULL;
+        size_t size = 0;
+        status = histo2d_serialize_json_alloc(h2, &json, &size);
+        if (status == HISTO_OK) {
+            fprintf(out_fp, "%s\n", json);
+            fflush(out_fp);
+            histo_free_buffer(json);
+        }
+    } else {
+        /* TSV / Table */
+        uint32_t nx = 0, ny = 0;
+        histo2d_axis_t x_axis, y_axis;
+        histo2d_axis_x(h2, &x_axis);
+        histo2d_axis_y(h2, &y_axis);
+        nx = x_axis.nbins;
+        ny = y_axis.nbins;
+
+
+        fprintf(out_fp, "Bin_X\tBin_Y\tCenter_X\tCenter_Y\tContent\tError\n");
+        for (uint32_t ix = 0; ix < nx; ++ix) {
+            for (uint32_t iy = 0; iy < ny; ++iy) {
+                double cx = 0.0, cy = 0.0, content = 0.0, err = 0.0;
+                histo2d_bin_center(h2, ix, iy, &cx, &cy);
+                histo2d_bin_content(h2, ix, iy, &content);
+                histo2d_bin_error(h2, ix, iy, &err);
+                fprintf(out_fp, "%u\t%u\t%.4f\t%.4f\t%.4f\t%.4f\n", ix, iy, cx, cy, content, err);
+            }
+        }
+        fflush(out_fp);
+    }
+    return status;
+}
+
 int cmd_fill_main(int argc, char **argv) {
+    bool is_2d = false;
     uint32_t nbins = 50;
     double range_min = 0.0, range_max = 0.0;
     bool has_min = false, has_max = false;
     bool auto_range = false;
+
+    uint32_t xbins = 50, ybins = 50;
+    double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0;
+    bool has_xmin = false, has_xmax = false, has_ymin = false, has_ymax = false;
+
+    double *var_edges = NULL;
+    size_t n_edges = 0;
     bool has_weights = false;
     int val_col = 1;
+    int x_col = 1, y_col = 2;
     int w_col = 2;
+    bool w_col_set = false;
     char delim = '\0';
     bool binary_input = false;
     bool merge_mode = false;
@@ -137,39 +218,71 @@ int cmd_fill_main(int argc, char **argv) {
     const char *out_file = NULL;
     uint64_t emit_every = 0;
     double emit_interval = 0.0;
-    double *var_edges = NULL;
-    uint32_t n_edges = 0;
 
-    /* Parse command line arguments */
     int file_start = argc;
+
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_fill_usage();
+            if (var_edges) free(var_edges);
             return 0;
-        } else if (strncmp(arg, "-n=", 3) == 0) {
-            nbins = (uint32_t)atoi(arg + 3);
-        } else if (strcmp(arg, "-n") == 0 && i + 1 < argc) {
-            nbins = (uint32_t)atoi(argv[++i]);
-        } else if (strncmp(arg, "--bins=", 7) == 0) {
-            nbins = (uint32_t)atoi(arg + 7);
-        } else if (strncmp(arg, "--min=", 6) == 0) {
-            range_min = atof(arg + 6);
-            has_min = true;
-        } else if (strncmp(arg, "--max=", 6) == 0) {
-            range_max = atof(arg + 6);
-            has_max = true;
+        } else if (strcmp(arg, "--2d") == 0) {
+            is_2d = true;
+            if (!w_col_set) w_col = 3;
+        } else if (strncmp(arg, "-n=", 3) == 0 || strncmp(arg, "--bins=", 7) == 0 || strcmp(arg, "-n") == 0 || strcmp(arg, "--bins") == 0) {
+            const char *val = (arg[1] == 'n' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--bins=", 7) == 0) ? arg + 7 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) nbins = (uint32_t)atoi(val);
+        } else if (strncmp(arg, "--xbins=", 8) == 0 || strcmp(arg, "--xbins") == 0) {
+            const char *val = (strncmp(arg, "--xbins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) xbins = (uint32_t)atoi(val);
+            is_2d = true;
+        } else if (strncmp(arg, "--ybins=", 8) == 0 || strcmp(arg, "--ybins") == 0) {
+            const char *val = (strncmp(arg, "--ybins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) ybins = (uint32_t)atoi(val);
+            is_2d = true;
+        } else if (strncmp(arg, "--xmin=", 7) == 0 || strcmp(arg, "--xmin") == 0) {
+            const char *val = (strncmp(arg, "--xmin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { xmin = atof(val); has_xmin = true; is_2d = true; }
+        } else if (strncmp(arg, "--xmax=", 7) == 0 || strcmp(arg, "--xmax") == 0) {
+            const char *val = (strncmp(arg, "--xmax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { xmax = atof(val); has_xmax = true; is_2d = true; }
+        } else if (strncmp(arg, "--ymin=", 7) == 0 || strcmp(arg, "--ymin") == 0) {
+            const char *val = (strncmp(arg, "--ymin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { ymin = atof(val); has_ymin = true; is_2d = true; }
+        } else if (strncmp(arg, "--ymax=", 7) == 0 || strcmp(arg, "--ymax") == 0) {
+            const char *val = (strncmp(arg, "--ymax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { ymax = atof(val); has_ymax = true; is_2d = true; }
+        } else if (strncmp(arg, "--min=", 6) == 0 || strcmp(arg, "--min") == 0) {
+            const char *val = (strncmp(arg, "--min=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { range_min = atof(val); has_min = true; }
+        } else if (strncmp(arg, "--max=", 6) == 0 || strcmp(arg, "--max") == 0) {
+            const char *val = (strncmp(arg, "--max=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { range_max = atof(val); has_max = true; }
         } else if (strcmp(arg, "--auto-range") == 0) {
             auto_range = true;
         } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--weights") == 0) {
             has_weights = true;
-        } else if (strncmp(arg, "--value-col=", 12) == 0) {
-            val_col = atoi(arg + 12);
-        } else if (strncmp(arg, "--weights-col=", 14) == 0) {
-            w_col = atoi(arg + 14);
-            has_weights = true;
-        } else if (strncmp(arg, "--delimiter=", 12) == 0) {
-            delim = arg[12];
+        } else if (strncmp(arg, "--value-col=", 12) == 0 || strcmp(arg, "--value-col") == 0) {
+            const char *val = (strncmp(arg, "--value-col=", 12) == 0) ? arg + 12 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) val_col = atoi(val);
+        } else if (strncmp(arg, "--xcol=", 7) == 0 || strcmp(arg, "--xcol") == 0) {
+            const char *val = (strncmp(arg, "--xcol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { x_col = atoi(val); is_2d = true; }
+        } else if (strncmp(arg, "--ycol=", 7) == 0 || strcmp(arg, "--ycol") == 0) {
+            const char *val = (strncmp(arg, "--ycol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { y_col = atoi(val); is_2d = true; }
+        } else if (strncmp(arg, "--weights-col=", 14) == 0 || strcmp(arg, "--weights-col") == 0) {
+            const char *val = (strncmp(arg, "--weights-col=", 14) == 0) ? arg + 14 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) { w_col = atoi(val); has_weights = true; w_col_set = true; }
+
+        } else if (strncmp(arg, "-d=", 3) == 0 || strncmp(arg, "--delimiter=", 12) == 0 || strcmp(arg, "-d") == 0) {
+            const char *val = (arg[1] == 'd' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--delimiter=", 12) == 0) ? arg + 12 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val && *val) delim = val[0];
         } else if (strcmp(arg, "--binary-f64") == 0) {
             binary_input = true;
         } else if (strcmp(arg, "--merge") == 0) {
@@ -203,7 +316,6 @@ int cmd_fill_main(int argc, char **argv) {
         } else if (strncmp(arg, "--emit-interval=", 16) == 0) {
             emit_interval = atof(arg + 16);
         } else if (strncmp(arg, "--edges=", 8) == 0) {
-            /* Parse comma-separated edges */
             const char *p = arg + 8;
             size_t edge_cap = 16;
             var_edges = (double *)malloc(edge_cap * sizeof(double));
@@ -229,7 +341,6 @@ int cmd_fill_main(int argc, char **argv) {
         }
     }
 
-    /* Determine output format default */
     if (!out_format) {
         out_format = (cli_is_stdout_tty() && !out_file) ? "json" : "binary";
     }
@@ -244,7 +355,135 @@ int cmd_fill_main(int argc, char **argv) {
         }
     }
 
-    /* Auto-range buffer if needed */
+    int num_files = argc - file_start;
+    const char *default_files[] = {"-"};
+    const char **files = (num_files > 0) ? (const char **)(argv + file_start) : default_files;
+    int nfiles = (num_files > 0) ? num_files : 1;
+
+    if (is_2d) {
+        /* -------------------------------------------------------------
+         * 2D Histogram Ingestion Pipeline
+         * ------------------------------------------------------------- */
+        double *x_samples = NULL, *y_samples = NULL, *w_samples = NULL;
+        size_t count_2d = 0, cap_2d = 0;
+        bool auto_range_2d = (!has_xmin || !has_xmax || !has_ymin || !has_ymax || auto_range);
+
+        histo2d_t *h2 = NULL;
+        if (!auto_range_2d) {
+            h2 = histo2d_create_uniform(xbins, xmin, xmax, ybins, ymin, ymax, flags);
+            if (!h2) {
+                fprintf(stderr, "Error: Failed to initialize 2D histogram.\n");
+                if (out_fp != stdout) fclose(out_fp);
+                return 1;
+            }
+        }
+
+        for (int f = 0; f < nfiles; ++f) {
+            FILE *in_fp = strcmp(files[f], "-") == 0 ? stdin : fopen(files[f], "r");
+            if (!in_fp) {
+                fprintf(stderr, "Warning: Cannot open input file '%s'\n", files[f]);
+                continue;
+            }
+
+            char line[4096];
+            char detected_delim = delim;
+
+            while (fgets(line, sizeof(line), in_fp)) {
+                char *p = line;
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == '\0' || *p == '#') continue;
+
+                if (detected_delim == '\0') {
+                    detected_delim = auto_detect_delimiter(p);
+                }
+
+                double vx = 0.0, vy = 0.0, vw = 1.0;
+                bool parsed_x = false, parsed_y = false;
+
+                if (detected_delim != ' ') {
+                    int col = 1;
+                    char *tok = strtok(p, (char[]){detected_delim, '\0'});
+                    while (tok) {
+                        if (col == x_col) { vx = atof(tok); parsed_x = true; }
+                        else if (col == y_col) { vy = atof(tok); parsed_y = true; }
+                        else if (has_weights && col == w_col) { vw = atof(tok); }
+                        tok = strtok(NULL, (char[]){detected_delim, '\0'});
+                        col++;
+                    }
+                } else {
+                    int col = 1;
+                    char *tok = strtok(p, " \t\r\n");
+                    while (tok) {
+                        if (col == x_col) { vx = atof(tok); parsed_x = true; }
+                        else if (col == y_col) { vy = atof(tok); parsed_y = true; }
+                        else if (has_weights && col == w_col) { vw = atof(tok); }
+                        tok = strtok(NULL, " \t\r\n");
+                        col++;
+                    }
+                }
+
+                if (!parsed_x || !parsed_y) continue;
+
+                if (auto_range_2d) {
+                    if (count_2d >= cap_2d) {
+                        cap_2d = cap_2d == 0 ? 1024 : cap_2d * 2;
+                        x_samples = (double *)realloc(x_samples, cap_2d * sizeof(double));
+                        y_samples = (double *)realloc(y_samples, cap_2d * sizeof(double));
+                        if (has_weights) w_samples = (double *)realloc(w_samples, cap_2d * sizeof(double));
+                    }
+                    x_samples[count_2d] = vx;
+                    y_samples[count_2d] = vy;
+                    if (has_weights) w_samples[count_2d] = vw;
+                    count_2d++;
+                } else {
+                    histo2d_fill_w(h2, vx, vy, vw);
+                }
+            }
+            if (in_fp != stdin) fclose(in_fp);
+        }
+
+        if (auto_range_2d) {
+            if (count_2d == 0) {
+                xmin = 0.0; xmax = 100.0; ymin = 0.0; ymax = 100.0;
+            } else {
+                xmin = x_samples[0]; xmax = x_samples[0];
+                ymin = y_samples[0]; ymax = y_samples[0];
+                for (size_t i = 1; i < count_2d; ++i) {
+                    if (x_samples[i] < xmin) xmin = x_samples[i];
+                    if (x_samples[i] > xmax) xmax = x_samples[i];
+                    if (y_samples[i] < ymin) ymin = y_samples[i];
+                    if (y_samples[i] > ymax) ymax = y_samples[i];
+                }
+                if (fabs(xmax - xmin) < 1e-12) { xmin -= 1.0; xmax += 1.0; }
+                else { xmax += (xmax - xmin) * 1e-6; }
+                if (fabs(ymax - ymin) < 1e-12) { ymin -= 1.0; ymax += 1.0; }
+                else { ymax += (ymax - ymin) * 1e-6; }
+            }
+
+            h2 = histo2d_create_uniform(xbins, xmin, xmax, ybins, ymin, ymax, flags);
+            if (h2) {
+                if (has_weights && w_samples) {
+                    histo2d_fill_n(h2, count_2d, x_samples, y_samples, w_samples);
+                } else {
+                    histo2d_fill_n(h2, count_2d, x_samples, y_samples, NULL);
+                }
+            }
+            if (x_samples) free(x_samples);
+            if (y_samples) free(y_samples);
+            if (w_samples) free(w_samples);
+        }
+
+        if (h2) {
+            emit_histo2d(h2, out_format, out_fp);
+            histo2d_destroy(h2);
+        }
+        if (out_fp != stdout) fclose(out_fp);
+        return 0;
+    }
+
+    /* -------------------------------------------------------------
+     * 1D Histogram Ingestion Pipeline
+     * ------------------------------------------------------------- */
     double *auto_samples = NULL;
     double *auto_weights = NULL;
     size_t auto_count = 0;
@@ -274,12 +513,6 @@ int cmd_fill_main(int argc, char **argv) {
             return 1;
         }
     }
-
-    /* Process input files or stdin */
-    int num_files = argc - file_start;
-    const char *default_files[] = {"-"};
-    const char **files = (num_files > 0) ? (const char **)(argv + file_start) : default_files;
-    int nfiles = (num_files > 0) ? num_files : 1;
 
     uint64_t sample_count = 0;
     double last_emit_time = cli_get_time_sec();
@@ -332,21 +565,25 @@ int cmd_fill_main(int argc, char **argv) {
                 }
             }
         } else {
-            /* Text line parsing */
+            /* Text line parsing with delimiter auto-detection */
             char line[2048];
+            char detected_delim = delim;
+
             while (fgets(line, sizeof(line), in_fp)) {
-                /* Skip blank / comment lines */
                 char *p = line;
                 while (*p && isspace((unsigned char)*p)) p++;
                 if (*p == '\0' || *p == '#') continue;
 
+                if (detected_delim == '\0') {
+                    detected_delim = auto_detect_delimiter(p);
+                }
+
                 double x = 0.0, w = 1.0;
                 bool parsed_x = false;
 
-                if (delim != '\0') {
-                    /* Custom delimiter splitting */
+                if (detected_delim != ' ') {
                     int col = 1;
-                    char *tok = strtok(p, (char[]){delim, '\0'});
+                    char *tok = strtok(p, (char[]){detected_delim, '\0'});
                     while (tok) {
                         if (col == val_col) {
                             x = atof(tok);
@@ -354,11 +591,10 @@ int cmd_fill_main(int argc, char **argv) {
                         } else if (has_weights && col == w_col) {
                             w = atof(tok);
                         }
-                        tok = strtok(NULL, (char[]){delim, '\0'});
+                        tok = strtok(NULL, (char[]){detected_delim, '\0'});
                         col++;
                     }
                 } else {
-                    /* Whitespace separated */
                     int col = 1;
                     char *tok = strtok(p, " \t\r\n");
                     while (tok) {
@@ -399,7 +635,6 @@ int cmd_fill_main(int argc, char **argv) {
         if (in_fp != stdin) fclose(in_fp);
     }
 
-    /* If auto-range was active, calculate min/max and populate histogram */
     if (auto_range) {
         if (auto_count == 0) {
             range_min = 0.0;
@@ -415,7 +650,6 @@ int cmd_fill_main(int argc, char **argv) {
                 range_min -= 1.0;
                 range_max += 1.0;
             } else {
-                /* Add a tiny padding so maximum value falls strictly inside top bin */
                 double pad = (range_max - range_min) * 1e-6;
                 range_max += pad;
             }

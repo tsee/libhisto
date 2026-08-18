@@ -10,12 +10,15 @@ static void print_usage(const char *prog) {
     printf("  histo-fill [options] [arguments...]\n");
     printf("  histo-plot [options] [arguments...]\n");
     printf("  histo-stats [options] [arguments...]\n");
+    printf("  histo-fit [options] [arguments...]\n");
     printf("  histo-cmp [options] [arguments...]\n\n");
     printf("Commands:\n");
     printf("  fill     Stream data in, aggregate into histogram, and emit binary/JSON/text\n");
     printf("  plot     Render histogram as ASCII / Unicode terminal bar chart\n");
     printf("  stats    Display detailed statistical metrics and moment analysis\n");
+    printf("  fit      Fit parametric models (Gaussian, Exponential, Polynomial, Breit-Wigner)\n");
     printf("  cmp      Compare two histograms and compute statistical distance metrics\n\n");
+
     printf("Flags:\n");
     printf("  -h, --help       Show this help message\n");
     printf("  -v, --version    Show version information\n\n");
@@ -42,6 +45,9 @@ int main(int argc, char **argv) {
     if (strcmp(prog_name, "histo-cmp") == 0 || strcmp(prog_name, "histo_cmp") == 0 ||
         strcmp(prog_name, "histo-compare") == 0) {
         return cmd_cmp_main(argc, argv);
+    }
+    if (strcmp(prog_name, "histo-fit") == 0 || strcmp(prog_name, "histo_fit") == 0) {
+        return cmd_fit_main(argc, argv);
     }
 
     /* Multi-call dispatcher */
@@ -73,6 +79,9 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "stats") == 0 || strcmp(cmd, "stat") == 0 || strcmp(cmd, "inspect") == 0) {
         return cmd_stats_main(sub_argc, sub_argv);
     }
+    if (strcmp(cmd, "fit") == 0) {
+        return cmd_fit_main(sub_argc, sub_argv);
+    }
     if (strcmp(cmd, "cmp") == 0 || strcmp(cmd, "compare") == 0 || strcmp(cmd, "diff") == 0) {
         return cmd_cmp_main(sub_argc, sub_argv);
     }
@@ -80,3 +89,4 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Error: Unknown command '%s'. Run '%s --help' for usage.\n", cmd, prog_name);
     return 1;
 }
+

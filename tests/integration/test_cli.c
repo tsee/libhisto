@@ -164,8 +164,135 @@ void test_cli_execution_pipelines(void) {
     remove(out_bin2);
 }
 
+extern int cmd_fit_main(int argc, char **argv);
+
+void test_cli_fit_pipeline(void) {
+    char *help_argv[] = {"histo-fit", "--help"};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(2, help_argv));
+
+    /* Create sample gaussian data */
+    const char *gauss_path = "/tmp/test_cli_gauss.txt";
+    FILE *fp = fopen(gauss_path, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 500; ++i) {
+        double u1 = (double)(i + 1) / 501.0;
+        double u2 = (double)((i * 37) % 500 + 1) / 501.0;
+        double z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.1415926535 * u2);
+        double val = 50.0 + 5.0 * z0;
+        fprintf(fp, "%.6f\n", val);
+    }
+    fclose(fp);
+
+    /* Test default fit (Gaussian) */
+    char *fit_default_argv[] = {"histo-fit", (char *)gauss_path};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(2, fit_default_argv));
+
+    /* Test JSON fit */
+    char *fit_json_argv[] = {"histo-fit", "--model=gaussian", "-j", (char *)gauss_path};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_json_argv));
+
+    /* Test quiet fit */
+    char *fit_quiet_argv[] = {"histo-fit", "-q", (char *)gauss_path};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_quiet_argv));
+
+    /* Test plot fit */
+    char *fit_plot_argv[] = {"histo-fit", "-p", (char *)gauss_path};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_plot_argv));
+
+    /* Test constrained fit with bounds and fix-param */
+    char *fit_bounds_argv[] = {
+        "histo-fit", "--bounds=2=1.0:10.0", "--fix-param=1=50.0", (char *)gauss_path
+    };
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_bounds_argv));
+
+    /* Test other models on serialized histogram */
+    const char *out_hist = "/tmp/test_cli_fit_h.json";
+    char *fill_argv[] = {
+        "histo-fill", "--bins=20", "--min=20", "--max=80",
+        "-o", "json", "-f", (char *)out_hist, (char *)gauss_path
+    };
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(9, fill_argv));
+
+    char *fit_poly_argv[] = {"histo-fit", "-m", "polynomial", "-d", "2", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(6, fit_poly_argv));
+
+    char *fit_exp_argv[] = {"histo-fit", "-m", "exponential", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_exp_argv));
+
+    char *fit_bw_argv[] = {"histo-fit", "-m", "breit-wigner", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_bw_argv));
+
+    char *fit_mle_argv[] = {"histo-fit", "--mle", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_mle_argv));
+
+    /* Error handling */
+    char *fit_err_argv[] = {"histo-fit", "-m", "invalid_model_name", (char *)out_hist};
+    optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fit_main(4, fit_err_argv));
+
+    remove(gauss_path);
+    remove(out_hist);
+}
+
+void test_cli_2d_fill_and_delimiters(void) {
+    /* 1. Comma-separated CSV */
+    const char *csv_path = "/tmp/test_cli_2d.csv";
+    FILE *fp = fopen(csv_path, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 100; ++i) {
+        fprintf(fp, "%.2f,%.2f\n", (double)(i % 10), (double)(i / 10));
+    }
+    fclose(fp);
+
+    const char *out_2d_json = "/tmp/test_cli_2d.json";
+    char *fill_csv_argv[] = {
+        "histo-fill", "--2d", "--xbins", "10", "--xmin", "0", "--xmax", "10",
+        "--ybins", "10", "--ymin", "0", "--ymax", "10",
+        "-o", "json", "-f", (char *)out_2d_json, (char *)csv_path
+    };
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_csv_argv) / sizeof(fill_csv_argv[0])), fill_csv_argv));
+
+    /* 2. Tab-separated TSV with weights */
+    const char *tsv_path = "/tmp/test_cli_2d.tsv";
+    fp = fopen(tsv_path, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 100; ++i) {
+        fprintf(fp, "%.2f\t%.2f\t%.2f\n", (double)(i % 10), (double)(i / 10), 2.0);
+    }
+    fclose(fp);
+
+    const char *out_2d_bin = "/tmp/test_cli_2d.bin";
+    char *fill_tsv_argv[] = {
+        "histo-fill", "--2d", "-w", "-o", "binary", "-f", (char *)out_2d_bin, (char *)tsv_path
+    };
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_tsv_argv) / sizeof(fill_tsv_argv[0])), fill_tsv_argv));
+
+    /* Test histo-plot on 2D binary file */
+    char *plot_2d_argv[] = {"histo-plot", (char *)out_2d_bin};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_2d_argv) / sizeof(plot_2d_argv[0])), plot_2d_argv));
+
+    /* 3. Semicolon-separated file */
+    const char *semi_path = "/tmp/test_cli_2d.semi";
+    fp = fopen(semi_path, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 50; ++i) {
+        fprintf(fp, "%d;%d;%f\n", i, i * 2, 1.5);
+    }
+    fclose(fp);
+
+    char *fill_semi_argv[] = {
+        "histo-fill", "--2d", "--auto-range", "-d", ";", "-o", "json", (char *)semi_path
+    };
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_semi_argv) / sizeof(fill_semi_argv[0])), fill_semi_argv));
+
+
+    remove(csv_path);
+    remove(out_2d_json);
+    remove(tsv_path);
+    remove(out_2d_bin);
+    remove(semi_path);
+}
+
 void test_cli_error_handling(void) {
-    /* Invalid arguments to subcommands */
     char *fill_err_argv[] = {"histo-fill", "--invalid-flag"};
     optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fill_main(2, fill_err_argv));
 
@@ -174,11 +301,15 @@ void test_cli_error_handling(void) {
 }
 
 int main(void) {
+
     UNITY_BEGIN();
     RUN_TEST(test_json_serialization_roundtrip_uniform);
     RUN_TEST(test_json_serialization_roundtrip_variable);
     RUN_TEST(test_json_corrupted_payload);
     RUN_TEST(test_cli_execution_pipelines);
+    RUN_TEST(test_cli_fit_pipeline);
+    RUN_TEST(test_cli_2d_fill_and_delimiters);
     RUN_TEST(test_cli_error_handling);
     return UNITY_END();
 }
+

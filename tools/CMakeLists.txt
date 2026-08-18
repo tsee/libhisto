@@ -3,6 +3,7 @@ add_library(histo_tools_lib STATIC
     src/cmd_fill.c
     src/cmd_plot.c
     src/cmd_stats.c
+    src/cmd_fit.c
     src/cmd_cmp.c
 )
 
@@ -27,7 +28,8 @@ target_include_directories(histo-cli PRIVATE
 target_link_libraries(histo-cli PRIVATE histo_tools_lib)
 
 # Create symlink aliases in build directory
-set(TOOL_ALIASES histo-fill histo-plot histo-stats histo-cmp)
+set(TOOL_ALIASES histo-fill histo-plot histo-stats histo-fit histo-cmp)
+
 foreach(alias ${TOOL_ALIASES})
     add_custom_command(TARGET histo-cli POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E create_symlink $<TARGET_FILE_NAME:histo-cli> ${CMAKE_CURRENT_BINARY_DIR}/${alias}
