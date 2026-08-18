@@ -291,11 +291,21 @@ def test_cli_block(block, source_dir, build_dir, verbose):
         print(f"  [PASS] CLI Pipeline {filepath}:{line}")
     return True
 
+def run_task(task, source_dir, build_dir, compiler, cflags, verbose):
+    task_type, block = task
+    if task_type == "c":
+        ok = test_c_block(block, source_dir, build_dir, compiler, cflags, verbose)
+        return ("c", block, ok)
+    else:
+        ok = test_cli_block(block, source_dir, build_dir, verbose)
+        return ("cli", block, ok)
+
 def main():
     parser = argparse.ArgumentParser(description="Test inline C and CLI examples from libhisto documentation.")
     parser.add_argument("--source-dir", default=os.path.abspath("."), help="Path to libhisto repository root")
     parser.add_argument("--build-dir", default=os.path.abspath("build"), help="Path to CMake build directory")
     parser.add_argument("--compiler", default=os.environ.get("CC", "gcc"), help="C compiler to use")
+    parser.add_argument("--jobs", "-j", type=int, default=os.cpu_count() or 4, help="Number of parallel workers")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
@@ -308,42 +318,49 @@ def main():
         "docs/histo2d_guide.md"
     ]
 
-    total_c = 0
-    passed_c = 0
-    total_cli = 0
-    passed_cli = 0
-    failed = False
-
-    print("======================================================================")
-    print(" TESTING INLINE DOCUMENTATION CODE EXAMPLES & CLI PIPELINES")
-    print("======================================================================")
-
+    tasks = []
     for rel_path in doc_files:
         filepath = os.path.join(args.source_dir, rel_path)
         if not os.path.exists(filepath):
             continue
 
-        print(f"\n--- Checking {rel_path} ---")
         blocks = extract_code_blocks(filepath)
-
         for block in blocks:
             lang = block["lang"].lower()
             if lang in ["c", "c99"]:
-                total_c += 1
-                if test_c_block(block, args.source_dir, args.build_dir, args.compiler, cflags, args.verbose):
-                    passed_c += 1
-                else:
-                    failed = True
+                tasks.append(("c", block))
             elif lang in ["bash", "sh"]:
                 code = block["code"]
                 if "histo" in code and not any(k in code for k in ["git clone", "make", "cmake", "sudo "]):
-                    total_cli += 1
-                    if test_cli_block(block, args.source_dir, args.build_dir, args.verbose):
-                        passed_cli += 1
-                    else:
-                        failed = True
+                    tasks.append(("cli", block))
 
-    print("\n======================================================================")
+    total_c = sum(1 for t in tasks if t[0] == "c")
+    total_cli = sum(1 for t in tasks if t[0] == "cli")
+    passed_c = 0
+    passed_cli = 0
+    failed = False
+
+    print("======================================================================")
+    print(f" TESTING INLINE DOCUMENTATION CODE EXAMPLES & CLI PIPELINES (-j {args.jobs})")
+    print("======================================================================")
+
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
+        futures = [executor.submit(run_task, t, args.source_dir, args.build_dir, args.compiler, cflags, args.verbose) for t in tasks]
+        for f in concurrent.futures.as_completed(futures):
+            task_type, block, ok = f.result()
+            if task_type == "c":
+                if ok:
+                    passed_c += 1
+                else:
+                    failed = True
+            else:
+                if ok:
+                    passed_cli += 1
+                else:
+                    failed = True
+
+    print("======================================================================")
     print(f" SUMMARY: C Examples: {passed_c}/{total_c} passed | CLI Examples: {passed_cli}/{total_cli} passed")
     if failed or passed_c != total_c or passed_cli != total_cli:
         print(" RESULT: FAILED")
@@ -353,6 +370,7 @@ def main():
         print(" RESULT: ALL INLINE DOCUMENTATION EXAMPLES PASSED SUCCESSFULLY")
         print("======================================================================")
         return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
