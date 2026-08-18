@@ -74,3 +74,17 @@ add_executable(test_fit
 )
 target_link_libraries(test_fit PRIVATE histo unity)
 add_test(NAME test_fit COMMAND test_fit)
+
+# Unit Test: 2-Dimensional Histograms (Lifecycle, Ingestion, 9-Guard Zones)
+add_executable(test_histo2d
+    test_histo2d.c
+)
+target_link_libraries(test_histo2d PRIVATE histo unity)
+add_test(NAME test_histo2d COMMAND test_histo2d)
+
+# Unit Test: 2D Moments, Projections, Profiles & Transformations
+add_executable(test_histo2d_stats
+    test_histo2d_stats.c
+)
+target_link_libraries(test_histo2d_stats PRIVATE histo unity)
+add_test(NAME test_histo2d_stats COMMAND test_histo2d_stats)

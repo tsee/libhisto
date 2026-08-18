@@ -70,6 +70,114 @@ static void get_ansi_gradient_color(double fraction, char *out_ansi, size_t max_
     snprintf(out_ansi, max_len, "\033[38;2;%d;%d;%dm", r, g, b);
 }
 
+static void get_viridis_color(double fraction, int *r, int *g, int *b) {
+    if (fraction < 0.0) fraction = 0.0;
+    if (fraction > 1.0) fraction = 1.0;
+    if (fraction < 0.25) {
+        double t = fraction / 0.25;
+        *r = (int)((1.0 - t) * 68 + t * 59);
+        *g = (int)((1.0 - t) * 1 + t * 82);
+        *b = (int)((1.0 - t) * 84 + t * 139);
+    } else if (fraction < 0.5) {
+        double t = (fraction - 0.25) / 0.25;
+        *r = (int)((1.0 - t) * 59 + t * 33);
+        *g = (int)((1.0 - t) * 82 + t * 145);
+        *b = (int)((1.0 - t) * 139 + t * 140);
+    } else if (fraction < 0.75) {
+        double t = (fraction - 0.5) / 0.25;
+        *r = (int)((1.0 - t) * 33 + t * 94);
+        *g = (int)((1.0 - t) * 145 + t * 201);
+        *b = (int)((1.0 - t) * 140 + t * 98);
+    } else {
+        double t = (fraction - 0.75) / 0.25;
+        *r = (int)((1.0 - t) * 94 + t * 253);
+        *g = (int)((1.0 - t) * 201 + t * 231);
+        *b = (int)((1.0 - t) * 98 + t * 37);
+    }
+}
+
+static void render_histo2d_heatmap(const histo2d_t *h, int term_width, bool use_color, const char *title) {
+    if (!h) return;
+    (void)term_width;
+
+    uint32_t nx = histo2d_nbins_x(h);
+    uint32_t ny = histo2d_nbins_y(h);
+    histo2d_axis_t ax, ay;
+    histo2d_axis_x(h, &ax);
+    histo2d_axis_y(h, &ay);
+
+    double max_content = 0.0;
+    for (uint32_t ix = 0; ix < nx; ++ix) {
+        for (uint32_t iy = 0; iy < ny; ++iy) {
+            double c = 0.0;
+            histo2d_bin_content(h, ix, iy, &c);
+            if (c > max_content) max_content = c;
+        }
+    }
+    if (max_content <= 0.0) max_content = 1.0;
+
+    if (title && *title) {
+        printf("\n── %s ──\n", title);
+    } else {
+        printf("\n── 2D Histogram Heatmap (%u x %u bins, Entries: %llu, Weight: %.4g) ──\n",
+               nx, ny, (unsigned long long)histo2d_num_entries(h), histo2d_total_weight(h));
+    }
+
+    /* Render Y rows from top (ny-1) to bottom (0) */
+    for (int iy = (int)ny - 1; iy >= 0; --iy) {
+        double ymin_b, ymax_b, dummy;
+        histo2d_bin_bounds(h, 0, (uint32_t)iy, &dummy, &dummy, &ymin_b, &ymax_b);
+        printf("%7.2f │ ", 0.5 * (ymin_b + ymax_b));
+
+        for (uint32_t ix = 0; ix < nx; ++ix) {
+            double c = 0.0;
+            histo2d_bin_content(h, ix, (uint32_t)iy, &c);
+            double frac = (c > 0.0) ? (c / max_content) : 0.0;
+            if (use_color) {
+                int r, g, b;
+                get_viridis_color(frac, &r, &g, &b);
+                printf("\033[48;2;%d;%d;%dm  \033[0m", r, g, b);
+            } else {
+                static const char density[] = " .:-=+*#%@";
+                int idx = (int)(frac * 9.0);
+                if (idx < 0) idx = 0;
+                if (idx > 9) idx = 9;
+                printf("%c ", density[idx]);
+            }
+        }
+        printf(" │\n");
+    }
+
+    /* X Axis line and ticks */
+    printf("        └");
+    for (uint32_t ix = 0; ix < nx; ++ix) printf("──");
+    printf("─┘\n");
+
+    printf("         ");
+    printf("%-7.2f", ax.min);
+    int mid_pad = (int)(nx * 2) - 14;
+    if (mid_pad > 0) {
+        for (int p = 0; p < mid_pad / 2; ++p) printf(" ");
+        printf("%-7.2f", 0.5 * (ax.min + ax.max));
+        for (int p = 0; p < (mid_pad - mid_pad / 2); ++p) printf(" ");
+    }
+    printf("%7.2f\n", ax.max);
+
+    /* Color bar legend */
+    if (use_color) {
+        printf("\n  Intensity: 0.00 ");
+        for (int step = 0; step <= 20; ++step) {
+            double frac = (double)step / 20.0;
+            int r, g, b;
+            get_viridis_color(frac, &r, &g, &b);
+            printf("\033[48;2;%d;%d;%dm \033[0m", r, g, b);
+        }
+        printf(" %.2e\n\n", max_content);
+    } else {
+        printf("\n  Density scale: [ .:-=+*#%%@ ] (0.00 -> %.2e)\n\n", max_content);
+    }
+}
+
 static void render_histogram_console(const histo_t *h, int term_width, const char *style,
                                      bool use_color, bool log_scale, bool show_errors,
                                      bool show_stats, const char *title) {
@@ -430,24 +538,30 @@ int cmd_plot_main(int argc, char **argv) {
 
         cli_input_format_t fmt = cli_detect_stream_format(in_fp);
         if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO) {
-            histo_t *h = NULL;
-            if (watch_mode) {
-                while (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
-                    if (clear_screen) {
-                        printf("\033[2J\033[H");
-                    } else {
-                        printf("\033[H");
-                    }
-                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
-                    histo_destroy(h);
-                    h = NULL;
-                }
+            histo2d_t *h2d = NULL;
+            if (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
+                render_histo2d_heatmap(h2d, term_width, use_color, title);
+                histo2d_destroy(h2d);
             } else {
-                if (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
-                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
-                    histo_destroy(h);
+                histo_t *h = NULL;
+                if (watch_mode) {
+                    while (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
+                        if (clear_screen) {
+                            printf("\033[2J\033[H");
+                        } else {
+                            printf("\033[H");
+                        }
+                        render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
+                        histo_destroy(h);
+                        h = NULL;
+                    }
                 } else {
-                    fprintf(stderr, "Error: Failed to deserialize histogram from '%s'\n", files[f]);
+                    if (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
+                        render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
+                        histo_destroy(h);
+                    } else {
+                        fprintf(stderr, "Error: Failed to deserialize histogram from '%s'\n", files[f]);
+                    }
                 }
             }
         } else {

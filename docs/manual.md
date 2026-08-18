@@ -570,3 +570,38 @@ For complete mathematical derivations and user recipes, see [`docs/curve_fitting
 | `histo_fit_result_destroy` | O(1) | O(1) | Frees result arrays and container |
 | `histo_fit_chi2_p_value` | O(1) | O(1) | Regularized incomplete gamma evaluation |
 
+---
+
+## 10. 2-Dimensional Histograms (`histo2d_t`)
+
+`libhisto` includes full support for 2-Dimensional histograms (`histo/histo2d.h`) for bivariate distributions, spatial telemetry, scattering experiments, and image analysis.
+
+### Key Capabilities
+- **Four Binning Combinations**: Uniform-Uniform, Variable-Variable, Uniform-Variable, and Variable-Uniform.
+- **9-Region Guard Partitioning**: Center, North, South, East, West, North-East, North-West, South-East, and South-West with non-finite sample tracking.
+- **Online Exact 2D Welford Comoments**: Running sample covariance Cov(X, Y) and Pearson correlation coefficient rho in [-1, 1].
+- **1D Marginal Projections & Slices**: `histo2d_project_x`, `histo2d_project_y`, `histo2d_slice_x`, and `histo2d_slice_y`.
+- **1D Profile Histograms**: `histo2d_profile_x` and `histo2d_profile_y` computing conditional mean and standard error of the mean in each bin.
+- **2D Transformations**: 2D scaling, continuous/discrete area normalization, integer block rebinning, and cell-wise arithmetic (`add`, `subtract`, `multiply`, `divide`).
+- **Format V3 Wire Serialization & JSON**: Canonical Little-Endian 256-byte header with contiguous doubles and `libhisto2d-v1` JSON schema.
+- **CLI TrueColor Heatmap**: `histo-plot` rendering with 24-bit TrueColor ANSI half-block `▀` compression and Viridis colormap.
+
+For full mathematical derivations and code walkthroughs, see [`docs/histo2d_guide.md`](@ref histo2d_guide).
+
+### Computational Complexity: 2D Histograms
+
+| Function | Time Complexity (Uniform) | Time Complexity (Variable) | Space Complexity | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `histo2d_create_*` | O(Nx * Ny) | O(Nx * Ny + Nx + Ny) | O(Nx * Ny) | Contiguous 64-byte aligned grid allocation |
+| `histo2d_destroy` | O(1) | O(1) | O(1) | Deallocates 2D container and aligned bins |
+| `histo2d_fill` / `_w` | O(1) | O(log Nx + log Ny) | O(1) | Coordinate lookup & 2D Welford comoments |
+| `histo2d_fill_n` | O(M) | O(M (log Nx + log Ny)) | O(1) | High-throughput batch array ingestion |
+| `histo2d_find_bin` | O(1) | O(log Nx + log Ny) | O(1) | Dual-axis coordinate lookup |
+| `histo2d_project_x/y` | O(Nx * Ny) | O(Nx * Ny) | O(Nx) or O(Ny) | Integrates across orthogonal axis |
+| `histo2d_slice_x/y` | O(K * N) | O(K * N) | O(N) | Integrates across sub-range of orthogonal bins |
+| `histo2d_profile_x/y` | O(Nx * Ny) | O(Nx * Ny) | O(Nx) or O(Ny) | Evaluates conditional mean & standard error |
+| `histo2d_rebin` | O(Nx * Ny) | O(Nx * Ny) | O((Nx*Ny)/(fx*fy)) | Combines adjacent blocks of fx * fy bins |
+| `histo2d_serialize_binary` | O(Nx * Ny) | O(Nx * Ny + Nx + Ny) | O(1) | Encodes Format V3 canonical Little-Endian blob |
+| `histo2d_deserialize_binary` | O(Nx * Ny) | O(Nx * Ny + Nx + Ny) | O(Nx * Ny) | Decodes Format V3 blob into 2D histogram |
+
+

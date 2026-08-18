@@ -27,9 +27,5 @@ compile_commands.json
 callgrind.out.*
 vgcore.*
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*~
-.DS_Store
+# Documentation build output
+docs/html/

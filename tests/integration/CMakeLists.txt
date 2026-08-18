@@ -30,3 +30,8 @@ if(LIBHISTO_BUILD_TOOLS)
     target_link_libraries(test_cli PRIVATE histo_tools_lib unity)
     add_test(NAME test_cli COMMAND test_cli)
 endif()
+
+# Integration Test: 2D Serialization & Wire Formats (V3 Binary & JSON)
+add_executable(test_histo2d_serialization test_histo2d_serialization.c)
+target_link_libraries(test_histo2d_serialization PRIVATE histo unity)
+add_test(NAME test_histo2d_serialization COMMAND test_histo2d_serialization)

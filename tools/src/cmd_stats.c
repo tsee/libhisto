@@ -99,36 +99,96 @@ static void print_histogram_stats(const histo_t *h, const char *fmt) {
         printf("median\t%.8g\n", median);
         printf("iqr\t%.8g\n", iqr);
         printf("mad\t%.8g\n", mad);
-        printf("trimmed_mean\t%.8g\n", t_mean);
-        printf("winsorized_mean\t%.8g\n", w_mean);
-        printf("mode_continuous\t%.8g\n", mode_cont);
         printf("fwhm\t%.8g\n", fwhm);
         printf("rms\t%.8g\n", rms);
-    } else { /* Human-readable table */
+    } else {
         printf("===============================================================\n");
-        printf("                    HISTOGRAM SUMMARY REPORT                   \n");
+        printf(" HISTOGRAM SUMMARY STATISTICS\n");
         printf("===============================================================\n");
-        printf(" Geometry & Counts:\n");
-        printf("   Bins:            %-12u Range: [%.4f, %.4f)\n", nbins, range_min, range_max);
-        printf("   Entries:         %-12llu Total Weight: %.4g\n", (unsigned long long)n_entries, total_w);
-        printf("   Underflow:       %-12.4g Overflow:     %.4g\n", histo_underflow(h), histo_overflow(h));
-        printf("   Non-Finite / NaN:%-12llu\n\n", (unsigned long long)histo_nan_count(h));
-
-        printf(" Central Moments & Shape:\n");
-        printf("   Mean:            %-12.6g Std Deviation: %.6g\n", mean, sdev);
-        printf("   Variance:        %-12.6g RMS:           %.6g\n", var, rms);
-        printf("   Skewness:        %-12.6g Kurtosis:      %.6g\n", skew, kurt);
-        printf("   Excess Kurtosis: %-12.6g\n\n", ex_kurt);
-
-        printf(" Robust Non-Parametric Metrics:\n");
-        printf("   Median (Q50):    %-12.6g IQR (Q75-Q25): %.6g\n", median, iqr);
-        printf("   Q25:             %-12.6g Q75:           %.6g\n", q25, q75);
-        printf("   MAD:             %-12.6g Trimmed Mean:  %.6g\n", mad, t_mean);
-        printf("   Winsorized Mean: %-12.6g\n\n", w_mean);
-
-        printf(" Peak & Width Estimation:\n");
+        printf("  Total Entries:    %llu\n", (unsigned long long)n_entries);
+        printf("  Total Weight:     %.6g\n", total_w);
+        printf("  Underflow Weight: %.6g\n", histo_underflow(h));
+        printf("  Overflow Weight:  %.6g\n", histo_overflow(h));
+        printf("  Rejected NaNs:    %llu\n", (unsigned long long)histo_nan_count(h));
+        printf("  Number of Bins:   %u\n", nbins);
+        printf("  Range:            [%.6g, %.6g]\n", range_min, range_max);
+        printf("---------------------------------------------------------------\n");
+        printf("  Moments & Central Tendency:\n");
+        printf("   Mean:            %-12.6g Std Dev:          %.6g\n", mean, sdev);
+        printf("   Variance:        %-12.6g RMS:              %.6g\n", var, rms);
+        printf("   Skewness:        %-12.6g Kurtosis:         %.6g\n", skew, kurt);
+        printf("   Excess Kurtosis: %-12.6g\n", ex_kurt);
+        printf("---------------------------------------------------------------\n");
+        printf("  Order Statistics & Quantiles:\n");
+        printf("   Median (Q50):    %-12.6g IQR:              %.6g\n", median, iqr);
+        printf("   Q25:             %-12.6g Q75:              %.6g\n", q25, q75);
+        printf("   Q05:             %-12.6g Q95:              %.6g\n", q05, q95);
+        printf("   MAD:             %-12.6g Trimmed Mean:     %.6g\n", mad, t_mean);
+        printf("   Winsorized Mean: %-12.6g\n", w_mean);
+        printf("---------------------------------------------------------------\n");
+        printf("  Peak & Mode Estimation:\n");
         printf("   Mode (Bin):      %-12u Mode (Continuous): %.6g\n", mode_bin, mode_cont);
         printf("   FWHM:            %-12.6g\n", fwhm);
+        printf("===============================================================\n");
+    }
+}
+
+static void print_histo2d_stats(const histo2d_t *h, const char *fmt) {
+    if (!h) return;
+    histo2d_stats_t s;
+    histo2d_get_stats(h, &s);
+
+    uint32_t nx = histo2d_nbins_x(h);
+    uint32_t ny = histo2d_nbins_y(h);
+
+    if (strcmp(fmt, "json") == 0) {
+        printf("{\n");
+        printf("  \"type\": \"2d\",\n");
+        printf("  \"nbins_x\": %u,\n", nx);
+        printf("  \"nbins_y\": %u,\n", ny);
+        printf("  \"entries\": %llu,\n", (unsigned long long)s.n_entries);
+        printf("  \"total_weight\": %.8g,\n", s.total_weight);
+        printf("  \"mean_x\": %.8g,\n", s.mean_x);
+        printf("  \"mean_y\": %.8g,\n", s.mean_y);
+        printf("  \"variance_x\": %.8g,\n", s.variance_x);
+        printf("  \"variance_y\": %.8g,\n", s.variance_y);
+        printf("  \"std_dev_x\": %.8g,\n", s.std_dev_x);
+        printf("  \"std_dev_y\": %.8g,\n", s.std_dev_y);
+        printf("  \"covariance\": %.8g,\n", s.covariance);
+        printf("  \"correlation\": %.8g\n", s.correlation);
+        printf("}\n");
+    } else if (strcmp(fmt, "tsv") == 0) {
+        printf("metric\tvalue\n");
+        printf("nbins_x\t%u\n", nx);
+        printf("nbins_y\t%u\n", ny);
+        printf("entries\t%llu\n", (unsigned long long)s.n_entries);
+        printf("total_weight\t%.8g\n", s.total_weight);
+        printf("mean_x\t%.8g\n", s.mean_x);
+        printf("mean_y\t%.8g\n", s.mean_y);
+        printf("variance_x\t%.8g\n", s.variance_x);
+        printf("variance_y\t%.8g\n", s.variance_y);
+        printf("std_dev_x\t%.8g\n", s.std_dev_x);
+        printf("std_dev_y\t%.8g\n", s.std_dev_y);
+        printf("covariance\t%.8g\n", s.covariance);
+        printf("correlation\t%.8g\n", s.correlation);
+    } else {
+        printf("===============================================================\n");
+        printf(" 2-DIMENSIONAL HISTOGRAM SUMMARY STATISTICS\n");
+        printf("===============================================================\n");
+        printf("  Grid Dimensions:  %u x %u bins\n", nx, ny);
+        printf("  Total Entries:    %llu\n", (unsigned long long)s.n_entries);
+        printf("  Total Weight:     %.6g\n", s.total_weight);
+        printf("  Rejected NaNs:    %llu\n", (unsigned long long)histo2d_nan_count(h));
+        printf("---------------------------------------------------------------\n");
+        printf("  X-Axis:  Range [%.4g, %.4g]\n", s.min_x, s.max_x);
+        printf("    Mean (X):       %-12.6g Std Dev (X):  %.6g\n", s.mean_x, s.std_dev_x);
+        printf("    Variance (X):   %-12.6g\n", s.variance_x);
+        printf("  Y-Axis:  Range [%.4g, %.4g]\n", s.min_y, s.max_y);
+        printf("    Mean (Y):       %-12.6g Std Dev (Y):  %.6g\n", s.mean_y, s.std_dev_y);
+        printf("    Variance (Y):   %-12.6g\n", s.variance_y);
+        printf("---------------------------------------------------------------\n");
+        printf("  Bivariate Correlation & Covariance:\n");
+        printf("    Covariance:     %-12.6g Pearson (rho): %.6f\n", s.covariance, s.correlation);
         printf("===============================================================\n");
     }
 }
@@ -166,6 +226,14 @@ int cmd_stats_main(int argc, char **argv) {
 
     int status = 0;
     for (int f = 0; f < nfiles; ++f) {
+        /* Try 2D first, then 1D */
+        histo2d_t *h2d = NULL;
+        if (cli_read_histo2d_from_file(files[f], &h2d) == HISTO_OK) {
+            print_histo2d_stats(h2d, fmt);
+            histo2d_destroy(h2d);
+            continue;
+        }
+
         histo_t *h = NULL;
         if (cli_read_histogram_from_file(files[f], &h) == HISTO_OK) {
             print_histogram_stats(h, fmt);

@@ -4,6 +4,8 @@
 
 ## Key Features
 
+- **2-Dimensional Histograms (`histo2d_t`):** Full support for bivariate distributions across all 4 binning combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region guard partitioning, 2D online Welford covariance $\operatorname{Cov}(X,Y)$ and Pearson correlation $\rho_{xy}$, 1D marginal projections (`project_x/y`), sub-interval slices (`slice_x/y`), profile histograms (`profile_x/y`), and TrueColor terminal heatmaps.
+- **Curve Fitting & Non-Linear Regression:** Built-in models (Gaussian, Exponential, Polynomials $d \le 10$, Breit-Wigner, Power Law) and custom user callbacks with Levenberg-Marquardt optimizer, parameter constraints/freezing, $\chi^2$ and Poisson MLE Cash deviance.
 - **Flexible Binning:** Uniform ($O(1)$) and Variable-width ($O(\log N)$) binning configurations with boundary-guarded floating-point indexing.
 - **SIMD Vector Acceleration:** AVX-512 and AVX2 / FMA vectorized batch ingestion (`histo_fill_n`) with automatic runtime CPUID feature detection and scalar fallback.
 - **DDSketch Dynamic Quantile Sketches:** Fully dynamic, bounded relative-error online quantile sketches (`include/histo/sketch.h`) with configurable accuracy $\alpha$, logarithmic dynamic binning, circular collapsing buffers, and mergeability.
@@ -14,9 +16,10 @@
 - **Robust Non-Parametric Measures:** Piecewise-linear quantile interpolation, Median, Interquartile Range (IQR), Median Absolute Deviation (MAD), Trimmed Mean, and Winsorized Mean.
 - **Two-Distribution Comparisons:** Weighted Chi-Square ($\chi^2$) test with degrees of freedom (NDF), Kolmogorov-Smirnov ($D$), 1D Wasserstein / Earth Mover's Distance ($W_1$), Kullback-Leibler (KL) divergence, and Bhattacharyya distance.
 - **Transformations & Arithmetic:** Element-wise vector arithmetic (`add`, `subtract`, `multiply`, `divide`), scalar scaling, normalization to target area, integer rebinning, slicing, and cumulative distribution functions (CDF).
-- **Terminal Sparkline & Visualization:** Multi-style terminal plotting (`histo-plot`) featuring 1/8th sub-character Unicode fractional blocks, compact single-line sparklines (`-S, --sparkline`), TrueColor gradients, and live continuous streaming watch mode (`--watch`).
-- **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format with automatic format migration (`histo_migrate_binary`) and IEEE-754 lossless JSON serialization.
+- **Terminal Heatmap & Sparkline Visualization:** Multi-style terminal plotting (`histo-plot`) featuring 2D TrueColor heatmaps (`--heatmap`), 1/8th sub-character Unicode fractional blocks, compact single-line sparklines (`-S, --sparkline`), TrueColor gradients, and live continuous streaming watch mode (`--watch`).
+- **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format (V1, V2, V3 for 2D) with automatic format migration (`histo_migrate_binary`) and IEEE-754 lossless JSON serialization.
 - **Memory Safety & Portability:** Strict ISO C99, 100% leak-free, thread-safe concurrent queries, zero compiler warnings, and clean ASan/UBSan/TSan/Valgrind validation.
+
 
 ---
 
@@ -106,10 +109,42 @@ int main(void) {
 }
 ```
 
+### 3. 2-Dimensional Histograms & Bivariate Moments (`histo2d_t`)
+
+```c
+#include <stdio.h>
+#include <histo/histo2d.h>
+
+int main(void) {
+    // 1. Create a 50x50 2D histogram over [-5, 5] x [-5, 5]
+    histo2d_t *h2d = histo2d_create_uniform(50, -5.0, 5.0, 50, -5.0, 5.0,
+                                            HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+
+    // 2. Ingest bivariate samples
+    histo2d_fill(h2d, 1.2, 2.4);
+    histo2d_fill_w(h2d, -0.5, 0.5, 3.0);
+
+    // 3. Compute bivariate statistics
+    histo2d_stats_t stats;
+    histo2d_get_stats(h2d, &stats);
+    printf("2D Entries: %lu | Covariance: %.4f | Pearson Rho: %.4f\n",
+           (unsigned long)stats.n_entries, stats.covariance, stats.correlation);
+
+    // 4. Extract 1D marginal projection along X
+    histo_t *proj_x = NULL;
+    histo2d_project_x(h2d, &proj_x);
+
+    histo_destroy(proj_x);
+    histo2d_destroy(h2d);
+    return 0;
+}
+```
+
 Compile with:
 ```bash
 gcc -O3 -std=c99 -Wall -Wextra -Iinclude example.c -Lbuild -lhisto -lm -o example
 ```
+
 
 ---
 

@@ -2,6 +2,7 @@
 #define HISTO_CLI_COMMON_H
 
 #include "histo/histo.h"
+#include "histo/histo2d.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -37,6 +38,9 @@ cli_input_format_t cli_detect_stream_format(FILE *fp);
 /* Buffer reading helpers */
 histo_status_t cli_read_histogram_from_stream(FILE *fp, histo_t **out_h);
 histo_status_t cli_read_histogram_from_file(const char *path, histo_t **out_h);
+
+histo_status_t cli_read_histo2d_from_stream(FILE *fp, histo2d_t **out_h);
+histo_status_t cli_read_histo2d_from_file(const char *path, histo2d_t **out_h);
 
 /* Time utilities */
 double cli_get_time_sec(void);

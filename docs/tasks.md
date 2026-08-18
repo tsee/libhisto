@@ -89,13 +89,14 @@
 
 ## Phase I: 2-Dimensional Histograms (`histo2d_t`)
 - [x] **I1** High-Level Architectural Blueprint & Specification (`docs/design_2d_histograms.md`)
-- [x] **I2** Proposed Public C API Header Draft (`docs/proposed_histo2d_header.h`)
+- [x] **I2** Proposed Public C API Header Draft (`docs/proposed_histo2d_header.h`, `include/histo/histo2d.h`)
 - [x] **I3** Wire Format V3 & 2D JSON Schema Specification (`docs/serialization_format.md`)
-- [ ] **I4** Core 2D Internal Memory & Ingestion Pipeline Implementation (`src/histo2d.c`)
-- [ ] **I5** Online 2D Welford Moments & Bivariate Statistics Routines
-- [ ] **I6** 1D Projections, Slices & Profile Histograms (`histo2d_project_*`, `histo2d_profile_*`)
-- [ ] **I7** 2D Transformations, Rebinning & Arithmetic
-- [ ] **I8** Little-Endian Wire Serialization (Format V3) & Deserialization
-- [ ] **I9** Terminal Heatmap & 2D CLI Tooling Integration (`histo-plot --heatmap`)
-- [ ] **I10** 2D Unit Tests, AVX2 SIMD Acceleration, & ASan/UBSan Verification
+- [x] **I4** Core 2D Internal Memory & Ingestion Pipeline Implementation (`src/histo2d.c`)
+- [x] **I5** Online 2D Welford Moments & Bivariate Statistics Routines
+- [x] **I6** 1D Projections, Slices & Profile Histograms (`histo2d_project_*`, `histo2d_profile_*`)
+- [x] **I7** 2D Transformations, Rebinning & Arithmetic
+- [x] **I8** Little-Endian Wire Serialization (Format V3) & Deserialization (`src/serialize_2d.c`)
+- [x] **I9** Terminal Heatmap & 2D CLI Tooling Integration (`histo-plot`, `histo-stats`, `histo-fill`)
+- [x] **I10** 2D Unit & Integration Tests, ASan/UBSan & Valgrind Verification (`test_histo2d`, `test_histo2d_stats`, `test_histo2d_serialization`)
+
 
