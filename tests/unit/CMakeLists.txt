@@ -67,3 +67,10 @@ add_executable(test_simd
 )
 target_link_libraries(test_simd PRIVATE histo unity)
 add_test(NAME test_simd COMMAND test_simd)
+
+# Unit Test: Curve Fitting & Non-Linear Regression Engine
+add_executable(test_fit
+    test_fit.c
+)
+target_link_libraries(test_fit PRIVATE histo unity)
+add_test(NAME test_fit COMMAND test_fit)

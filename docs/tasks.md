@@ -75,15 +75,27 @@
 
 ---
 
-## Phase H: 2-Dimensional Histograms (`histo2d_t`)
-- [x] **H1** High-Level Architectural Blueprint & Specification (`docs/design_2d_histograms.md`)
-- [x] **H2** Proposed Public C API Header Draft (`docs/proposed_histo2d_header.h`)
-- [x] **H3** Wire Format V3 & 2D JSON Schema Specification (`docs/serialization_format.md`)
-- [ ] **H4** Core 2D Internal Memory & Ingestion Pipeline Implementation (`src/histo2d.c`)
-- [ ] **H5** Online 2D Welford Moments & Bivariate Statistics Routines
-- [ ] **H6** 1D Projections, Slices & Profile Histograms (`histo2d_project_*`, `histo2d_profile_*`)
-- [ ] **H7** 2D Transformations, Rebinning & Arithmetic
-- [ ] **H8** Little-Endian Wire Serialization (Format V3) & Deserialization
-- [ ] **H9** Terminal Heatmap & 2D CLI Tooling Integration (`histo-plot --heatmap`)
-- [ ] **H10** 2D Unit Tests, AVX2 SIMD Acceleration, & ASan/UBSan Verification
+## Phase H: Curve Fitting & Non-Linear Regression Engine
+- [x] **H1** Modular architecture & public C API (`include/histo/fit.h`, `src/fit.c`)
+- [x] **H2** Built-in parametric models (Gaussian, Exponential, Polynomial up to degree 10, Breit-Wigner, Power Law) & custom user callback support
+- [x] **H3** Levenberg-Marquardt optimizer with adaptive damping and Direct Linear Least Squares for polynomials
+- [x] **H4** Objective loss functions: Weighted Chi-Square, Unweighted Least Squares, and Poisson MLE (Cash / Baker-Cousins deviance)
+- [x] **H5** Parameter box constraints, fixed parameter freezing, and automatic moment-based initial guess heuristics
+- [x] **H6** Comprehensive fit result diagnostics: covariance & correlation matrices, parameter errors, reduced Chi2, p-values (Gamma CDF), AIC, and BIC
+- [x] **H7** Unit and stress test suite (`tests/unit/test_fit.c`) with 100% leak-free ASan/UBSan and Valgrind verification
+- [x] **H8** Mathematical user guide (`docs/curve_fitting_guide.md`) and user manual updates (`docs/manual.md`)
+
+---
+
+## Phase I: 2-Dimensional Histograms (`histo2d_t`)
+- [x] **I1** High-Level Architectural Blueprint & Specification (`docs/design_2d_histograms.md`)
+- [x] **I2** Proposed Public C API Header Draft (`docs/proposed_histo2d_header.h`)
+- [x] **I3** Wire Format V3 & 2D JSON Schema Specification (`docs/serialization_format.md`)
+- [ ] **I4** Core 2D Internal Memory & Ingestion Pipeline Implementation (`src/histo2d.c`)
+- [ ] **I5** Online 2D Welford Moments & Bivariate Statistics Routines
+- [ ] **I6** 1D Projections, Slices & Profile Histograms (`histo2d_project_*`, `histo2d_profile_*`)
+- [ ] **I7** 2D Transformations, Rebinning & Arithmetic
+- [ ] **I8** Little-Endian Wire Serialization (Format V3) & Deserialization
+- [ ] **I9** Terminal Heatmap & 2D CLI Tooling Integration (`histo-plot --heatmap`)
+- [ ] **I10** 2D Unit Tests, AVX2 SIMD Acceleration, & ASan/UBSan Verification
 

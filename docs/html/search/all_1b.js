@@ -16,10 +16,12 @@ var searchData=
   ['statistical_20formulations_13',['5. Numerical Algorithms &amp;amp; Statistical Formulations',['../index.html#autotoc_md24',1,'']]],
   ['statistics_14',['4.6 Robust Non-Parametric &amp;amp; Dispersion Statistics',['../index.html#autotoc_md18',1,'']]],
   ['statistics_204_15',['5.3 Online Weighted Welford Statistics ( \\(O(1)\\))',['../index.html#autotoc_md27',1,'']]],
-  ['std_5fdev_16',['std_dev',['../structhisto__stats.html#a1a677524f59fe7f69387a825feeaf529',1,'histo_stats']]],
-  ['streaming_20dynamic_20quantile_20sketching_20ddsketch_17',['3.2 Streaming Dynamic Quantile Sketching (DDSketch)',['../index.html#autotoc_md10',1,'']]],
-  ['streaming_20ingestion_20histo_20fill_18',['4.8.1 Streaming Ingestion (&lt;span class=&quot;tt&quot;&gt;histo-fill&lt;/span&gt;)',['../index.html#autotoc_md21',1,'']]],
-  ['support_20linear_20quantile_20dispersion_2030_19',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md30',1,'']]],
-  ['sympathy_20',['6. Performance Envelope &amp;amp; Mechanical Sympathy',['../index.html#autotoc_md36',1,'']]],
-  ['sympathy_20principles_21',['Mechanical Sympathy Principles',['../index.html#autotoc_md37',1,'']]]
+  ['status_16',['status',['../structhisto__fit__result.html#a48eb16db6c29d10e10e3397f6c379476',1,'histo_fit_result']]],
+  ['std_5fdev_17',['std_dev',['../structhisto__stats.html#a1a677524f59fe7f69387a825feeaf529',1,'histo_stats']]],
+  ['stop_5freason_18',['stop_reason',['../structhisto__fit__result.html#a07cb77b5a442ea57bad45012cdc23c43',1,'histo_fit_result']]],
+  ['streaming_20dynamic_20quantile_20sketching_20ddsketch_19',['3.2 Streaming Dynamic Quantile Sketching (DDSketch)',['../index.html#autotoc_md10',1,'']]],
+  ['streaming_20ingestion_20histo_20fill_20',['4.8.1 Streaming Ingestion (&lt;span class=&quot;tt&quot;&gt;histo-fill&lt;/span&gt;)',['../index.html#autotoc_md21',1,'']]],
+  ['support_20linear_20quantile_20dispersion_2030_21',['5.6 Non-Empty Support Linear Quantile &amp;amp; Dispersion ( \\(O(N)\\))',['../index.html#autotoc_md30',1,'']]],
+  ['sympathy_22',['6. Performance Envelope &amp;amp; Mechanical Sympathy',['../index.html#autotoc_md36',1,'']]],
+  ['sympathy_20principles_23',['Mechanical Sympathy Principles',['../index.html#autotoc_md37',1,'']]]
 ];

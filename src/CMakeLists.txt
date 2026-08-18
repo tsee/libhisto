@@ -1,5 +1,6 @@
 add_library(histo
     histo.c
+    fit.c
     simd.c
     sketch.c
     serialize.c
