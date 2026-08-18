@@ -7,6 +7,9 @@ set(FUZZ_TARGETS
     fuzz_deserialize_json
     fuzz_sketch_binary
     fuzz_fill
+    fuzz_deserialize_2d_binary
+    fuzz_deserialize_2d_json
+    fuzz_fit
 )
 
 # Corpus generation executable
@@ -66,4 +69,7 @@ else()
     add_test(NAME fuzz_deserialize_json COMMAND fuzz_deserialize_json ${CMAKE_CURRENT_SOURCE_DIR}/corpus/json)
     add_test(NAME fuzz_sketch_binary COMMAND fuzz_sketch_binary ${CMAKE_CURRENT_SOURCE_DIR}/corpus/sketch)
     add_test(NAME fuzz_fill COMMAND fuzz_fill ${CMAKE_CURRENT_SOURCE_DIR}/corpus/fill)
+    add_test(NAME fuzz_deserialize_2d_binary COMMAND fuzz_deserialize_2d_binary ${CMAKE_CURRENT_SOURCE_DIR}/corpus/binary_2d)
+    add_test(NAME fuzz_deserialize_2d_json COMMAND fuzz_deserialize_2d_json ${CMAKE_CURRENT_SOURCE_DIR}/corpus/json_2d)
+    add_test(NAME fuzz_fit COMMAND fuzz_fit ${CMAKE_CURRENT_SOURCE_DIR}/corpus/fit)
 endif()

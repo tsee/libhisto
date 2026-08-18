@@ -1,4 +1,5 @@
 #include "histo/histo.h"
+#include "histo/histo2d.h"
 #include "histo/sketch.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,9 @@ int main(void) {
     mkdir_p("tests/fuzz/corpus/json");
     mkdir_p("tests/fuzz/corpus/sketch");
     mkdir_p("tests/fuzz/corpus/fill");
+    mkdir_p("tests/fuzz/corpus/binary_2d");
+    mkdir_p("tests/fuzz/corpus/json_2d");
+    mkdir_p("tests/fuzz/corpus/fit");
 
     /* ===================================================================== */
     /* Binary Corpus                                                         */
@@ -148,6 +152,36 @@ int main(void) {
     };
     memcpy(ieee_stream + 20, specials, sizeof(specials));
     write_file("tests/fuzz/corpus/fill/ieee754_specials.bin", ieee_stream, 20 + sizeof(specials));
+
+
+    /* ===================================================================== */
+    /* 2D Binary Corpus                                                      */
+    /* ===================================================================== */
+    histo2d_t *h2_unif = histo2d_create_uniform(10, 0.0, 10.0, 10, 0.0, 10.0, HISTO_FLAG_TRACK_SUMW2);
+    for (int i = 0; i < 50; i++) histo2d_fill(h2_unif, i % 10, i % 10);
+    void *buf2_unif = NULL;
+    size_t sz2_unif = 0;
+    histo2d_serialize_binary_alloc(h2_unif, &buf2_unif, &sz2_unif);
+    write_file("tests/fuzz/corpus/binary_2d/uniform_2d.bin", buf2_unif, sz2_unif);
+    
+    /* 2D JSON Corpus */
+    char *json2_unif = NULL;
+    size_t out_sz2 = 0;
+    histo2d_serialize_json_alloc(h2_unif, &json2_unif, &out_sz2);
+    write_file("tests/fuzz/corpus/json_2d/uniform_2d.json", json2_unif, strlen(json2_unif));
+    
+    if (buf2_unif) histo_free_buffer(buf2_unif);
+    if (json2_unif) histo_free_buffer(json2_unif);
+    histo2d_destroy(h2_unif);
+    
+    /* ===================================================================== */
+    /* Fit Corpus                                                            */
+    /* ===================================================================== */
+    uint8_t fit_seed[256];
+    memset(fit_seed, 0, sizeof(fit_seed));
+    fit_seed[0] = 0; // type 0
+    for(int i=1; i<256; i++) fit_seed[i] = i;
+    write_file("tests/fuzz/corpus/fit/seed1.bin", fit_seed, sizeof(fit_seed));
 
     histo_destroy(h_unif);
     histo_destroy(h_var);
