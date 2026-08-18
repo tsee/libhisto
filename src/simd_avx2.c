@@ -137,4 +137,112 @@ bool histo_fill_uniform_w2_avx2(histo_t *h, const double *x, const double *weigh
     }
     return had_non_finite;
 }
+#include "histo/histo2d.h"
+#include "internal_2d.h"
+
+#ifdef LIBHISTO_ENABLE_AVX2
+bool histo2d_fill_uniform_avx2(histo2d_t *h, const double *x, const double *y, size_t n) {
+    size_t i = 0;
+    bool had_non_finite = false;
+    double inv_dx = h->x_axis.inv_binsize > 0.0 ? h->x_axis.inv_binsize : 1.0 / h->x_axis.binsize;
+    double inv_dy = h->y_axis.inv_binsize > 0.0 ? h->y_axis.inv_binsize : 1.0 / h->y_axis.binsize;
+    uint32_t nx = h->x_axis.nbins;
+    uint32_t ny = h->y_axis.nbins;
+    double min_x = h->x_axis.min;
+    double max_x = h->x_axis.max;
+    double min_y = h->y_axis.min;
+    double max_y = h->y_axis.max;
+
+    __m256d v_min_x = _mm256_set1_pd(min_x);
+    __m256d v_max_x = _mm256_set1_pd(max_x);
+    __m256d v_inv_dx = _mm256_set1_pd(inv_dx);
+    __m256d v_nx_minus_1 = _mm256_set1_pd((double)(nx - 1));
+
+    __m256d v_min_y = _mm256_set1_pd(min_y);
+    __m256d v_max_y = _mm256_set1_pd(max_y);
+    __m256d v_inv_dy = _mm256_set1_pd(inv_dy);
+    __m256d v_ny_minus_1 = _mm256_set1_pd((double)(ny - 1));
+
+    __m256d v_zero = _mm256_setzero_pd();
+
+    for (; i + 3 < n; i += 4) {
+        __m256d v_x = _mm256_loadu_pd(&x[i]);
+        __m256d v_y = _mm256_loadu_pd(&y[i]);
+
+        __m256d mask_under_x = _mm256_cmp_pd(v_x, v_min_x, _CMP_LT_OQ);
+        __m256d mask_over_x = _mm256_cmp_pd(v_x, v_max_x, _CMP_GE_OQ);
+        __m256d mask_nan_x = _mm256_cmp_pd(v_x, v_x, _CMP_NEQ_UQ);
+
+        __m256d mask_under_y = _mm256_cmp_pd(v_y, v_min_y, _CMP_LT_OQ);
+        __m256d mask_over_y = _mm256_cmp_pd(v_y, v_max_y, _CMP_GE_OQ);
+        __m256d mask_nan_y = _mm256_cmp_pd(v_y, v_y, _CMP_NEQ_UQ);
+
+        __m256d mask_any_bad = _mm256_or_pd(
+            _mm256_or_pd(_mm256_or_pd(mask_under_x, mask_over_x), mask_nan_x),
+            _mm256_or_pd(_mm256_or_pd(mask_under_y, mask_over_y), mask_nan_y)
+        );
+
+        int bad_mask = _mm256_movemask_pd(mask_any_bad);
+
+        if (bad_mask != 0) {
+            for (size_t j = 0; j < 4; ++j) {
+                if (histo2d_fill(h, x[i + j], y[i + j]) == HISTO_ERR_NON_FINITE) {
+                    had_non_finite = true;
+                }
+            }
+        } else {
+            __m256d v_idx_x = _mm256_floor_pd(_mm256_mul_pd(_mm256_sub_pd(v_x, v_min_x), v_inv_dx));
+            v_idx_x = _mm256_max_pd(v_idx_x, v_zero);
+            v_idx_x = _mm256_min_pd(v_idx_x, v_nx_minus_1);
+
+            __m256d v_idx_y = _mm256_floor_pd(_mm256_mul_pd(_mm256_sub_pd(v_y, v_min_y), v_inv_dy));
+            v_idx_y = _mm256_max_pd(v_idx_y, v_zero);
+            v_idx_y = _mm256_min_pd(v_idx_y, v_ny_minus_1);
+
+            double idx_arr_x[4];
+            double idx_arr_y[4];
+            _mm256_storeu_pd(idx_arr_x, v_idx_x);
+            _mm256_storeu_pd(idx_arr_y, v_idx_y);
+
+            for(int j=0; j<4; ++j) {
+                int64_t ix = (int64_t)idx_arr_x[j];
+                int64_t iy = (int64_t)idx_arr_y[j];
+                double vx = x[i + j];
+                double vy = y[i + j];
+
+                if (ix + 1 < (int64_t)nx && vx >= min_x + (double)(ix + 1) * h->x_axis.binsize) ix++;
+                if (ix > 0 && vx < min_x + (double)ix * h->x_axis.binsize) ix--;
+                
+                if (iy + 1 < (int64_t)ny && vy >= min_y + (double)(iy + 1) * h->y_axis.binsize) iy++;
+                if (iy > 0 && vy < min_y + (double)iy * h->y_axis.binsize) iy--;
+
+                size_t idx = histo2d_linear_index((uint32_t)ix, (uint32_t)iy, ny);
+                h->bins[idx] += 1.0;
+                h->total_weight += 1.0;
+                h->n_fills++;
+                
+            }
+            h->guards[HISTO2D_REGION_CENTER].weight += 4.0;
+            h->guards[HISTO2D_REGION_CENTER].count += 4;
+        }
+    }
+    for (; i < n; ++i) {
+        if (histo2d_fill(h, x[i], y[i]) == HISTO_ERR_NON_FINITE) {
+            had_non_finite = true;
+        }
+    }
+    return had_non_finite;
+}
+
+bool histo2d_fill_uniform_w2_avx2(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n) {
+    size_t i = 0;
+    bool had_non_finite = false;
+    for (; i < n; ++i) {
+        if (histo2d_fill_w(h, x[i], y[i], weights[i]) == HISTO_ERR_NON_FINITE) {
+            had_non_finite = true;
+        }
+    }
+    return had_non_finite;
+}
+#endif
 #endif

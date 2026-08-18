@@ -2,8 +2,14 @@
 #define HISTO_SIMD_H
 
 #include "histo/histo.h"
+#include "histo/histo2d.h"
 #include <stdbool.h>
 #include <stddef.h>
+
+bool histo2d_fill_uniform_avx2(histo2d_t *h, const double *x, const double *y, size_t n);
+bool histo2d_fill_uniform_avx512(histo2d_t *h, const double *x, const double *y, size_t n);
+bool histo2d_fill_uniform_w2_avx2(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n);
+bool histo2d_fill_uniform_w2_avx512(histo2d_t *h, const double *x, const double *y, const double *weights, size_t n);
 
 #ifdef __cplusplus
 extern "C" {

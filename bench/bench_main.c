@@ -1,6 +1,7 @@
 #include "histo/histo.h"
 #include "histo/sketch.h"
 #include <stdio.h>
+#include "histo/histo2d.h"
 #include <stdlib.h>
 #include <time.h>
 
@@ -306,6 +307,25 @@ int main(void) {
                elapsed_sec, kops, (elapsed_sec / AGG_ITERATIONS) * 1e6);
                
         histo_sketch_destroy(sketch);
+    }
+
+    /* 16. Benchmark 2D Batch Ingestion */
+    {
+        histo2d_t *h2 = histo2d_create_uniform(100, 0.0, 100.0, 100, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+        double *ydata = (double *)malloc(NUM_SAMPLES * sizeof(double));
+        for (size_t i = 0; i < NUM_SAMPLES; ++i) {
+            ydata[i] = data[i]; // just reuse data for y for simplicity
+        }
+        clock_t start = clock();
+        histo2d_fill_n(h2, NUM_SAMPLES, data, ydata, weights);
+        clock_t end = clock();
+        double elapsed_sec = (double)(end - start) / CLOCKS_PER_SEC;
+        double mops = ((double)NUM_SAMPLES / elapsed_sec) / 1e6;
+        printf("16. 2D Batch Ingestion (histo2d_fill_n, 10M ops):\n");
+        printf("    - Time: %.3f s | Throughput: %.2f Mops/s (%.2f ns/op)\n\n",
+               elapsed_sec, mops, (elapsed_sec / NUM_SAMPLES) * 1e9);
+        histo2d_destroy(h2);
+        free(ydata);
     }
 
     histo_destroy(h_agg);

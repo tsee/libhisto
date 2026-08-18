@@ -2,6 +2,8 @@
 #include "histo/histo.h"
 #include "../../src/simd.h"
 #include "../../src/internal.h"
+#include "histo/histo2d.h"
+#include "../../src/internal_2d.h"
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
@@ -196,6 +198,46 @@ void test_simd_dispatch_equivalence(void) {
     histo_destroy(h_batch);
 }
 
+static void assert_histograms_2d_equal(const histo2d_t *h1, const histo2d_t *h2) {
+    TEST_ASSERT_EQUAL_UINT32(h1->x_axis.nbins, h2->x_axis.nbins);
+    TEST_ASSERT_EQUAL_UINT32(h1->y_axis.nbins, h2->y_axis.nbins);
+    TEST_ASSERT_EQUAL_UINT64(h1->n_fills, h2->n_fills);
+    TEST_ASSERT_EQUAL_UINT64(h1->n_nan, h2->n_nan);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, h1->total_weight, h2->total_weight);
+
+    uint32_t nx = h1->x_axis.nbins;
+    uint32_t ny = h1->y_axis.nbins;
+    for (uint32_t i = 0; i < nx * ny; ++i) {
+        TEST_ASSERT_DOUBLE_WITHIN(1e-12, h1->bins[i], h2->bins[i]);
+    }
+}
+
+void test_simd_dispatch_equivalence_2d(void) {
+    const size_t n = 200;
+    double x[200], y[200], weights[200];
+
+    for (size_t i = 0; i < n; ++i) {
+        x[i] = (double)(i % 120) - 10.0;
+        y[i] = (double)(i % 110) - 5.0;
+        weights[i] = 1.25 + (double)(i % 3);
+    }
+
+    histo2d_t *h_scalar = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    histo2d_t *h_batch = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+
+    for (size_t i = 0; i < n; ++i) {
+        histo2d_fill_w(h_scalar, x[i], y[i], weights[i]);
+    }
+
+    histo_status_t st = histo2d_fill_n(h_batch, n, x, y, weights);
+    TEST_ASSERT_EQUAL(HISTO_OK, st);
+
+    assert_histograms_2d_equal(h_scalar, h_batch);
+
+    histo2d_destroy(h_scalar);
+    histo2d_destroy(h_batch);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_neon_uniform_in_range);
@@ -203,5 +245,6 @@ int main(void) {
     RUN_TEST(test_neon_out_of_range_and_specials);
     RUN_TEST(test_neon_weighted_w2);
     RUN_TEST(test_simd_dispatch_equivalence);
+    RUN_TEST(test_simd_dispatch_equivalence_2d);
     return UNITY_END();
 }
