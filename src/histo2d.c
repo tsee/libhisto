@@ -320,23 +320,34 @@ histo_status_t histo2d_fill_n(histo2d_t *h, size_t n,
     if (h->x_axis.bin_type == HISTO_BIN_UNIFORM && h->y_axis.bin_type == HISTO_BIN_UNIFORM &&
         !(h->flags & HISTO_FLAG_EXACT_MOMENTS)) {
         if (weights) {
+#ifdef LIBHISTO_ENABLE_AVX512
             if (histo_simd_has_avx512()) {
                 had_nan = histo2d_fill_uniform_w2_avx512(h, x, y, weights, n);
                 return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
-            } else if (histo_simd_has_avx2()) {
+            }
+#endif
+#ifdef LIBHISTO_ENABLE_AVX2
+            if (histo_simd_has_avx2()) {
                 had_nan = histo2d_fill_uniform_w2_avx2(h, x, y, weights, n);
                 return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
             }
+#endif
         } else {
+#ifdef LIBHISTO_ENABLE_AVX512
             if (histo_simd_has_avx512()) {
                 had_nan = histo2d_fill_uniform_avx512(h, x, y, n);
                 return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
-            } else if (histo_simd_has_avx2()) {
+            }
+#endif
+#ifdef LIBHISTO_ENABLE_AVX2
+            if (histo_simd_has_avx2()) {
                 had_nan = histo2d_fill_uniform_avx2(h, x, y, n);
                 return had_nan ? HISTO_WARN_NON_FINITE : HISTO_OK;
             }
+#endif
         }
     }
+
 
     for (size_t i = 0; i < n; ++i) {
         double xi = x[i];

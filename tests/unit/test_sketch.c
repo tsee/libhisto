@@ -56,6 +56,7 @@ void test_sketch_serialization() {
     histo_sketch_t *restored = NULL;
     status = histo_sketch_deserialize_binary(buf, size, &restored);
     assert(status == HISTO_OK);
+    (void)status;
     assert(restored != NULL);
 
     assert(histo_sketch_num_entries(restored) == histo_sketch_num_entries(s));
