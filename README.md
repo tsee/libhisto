@@ -4,21 +4,22 @@
 
 ## Key Features
 
-- **2-Dimensional Histograms (`histo2d_t`):** Full support for bivariate distributions across all 4 binning combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region guard partitioning, 2D online Welford covariance $\mathrm{Cov}(X, Y)$ and Pearson correlation $\rho_{xy}$, 1D marginal projections (`project_x/y`), sub-interval slices (`slice_x/y`), profile histograms (`profile_x/y`), and TrueColor terminal heatmaps.
-- **Curve Fitting & Non-Linear Regression:** Built-in models (Gaussian, Exponential, Polynomials $d \le 10$, Breit-Wigner, Power Law) and custom user callbacks with Levenberg-Marquardt optimizer, parameter constraints/freezing, $\chi^2$ and Poisson MLE Cash deviance.
-- **Flexible Binning:** Uniform ($O(1)$) and Variable-width ($O(\log N)$) binning configurations with boundary-guarded floating-point indexing.
+- **2-Dimensional Histograms (`histo2d_t`):** Full support for bivariate distributions across all 4 binning combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region guard partitioning, 2D online Welford covariance `Cov(X, Y)` and Pearson correlation `ρ_xy`, 1D marginal projections (`project_x/y`), sub-interval slices (`slice_x/y`), profile histograms (`profile_x/y`), and TrueColor terminal heatmaps.
+- **Curve Fitting & Non-Linear Regression:** Built-in models (Gaussian, Exponential, Polynomials *d* ≤ 10, Breit-Wigner, Power Law) and custom user callbacks with Levenberg-Marquardt optimizer, parameter constraints/freezing, χ² and Poisson MLE Cash deviance.
+- **Flexible Binning:** Uniform (*O*(1)) and Variable-width (*O*(log *N*)) binning configurations with boundary-guarded floating-point indexing.
 - **SIMD Vector Acceleration:** AVX-512 and AVX2 / FMA vectorized batch ingestion (`histo_fill_n`) with automatic runtime CPUID feature detection and scalar fallback.
-- **DDSketch Dynamic Quantile Sketches:** Fully dynamic, bounded relative-error online quantile sketches (`include/histo/sketch.h`) with configurable accuracy $\alpha$, logarithmic dynamic binning, circular collapsing buffers, and mergeability.
+- **DDSketch Dynamic Quantile Sketches:** Fully dynamic, bounded relative-error online quantile sketches (`include/histo/sketch.h`) with configurable accuracy α, logarithmic dynamic binning, circular collapsing buffers, and mergeability.
 - **Exact Online Moments:** Online weighted Welford moments for sample mean and variance with numerical variance floor protection and full support for negative weights.
 - **Statistical Uncertainty:** Division-free `sum_w2` statistical error tracking and propagation across arithmetic operations (addition, subtraction, multiplication, division).
-- **Comprehensive Summary Statistics:** Mean, variance, standard deviation, higher-order central moments ($M_k$), skewness, kurtosis, and excess kurtosis.
+- **Comprehensive Summary Statistics:** Mean, variance, standard deviation, higher-order central moments (*M_k*), skewness, kurtosis, and excess kurtosis.
 - **Peak & Shape Characterization:** Discrete mode bin lookup, continuous 3-point parabolic peak interpolation, Full Width at Half Maximum (FWHM), and Root Mean Square (RMS).
 - **Robust Non-Parametric Measures:** Piecewise-linear quantile interpolation, Median, Interquartile Range (IQR), Median Absolute Deviation (MAD), Trimmed Mean, and Winsorized Mean.
-- **Two-Distribution Comparisons:** Weighted Chi-Square ($\chi^2$) test with degrees of freedom (NDF), Kolmogorov-Smirnov ($D$), 1D Wasserstein / Earth Mover's Distance ($W_1$), Kullback-Leibler (KL) divergence, and Bhattacharyya distance.
+- **Two-Distribution Comparisons:** Weighted Chi-Square (χ²) test with degrees of freedom (NDF), Kolmogorov-Smirnov (*D*), 1D Wasserstein / Earth Mover's Distance (*W*₁), Kullback-Leibler (KL) divergence, and Bhattacharyya distance.
 - **Transformations & Arithmetic:** Element-wise vector arithmetic (`add`, `subtract`, `multiply`, `divide`), scalar scaling, normalization to target area, integer rebinning, slicing, and cumulative distribution functions (CDF).
 - **Terminal Heatmap & Sparkline Visualization:** Multi-style terminal plotting (`histo-plot`) featuring 2D TrueColor heatmaps (`--heatmap`), 1/8th sub-character Unicode fractional blocks, compact single-line sparklines (`-S, --sparkline`), TrueColor gradients, and live continuous streaming watch mode (`--watch`).
 - **Portable Serialization:** Canonical 256-byte Little-Endian binary wire format (V1, V2, V3 for 2D) with automatic format migration (`histo_migrate_binary`) and IEEE-754 lossless JSON serialization.
 - **Memory Safety & Portability:** Strict ISO C99, 100% leak-free, thread-safe concurrent queries, zero compiler warnings, and clean ASan/UBSan/TSan/Valgrind validation.
+
 
 
 ---
@@ -176,18 +177,18 @@ target_link_libraries(your_target PRIVATE libhisto::libhisto)
 ## Core Architectural Concepts
 
 - **Uniform vs. Variable Bins:**
-  - *Uniform Binning*: Divides range $[x_{\min}, x_{\max})$ into equal widths, enabling $O(1)$ lookups via boundary-guarded reciprocal multiplication.
-  - *Variable Binning*: Allows arbitrary monotonically increasing bin edges, utilizing an optimized $O(\log N)$ bisection binary search.
+  - *Uniform Binning*: Divides range `[xmin, xmax)` into equal widths, enabling *O*(1) lookups via boundary-guarded reciprocal multiplication.
+  - *Variable Binning*: Allows arbitrary monotonically increasing bin edges, utilizing an optimized *O*(log *N*) bisection binary search.
 - **SIMD Vector Acceleration:**
   - `histo_fill_n` dynamically selects AVX-512 or AVX2 vectorized execution paths when supported by the host CPU, computing candidate bin indices, branchless boundary guards, and parallel memory increments in vectorized batches.
 - **DDSketch Dynamic Quantile Sketches:**
-  - Unbounded-range streaming quantile estimator with provable relative error bound $\alpha$. Uses logarithmic binning ($k = \lceil \log_\gamma |x| \rceil$ with $\gamma = \frac{1+\alpha}{1-\alpha}$) and dense circular buffer collapsing to enforce bounded memory $O(\text{max\_bins})$.
+  - Unbounded-range streaming quantile estimator with provable relative error bound α. Uses logarithmic binning (*k* = ⌈log_γ |*x*|⌉ with γ = (1+α)/(1−α)) and dense circular buffer collapsing to enforce bounded memory *O*(`max_bins`).
 - **Statistical Uncertainty (`sum_w2`):**
-  - Accurately tracks per-bin $\sum w_i^2$, providing statistical error bars ($\sigma_i = \sqrt{\sum w_i^2}$) and enabling division-free error propagation for histogram products and quotients.
+  - Accurately tracks per-bin ∑*w*², providing statistical error bars (σ = √(∑*w*²)) and enabling division-free error propagation for histogram products and quotients.
 - **Exact Online Welford Moments:**
-  - When `HISTO_FLAG_EXACT_MOMENTS` is active, running mean and $M_2$ are updated in $O(1)$ on every fill without sample storage or bin discretization artifacts.
+  - When `HISTO_FLAG_EXACT_MOMENTS` is active, running mean and *M*₂ are updated in *O*(1) on every fill without sample storage or bin discretization artifacts.
 - **Robust & Distribution Comparison Metrics:**
-  - Compute higher-order moments (skewness, kurtosis), robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and measure statistical distances ($\chi^2$, Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, Bhattacharyya) between histograms with matching geometry.
+  - Compute higher-order moments (skewness, kurtosis), robust non-parametric metrics (IQR, MAD, trimmed/winsorized mean), and measure statistical distances (χ², Kolmogorov-Smirnov, 1D Wasserstein, KL divergence, Bhattacharyya) between histograms with matching geometry.
 
 ---
 
@@ -197,24 +198,25 @@ Benchmark measurements conducted on **Intel(R) Core(TM) Ultra 7 255HX (5.3 GHz m
 
 | Operation / Routine | Throughput | Latency / Call | Complexity |
 | :--- | :--- | :--- | :--- |
-| **Batch Ingestion (`histo_fill_n` SIMD)** | **441.15 Mops/s** | **2.27 ns / sample** | $O(N)$ vectorized |
-| **Single Uniform Fill (`histo_fill`)** | **288.26 Mops/s** | **3.47 ns / sample** | $O(1)$ |
-| **Weighted Fill + `sum_w2` (`histo_fill_w`)** | **223.45 Mops/s** | **4.48 ns / sample** | $O(1)$ |
-| **Variable Bin Binary Search (100 bins)** | **33.65 Mops/s** | **29.72 ns / sample** | $O(\log N)$ |
-| **DDSketch Streaming Ingestion** | **143.58 Mops/s** | **6.97 ns / sample** | $O(1)$ amortized |
-| **DDSketch Quantile Queries (P50/P90/P99)** | **231.17 k-queries/s** | **4.33 µs / query** | $O(B)$ |
-| **Two-Sample Comparison (Chi2/KS/EMD/Bhatt)** | **27.62 k-comparisons/s** | **36.20 µs / comparison** | $O(N)$ |
-| **Two-Pass Moments (Mean + Variance, 10k bins)** | **126.8 k-queries/s** | **7.89 µs / call** | $O(N)$ |
-| **Quantile & Median (Q25 + Q50 + Q75, 10k bins)** | **73.5 k-queries/s** | **13.6 µs / call** | $O(N)$ |
-| **Binary Serialization (10k bins)** | **38.4 k-ser/s** | **26.0 µs / save** | $O(N)$ |
+| **Batch Ingestion (`histo_fill_n` SIMD)** | **441.15 Mops/s** | **2.27 ns / sample** | *O*(N) vectorized |
+| **Single Uniform Fill (`histo_fill`)** | **288.26 Mops/s** | **3.47 ns / sample** | *O*(1) |
+| **Weighted Fill + `sum_w2` (`histo_fill_w`)** | **223.45 Mops/s** | **4.48 ns / sample** | *O*(1) |
+| **Variable Bin Binary Search (100 bins)** | **33.65 Mops/s** | **29.72 ns / sample** | *O*(log N) |
+| **DDSketch Streaming Ingestion** | **143.58 Mops/s** | **6.97 ns / sample** | *O*(1) amortized |
+| **DDSketch Quantile Queries (P50/P90/P99)** | **231.17 k-queries/s** | **4.33 µs / query** | *O*(B) |
+| **Two-Sample Comparison (Chi2/KS/EMD/Bhatt)** | **27.62 k-comparisons/s** | **36.20 µs / comparison** | *O*(N) |
+| **Two-Pass Moments (Mean + Variance, 10k bins)** | **126.8 k-queries/s** | **7.89 µs / call** | *O*(N) |
+| **Quantile & Median (Q25 + Q50 + Q75, 10k bins)** | **73.5 k-queries/s** | **13.6 µs / call** | *O*(N) |
+| **Binary Serialization (10k bins)** | **38.4 k-ser/s** | **26.0 µs / save** | *O*(N) |
 
 ### Mechanical Sympathy & Engineering Principles
 
 1. **Zero Heap Allocation in Ingestion Hot Path:** Ingestion routines (`histo_fill`, `histo_fill_w`, `histo_fill_n`, `histo_fill_strided`, `histo_sketch_insert`) execute with zero heap allocation overhead, operating directly on pre-allocated cache-line aligned memory.
-2. **Reciprocal Multiplication (`FMUL`) instead of Division (`FDIV`):** For uniform binning, bin coordinate lookup evaluates `(x - min) * inv_binsize` using precomputed reciprocal multiplication (latency $\approx 3$–4 cycles) rather than expensive floating-point division instructions (latency $\approx 14$–20 cycles).
+2. **Reciprocal Multiplication (`FMUL`) instead of Division (`FDIV`):** For uniform binning, bin coordinate lookup evaluates `(x - min) * inv_binsize` using precomputed reciprocal multiplication (latency ≈ 3–4 cycles) rather than expensive floating-point division instructions (latency ≈ 14–20 cycles).
 3. **Branchless SIMD Ingestion Kernels:** Vectorized batch ingestion utilizes AVX-512 / AVX2 instructions with FMA to transform coordinate blocks in parallel, applying vector min/max clamping and vectorized non-finite checks.
-4. **Division-Free Statistical Error Propagation:** Algebraic expansions for arithmetic operations propagate $\sum w^2$ without intermediate floating-point divisions, eliminating NaN singularities and CPU pipeline stalls on empty bins.
+4. **Division-Free Statistical Error Propagation:** Algebraic expansions for arithmetic operations propagate ∑*w*² without intermediate floating-point divisions, eliminating NaN singularities and CPU pipeline stalls on empty bins.
 5. **Strict 8-Byte Alignment & Cache-Conscious Data Structures:** Internal structures feature explicit 8-byte alignment padding and contiguous cache layouts, maximizing L1d/L2 cache hit ratios.
+
 
 ---
 
@@ -309,13 +311,14 @@ cat data.bin | histo-plot --sparkline --style=ascii --no-stats
 
 2. **`histo-plot`**:
    - Renders 1D histograms as terminal charts with automatic width adaptation.
-   - Supports Unicode 1/8th fractional blocks, compact single-line sparklines (`-S, --sparkline` e.g. ` ▂▃▅██▆▃▂ `), shaded blocks, ASCII bars (`--style=ascii`), ANSI 24-bit TrueColor density gradients (`--color=always`), logarithmic scaling (`--log`), error whiskers ($\pm \sigma$), and live continuous watch mode (`--watch`).
+   - Supports Unicode 1/8th fractional blocks, compact single-line sparklines (`-S, --sparkline` e.g. ` ▂▃▅██▆▃▂ `), shaded blocks, ASCII bars (`--style=ascii`), ANSI 24-bit TrueColor density gradients (`--color=always`), logarithmic scaling (`--log`), error whiskers (±σ), and live continuous watch mode (`--watch`).
 
 3. **`histo-stats`**:
    - Computes comprehensive summary reports including exact central moments (skewness, kurtosis), robust dispersion (IQR, MAD, trimmed/Winsorized means), and sub-bin continuous peak mode. Emits human-readable tables, TSV, or machine-readable JSON (`-f json`).
 
 4. **`histo-cmp`**:
-   - Compares two distributions and reports weighted Chi-Square ($\chi^2$/NDF), Kolmogorov-Smirnov supremum distance ($D$), 1D Wasserstein Earth Mover's Distance ($W_1$), Kullback-Leibler divergence ($D_{\text{KL}}$), and Bhattacharyya distance.
+   - Compares two distributions and reports weighted Chi-Square (χ²/NDF), Kolmogorov-Smirnov supremum distance (*D*), 1D Wasserstein Earth Mover's Distance (*W*₁), Kullback-Leibler divergence (*D*_KL), and Bhattacharyya distance.
+
 
 5. **`histo` (Multi-call Dispatcher)**:
    - Unified entry point: `histo fill ...`, `histo plot ...`, `histo stats ...`, `histo cmp ...`.
