@@ -1,4 +1,4 @@
-.PHONY: all build test test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 
@@ -9,6 +9,11 @@ build:
 	cmake --build $(BUILD_DIR)
 
 test: test-asan
+
+test-all: test-asan test-fuzz test-tsan memcheck docs
+	@echo "======================================================================"
+	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), MEMCHECK & DOCS PASSED"
+	@echo "======================================================================"
 
 test-asan:
 	cmake -B $(BUILD_DIR)-asan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON -DLIBHISTO_ENABLE_FUZZING=ON

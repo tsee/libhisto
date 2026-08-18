@@ -309,6 +309,9 @@ make build
 make test
 # or: ctest --test-dir build --output-on-failure
 
+# Run all test suites (ASan, UBSan, Fuzzing, TSan, Valgrind Memcheck, and Doxygen)
+make test-all
+
 # Run tests under AddressSanitizer (ASan) & UBSan
 make test-asan
 
