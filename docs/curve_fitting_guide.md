@@ -1,192 +1,156 @@
 # Curve Fitting & Non-Linear Regression Guide {#curve_fitting_guide}
 
-`libhisto` provides a high-performance, modular curve fitting and regression engine in `histo/fit.h`. It supports built-in parametric models (Gaussian, Exponential, Polynomial, Breit-Wigner, Power Law) and arbitrary user-defined models with analytical or finite-difference gradients.
+This guide details the curve fitting and non-linear regression capabilities in `libhisto` (`include/histo/fit.h` and the `histo fit` CLI tool). `libhisto` provides high-performance Levenberg-Marquardt (LM) non-linear optimization, Direct Linear Least Squares for polynomials, Weighted Chi-Square minimization, and Poisson Maximum Likelihood Estimation (Cash deviance / Baker-Cousins).
 
 ---
 
-## 1. Mathematical Formulations & Algorithms
+## 1. CLI: `histo fit`
 
-### 1.1 Chi-Square Minimization (Weighted Least Squares)
+The `histo fit` command-line tool fits parametric models directly to streaming data or serialized histograms (`.bin` or `.json`), producing formatted parameter estimates, standard errors, 95% confidence intervals, \f$\chi^2/\mathrm{NDF}\f$ goodness-of-fit metrics, and visual ASCII curve overlays.
 
-For a histogram with \f$N\f$ bins, bin centers \f$x_i\f$, observed contents \f$y_i\f$, and variances \f$\sigma_i^2\f$, the Chi-Square objective function is:
 
+### 1.1 Supported Built-in Models
+
+| Model Name | CLI Flag | Formula | Parameters |
+| :--- | :--- | :--- | :--- |
+| **Gaussian** | `-m gaussian` | \f$ f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right) \f$ | [0] Amplitude (A), [1] Mean (μ), [2] Std Dev (σ) |
+| **Exponential** | `-m exponential` | \f$ f(x) = A \cdot \exp(-\lambda x) + C \f$ | [0] Amplitude (A), [1] Decay Rate (λ), [2] Baseline (C) |
+| **Polynomial** | `-m polynomial -d N` | \f$ f(x) = \sum_{k=0}^N c_k x^k \f$ | [0] c0, [1] c1, ..., [N] cN (Degree 0 to 10) |
+| **Breit-Wigner** | `-m breit-wigner` | \f$ f(x) = \frac{A}{\pi} \frac{\Gamma/2}{(x - M)^2 + (\Gamma/2)^2} \f$ | [0] Area Scale (A), [1] Peak Mass (M), [2] FWHM (Γ) |
+| **Power Law** | `-m power-law` | \f$ f(x) = A \cdot (x - x_0)^k \f$ | [0] Amplitude (A), [1] Exponent (k), [2] Origin (x0) |
+
+
+### 1.2 CLI Usage Recipes
+
+```bash
+# 1. Pipe Gaussian data into histo fill and fit with visual ASCII overlay
+python3 -c "import random; print('\n'.join(str(random.gauss(50.0, 5.0)) for _ in range(10000)))" \
+  | histo fill -n 50 --min 20 --max 80 \
+  | histo fit -p
+
+# 2. Fit quadratic background polynomial (Degree 2)
+histo fit -m polynomial -d 2 background.json
+
+# 3. Fit low-count Poisson data with Maximum Likelihood Estimation (--mle)
+histo fit -m gaussian --mle sparse_counts.bin
+
+# 4. Fit with parameter bounds and frozen parameters
+histo fit -m gaussian --bounds 2=1.0:10.0 --fix-param 1=50.0 data.json
+
+# 5. Output machine-readable JSON results
+histo fit -m gaussian -j data.bin > fit_results.json
+```
+
+---
+
+## 2. Programmatic C99 API (`histo/fit.h`)
+
+### 2.1 Core API Workflow
+
+```c
+#include <stdio.h>
+#include <histo/histo.h>
+#include <histo/fit.h>
+
+int main(void) {
+    // 1. Create and fill a histogram
+    histo_t *h = histo_create_uniform(50, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    for (int i = 0; i < 5000; ++i) {
+        double val = 50.0 + ((i % 30) - 15) * 1.5;
+        histo_fill(h, val);
+    }
+
+    // 2. Configure fit options (optional: pass NULL for standard defaults)
+    histo_fit_options_t opts;
+    histo_fit_options_init(&opts);
+    opts.loss_type = HISTO_FIT_LOSS_CHI2; // Or HISTO_FIT_LOSS_POISSON_MLE for low counts
+    opts.max_iterations = 500;
+    opts.ftol = 1e-8;
+
+    // 3. Execute fit (initial guesses estimated automatically from moments if NULL)
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN, NULL, &opts, &res);
+
+    if (status == HISTO_OK && res->converged) {
+        printf("Convergence: %s (%u iterations)\n", res->stop_reason, res->iterations);
+        printf("Goodness-of-fit: Chi2/NDF = %.2f / %d (p-value: %.4g)\n",
+               res->chi2, res->ndf, res->p_value);
+        printf("Fitted Parameters:\n");
+        printf("  [0] Amplitude (A) = %.3f +/- %.3f\n", res->params[0], res->param_errors[0]);
+        printf("  [1] Mean (mu)     = %.3f +/- %.3f\n", res->params[1], res->param_errors[1]);
+        printf("  [2] Sigma         = %.3f +/- %.3f\n", res->params[2], res->param_errors[2]);
+    }
+
+    // 4. Clean lifecycle management
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+    return 0;
+}
+```
+
+### 2.2 Parameter Constraints & Freezing
+
+You can constrain parameters within physical boundaries ([lower_bound, upper_bound]) or freeze known constants during optimization:
+
+
+```c
+histo_fit_options_t opts;
+histo_fit_options_init(&opts);
+
+double lower_bounds[3] = {0.0, 40.0, 0.5};    // A >= 0, mu >= 40, sigma >= 0.5
+double upper_bounds[3] = {1e6, 60.0, 20.0};   // A <= 1e6, mu <= 60, sigma <= 20
+bool fixed_params[3]   = {false, true, false}; // Freeze mu at initial guess value
+
+opts.lower_bounds = lower_bounds;
+opts.upper_bounds = upper_bounds;
+opts.fixed_params = fixed_params;
+
+double initial_guess[3] = {1000.0, 50.0, 5.0};
+histo_fit_result_t *res = NULL;
+histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN, initial_guess, &opts, &res);
+```
+
+### 2.3 Custom User Models (`histo_fit_custom`)
+
+Fit arbitrary non-linear user functions with finite-difference or analytical gradients:
+
+```c
+// User function callback: f(x; p0, p1) = p0 * sin(p1 * x)
+static double my_sine_model(double x, const double *p, void *userdata) {
+    (void)userdata;
+    return p[0] * sin(p[1] * x);
+}
+
+// Optional analytical gradient: [df/dp0, df/dp1]
+static void my_sine_gradient(double x, const double *p, double *grad, void *userdata) {
+    (void)userdata;
+    grad[0] = sin(p[1] * x);
+    grad[1] = p[0] * x * cos(p[1] * x);
+}
+
+// ...
+histo_fit_options_t opts;
+histo_fit_options_init(&opts);
+opts.grad_fn = my_sine_gradient; // Or NULL for automatic central finite differences
+
+double initial_params[2] = {10.0, 0.1};
+histo_fit_result_t *res = NULL;
+histo_fit_custom(h, my_sine_model, 2, initial_params, &opts, &res);
+```
+
+---
+
+## 3. Statistical Formulations & Loss Functions
+
+### 3.1 Chi-Square Minimization (\f$ \chi^2 \f$)
+Standard weighted least squares accounting for per-bin variance:
 \f[
 \chi^2(\mathbf{p}) = \sum_{i=1}^N \frac{(y_i - f(x_i; \mathbf{p}))^2}{\sigma_i^2}
 \f]
+where \f$\sigma_i^2 = \sum w_i^2\f$ if tracked, or \f$\max(y_i, 1.0)\f$ for unweighted counts.
 
-where:
-- When sum-of-weights-squared tracking (`HISTO_FLAG_TRACK_SUMW2`) is enabled, \f$\sigma_i^2 = \sum w_i^2\f$.
-- For unweighted Poisson counts, \f$\sigma_i^2 = \max(y_i, 1.0)\f$.
-- For unweighted least squares (`HISTO_FIT_LOSS_UNWEIGHTED_LS`), \f$\sigma_i = 1.0\f$, and the covariance matrix is scaled post-fit by \f$s^2 = \chi^2 / \text{ndf}\f$.
-
-### 1.2 Binned Poisson Maximum Likelihood Estimation (Cash / Baker-Cousins Deviance)
-
-For low-count or sparse Poisson histograms where Gaussian approximations (\f$\sigma_i \approx \sqrt{y_i}\f$) break down, `libhisto` provides the Cash Poisson deviance statistic:
-
+### 3.2 Poisson Maximum Likelihood Estimation (Cash Deviance)
+For sparse or low-count histograms where Gaussian approximations fail, Cash Poisson deviance minimizes:
 \f[
 -2 \ln \lambda(\mathbf{p}) = 2 \sum_{i=1}^N \left[ f(x_i; \mathbf{p}) - y_i + y_i \ln\left(\frac{y_i}{f(x_i; \mathbf{p})}\right) \right]
 \f]
-
-with the convention \f$0 \ln(0 / f) \equiv 0\f$. The gradient and Fisher Information (approximate Hessian) used in Levenberg-Marquardt iterations are:
-
-\f[
-\nabla [-2\ln\lambda] = 2 \sum_{i=1}^N \left(1 - \frac{y_i}{f(x_i; \mathbf{p})}\right) \nabla f(x_i; \mathbf{p})
-\f]
-
-\f[
-\mathbf{H} \approx 2 \sum_{i=1}^N \frac{1}{f(x_i; \mathbf{p})} \nabla f(x_i; \mathbf{p}) \nabla f(x_i; \mathbf{p})^T
-\f]
-
-### 1.3 Levenberg-Marquardt (LM) Optimizer
-
-The Levenberg-Marquardt algorithm adaptively interpolates between Gradient Descent (when far from the optimum) and Gauss-Newton optimization (near the optimum). At iteration \f$k\f$, the step \f$\Delta \mathbf{p}\f$ is solved from:
-
-\f[
-\left(\mathbf{J}^T \mathbf{W} \mathbf{J} + \lambda \mathrm{diag}(\mathbf{J}^T \mathbf{W} \mathbf{J})\right) \Delta \mathbf{p} = \mathbf{J}^T \mathbf{W} (\mathbf{y} - \mathbf{f}(\mathbf{p}))
-\f]
-
-- **Damping parameter \f$\lambda\f$**: Updated via the Marquardt-Nielsen gain ratio \f$\rho = \frac{S(\mathbf{p}) - S(\mathbf{p} + \Delta \mathbf{p})}{L(\mathbf{0}) - L(\Delta \mathbf{p})}\f$. When \f$\rho > 0.75\f$, \f$\lambda\f$ is decreased; when \f$\rho < 0.25\f$, \f$\lambda\f$ is increased and the step is rejected.
-- **System Solver**: Solved via Cholesky decomposition (\f$\mathbf{L} \mathbf{L}^T\f$) with positive-definite diagonal ridge regularization.
-
-### 1.4 Direct Linear Least Squares for Polynomials
-
-For polynomial models of degree \f$d \le 10\f$ under \f$\chi^2\f$ loss without non-linear bounds, the normal equations \f$\mathbf{X}^T \mathbf{W} \mathbf{X} \mathbf{c} = \mathbf{X}^T \mathbf{W} \mathbf{y}\f$ are solved directly in a single exact pass via Cholesky decomposition without requiring initial guesses or iterations.
-
----
-
-## 2. Covariance Matrix & Goodness of Fit
-
-### 2.1 Covariance & Parameter Standard Errors
-
-The parameter covariance matrix \f$\mathbf{C} \in \mathbb{R}^{P \times P}\f$ is obtained from the inverse of the curvature matrix:
-
-\f[
-\mathbf{C} = \left(\mathbf{J}^T \mathbf{W} \mathbf{J}\right)^{-1}
-\f]
-
-The estimated standard error for parameter \f$j\f$ is:
-
-\f[
-\sigma_{p_j} = \sqrt{C_{jj}}
-\f]
-
-The parameter correlation matrix is:
-
-\f[
-R_{jk} = \frac{C_{jk}}{\sigma_{p_j} \sigma_{p_k}}
-\f]
-
-### 2.2 Goodness-of-Fit Diagnostics
-
-- **Degrees of Freedom (NDF)**: \f$\text{ndf} = N_{\text{bins}} - N_{\text{free\_params}}\f$.
-- **Reduced \f$\chi^2\f$**: \f$\chi^2_\nu = \chi^2 / \text{ndf}\f$. A good fit typically has \f$\chi^2_\nu \approx 1.0\f$.
-- **p-Value**: Upper-tail probability from the Chi-Square distribution:
-  \f[
-  p = P\left(X \ge \chi^2_{\text{obs}} \mid \text{ndf}\right) = \frac{\Gamma(\text{ndf}/2, \chi^2/2)}{\Gamma(\text{ndf}/2)}
-  \f]
-  Computed via regularized incomplete gamma functions.
-- **Information Criteria**:
-  - Akaike Information Criterion: \f$\text{AIC} = 2k - 2\ln L\f$.
-  - Bayesian Information Criterion: \f$\text{BIC} = k \ln N - 2\ln L\f$.
-
----
-
-## 3. Practical Usage & C99 Code Examples
-
-### 3.1 Gaussian Resonance Peak Fit
-
-```c
-#include "histo/histo.h"
-#include "histo/fit.h"
-#include <stdio.h>
-
-void fit_resonance_example(histo_t *h) {
-    histo_fit_result_t *res = NULL;
-    
-    /* Automatic initial guess estimation from moments */
-    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN, NULL, NULL, &res);
-    if (status == HISTO_OK && res->converged) {
-        printf("Fitted Amplitude: %.2f +/- %.2f\n", res->params[0], res->param_errors[0]);
-        printf("Fitted Mean:      %.2f +/- %.2f\n", res->params[1], res->param_errors[1]);
-        printf("Fitted Sigma:     %.2f +/- %.2f\n", res->params[2], res->param_errors[2]);
-        printf("Chi2 / NDF:       %.2f / %d (Reduced: %.2f, p-value: %.4f)\n",
-               res->chi2, res->ndf, res->reduced_chi2, res->p_value);
-    }
-    
-    histo_fit_result_destroy(res);
-}
-```
-
-### 3.2 Polynomial Background Fit with Sub-range
-
-```c
-#include "histo/histo.h"
-#include "histo/fit.h"
-#include <stdio.h>
-
-void fit_background_example(histo_t *h) {
-    histo_fit_options_t opts;
-    histo_fit_options_init(&opts);
-    opts.poly_degree = 2; /* Quadratic: c0 + c1*x + c2*x^2 */
-    opts.range_min = 10.0;
-    opts.range_max = 50.0;
-
-    histo_fit_result_t *res = NULL;
-    if (histo_fit_model(h, HISTO_FIT_MODEL_POLYNOMIAL, NULL, &opts, &res) == HISTO_OK) {
-        printf("Background: f(x) = %.3e + %.3e*x + %.3e*x^2\n",
-               res->params[0], res->params[1], res->params[2]);
-    }
-    histo_fit_result_destroy(res);
-}
-```
-
-### 3.3 Custom Parametric Model with Analytical Gradient
-
-```c
-#include "histo/histo.h"
-#include "histo/fit.h"
-#include <math.h>
-#include <stdio.h>
-
-/* Double exponential decay: f(x) = A1*exp(-k1*x) + A2*exp(-k2*x) */
-static double double_exp(double x, const double *p, void *userdata) {
-    (void)userdata;
-    return p[0] * exp(-p[1] * x) + p[2] * exp(-p[3] * x);
-}
-
-static void double_exp_grad(double x, const double *p, double *grad, void *userdata) {
-    (void)userdata;
-    double e1 = exp(-p[1] * x);
-    double e2 = exp(-p[3] * x);
-    grad[0] = e1;
-    grad[1] = -p[0] * x * e1;
-    grad[2] = e2;
-    grad[3] = -p[2] * x * e2;
-}
-
-void fit_custom_example(histo_t *h) {
-    histo_fit_options_t opts;
-    histo_fit_options_init(&opts);
-    opts.grad_fn = double_exp_grad;
-
-    const double p_init[4] = {100.0, 1.0, 20.0, 0.1};
-    histo_fit_result_t *res = NULL;
-
-    if (histo_fit_custom(h, double_exp, 4, p_init, &opts, &res) == HISTO_OK) {
-        printf("Fast decay rate: %.4f +/- %.4f\n", res->params[1], res->param_errors[1]);
-        printf("Slow decay rate: %.4f +/- %.4f\n", res->params[3], res->param_errors[3]);
-    }
-    histo_fit_result_destroy(res);
-}
-```
-
----
-
-## 4. Failure Modes & Remediation
-
-| Failure Mode | Root Cause | Remediation |
-| :--- | :--- | :--- |
-| **Singular Hessian Matrix (`HISTO_FIT_ERR_SINGULAR`)** | Parameters are degenerate or linearly dependent (e.g. amplitude of zero component). | Freeze unneeded parameters using `opts.fixed_params` or add tighter box constraints. |
-| **Local Minimum Trapping** | Initial guess is too far from true global basin. | Use `histo_fit_estimate_initial_params` or provide physically motivated initial guesses. |
-| **Divergence (`HISTO_FIT_ERR_DIVERGENCE`)** | Model evaluated outside domain (e.g. \f$x - x_0 \le 0\f$ for power law or \f$\sigma \le 0\f$ for Gaussian). | Set box constraints with `opts.lower_bounds` and `opts.upper_bounds`. |
-| **Under-constrained Fit (`ndf <= 0`)** | Number of bins in fit range is less than or equal to free parameters. | Broaden fit range `[opts.range_min, opts.range_max]` or increase histogram binning resolution. |

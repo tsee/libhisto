@@ -1,94 +1,81 @@
-# CLI Toolkit Extensions: Design Specification
+# CLI Extensions & Terminal Ergonomics Design
 
-## 1. Overview & Incremental Learning Philosophy
+This document details the design philosophy, ergonomics, and visualizations of the `libhisto` command-line interface (CLI) extensions. Our CLI tools provide powerful, user-centric ways to inspect, summarize, and monitor histogram data directly from the terminal.
 
-The `libhisto` CLI toolkit extensions adhere strictly to Unix pipeline composability and progressive disclosure:
-- **Level 1 (Zero-Config Pipes)**: Run `cat data.txt | histo fit` or `cat data.txt | histo fill --2d > out.json` without configuring options.
-- **Level 2 (Structured Formats & Models)**: Select fitting models (`--model exponential`), output formats (`--json`), and bin geometry (`--bins 100`).
-- **Level 3 (Constrained Optimization & Diagnostics)**: Box constraints (`--bounds`), frozen parameters (`--fix-param`), Poisson MLE (`--mle`), and residual analysis.
+## Design Philosophy
 
----
+The `libhisto` CLI tools are built around three core principles:
+1. **Pipes over Files:** Embrace the UNIX philosophy. Tools must seamlessly accept standard input (stdin) streams and produce clean standard output (stdout) for composition with other tools like `grep`, `awk`, or `jq`.
+2. **Graceful Degradation:** Rich visual features (ANSI colors, Unicode blocks) must automatically fall back to ASCII or plain text when the terminal does not support them or when output is piped to a non-tty destination.
+3. **Progressive Disclosure:** Provide only the most critical information by default. Advanced statistics, percentiles, and complex visualizations should require explicit flags or subcommands.
 
-## 2. Command Architecture & Sub-Commands
+## Progressive Disclosure Tiers
 
-| Binary Symlink | Sub-command | Purpose |
-| :--- | :--- | :--- |
-| `histo-fit` | `histo fit` | Binned parametric curve fitting with formula and parameter table |
-| `histo-fill` | `histo fill` | Stream ingestion for 1D and 2D (`--2d`), JSON/binary export |
-| `histo-plot` | `histo plot` | Terminal histogram visualization (vertical/horizontal bars, 2D heatmaps) |
-| `histo-stats` | `histo stats` | Moments, quantiles, robust dispersion, 2D bivariate statistics |
-| `histo-cmp` | `histo cmp` | Two-distribution statistical distance metrics ($\chi^2$, KS, Wasserstein, KL) |
+The CLI features map directly to the Progressive Disclosure tiers of `libhisto`:
 
----
+### Tier 1: Essential Insights
+- **Default Output:** A minimal summary containing total entries, min, max, and mean.
+- **Sparklines:** Compact, single-line data representations using Unicode block characters (e.g., ` ▂▃▅▆▇█`) for a quick visual grasp of the distribution.
 
-## 3. `histo fit` Specification
+### Tier 2: Analytical Depth
+- **Detailed Stats:** By providing the `--stats` flag, users receive comprehensive statistical moments (variance, standard deviation, skewness, kurtosis) and configurable percentiles (e.g., p50, p90, p99).
+- **Text-Based Histograms:** Multi-line ASCII/Unicode bar charts for clear, bin-by-bin density visualization.
 
-### Default Output Format
-`histo fit` outputs the fitted mathematical formula, a formatted parameter table, and convergence diagnostics:
+### Tier 3: Advanced Visualizations
+- **Terminal Heatmaps:** 2D density plots for multi-dimensional data, utilizing 256-color or true-color ANSI escape sequences.
+- **Continuous Monitoring:** Real-time tailing of data streams with dynamic UI updates (similar to `top` or `htop`) using ncurses-like rendering techniques.
 
-```text
-================================================================================
- MODEL: Gaussian Resonance [ f(x) = A · exp(-(x - μ)² / (2σ²)) ]
-================================================================================
-  Param  Name               Estimate      Std. Error       95% Confidence Interval
-  [0]    Amplitude (A)      1248.520     ±  14.281        [ 1220.528, 1276.512 ]
-  [1]    Mean (μ)             50.012     ±   0.011        [   49.990,   50.034 ]
-  [2]    Std Dev (σ)           1.488     ±   0.010        [    1.468,    1.508 ]
---------------------------------------------------------------------------------
- GOODNESS OF FIT:
-  χ² / NDF       = 37.42 / 37 (1.011)
-  p-value        = 0.4497 (Consistent with model)
-  Log-Likelihood = -142.81  |  AIC = 291.62  |  BIC = 297.05
-  Convergence    = Converged in 6 iterations (Δχ² < 1e-6)
-================================================================================
+## Terminal Visualizations
+
+### 1. Sparklines
+Sparklines are ideal for inline logging or highly constrained terminal windows. They provide an immediate sense of the shape of the data.
+
+**Example Output:**
+```
+$ cat latency.log | histo-cli spark
+Latency (ms):  ▂▃▅▆▇█▇▆▄▂ 
 ```
 
-### Supported Parametric Models
-1. `gaussian` (default): $f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right)$
-2. `exponential`: $f(x) = A \cdot \exp(-\lambda x) + C$
-3. `polynomial`: $f(x) = \sum_{k=0}^d c_k x^k$ (specify degree with `--degree <d>`)
-4. `breit-wigner`: $f(x) = \frac{A}{\pi} \frac{\Gamma / 2}{(x - M)^2 + (\Gamma / 2)^2}$
-5. `power-law`: $f(x) = A \cdot (x - x_0)^k$
+### 2. Stats Output
+The stats output is designed for clarity, aligning numerical values and using human-readable formatting.
 
-### Command-Line Arguments for `histo fit`
-- `--model, -m <model>`: Model type (`gaussian`, `exponential`, `polynomial`, `breit-wigner`, `power-law`). Default: `gaussian`.
-- `--degree, -d <N>`: Degree for polynomial models (1 to 10). Default: 1.
-- `--mle`: Use Binned Poisson Maximum Likelihood Estimation (-2 ln L) instead of $\chi^2$ Least Squares.
-- `--bounds, -b <idx=min:max>`: Box constraints for parameter index (e.g. `--bounds 2=0.1:10.0`).
-- `--fix-param, -f <idx=val>`: Hold parameter constant during optimization.
-- `--confidence, -c <level>`: Confidence level for parameter error intervals (default: 0.95).
-- `--plot, -p`: Render optional ASCII curve overlay above parameter table.
-- `--json, -j`: Emit structured JSON report for programmatic ingestion.
-- `--quiet, -q`: Output only optimal parameter values (tab-separated) for shell scripts.
-- `--input, -i <file>`: Input histogram file (JSON or Format V1/V2 binary) or raw samples (default: `stdin`).
+**Example Output:**
+```
+$ histo-cli summarize --stats access_times.bin
+# Basic Metrics
+Count:      1,024,512
+Min:        12.4 ms
+Max:        4,102.1 ms
+Mean:       45.2 ms
 
----
+# Moments
+StdDev:     12.8 ms
+Skewness:   1.2
+Kurtosis:   3.1
 
-## 4. `histo fill --2d` Specification
-
-### Usage Examples
-```bash
-# Ingest 2D coordinate pairs from CSV/text and emit JSON
-cat telemetry_xy.csv | histo fill --2d > grid.json
-
-# Explicit 100x100 grid with custom column indices
-histo fill --2d --xbins 100 --xmin -10 --xmax 10 --ybins 100 --ymin -10 --ymax 10 \
-           --xcol 1 --ycol 2 --wcol 3 < simulation.dat > grid.bin
+# Percentiles
+p50:        42.1 ms
+p90:        61.5 ms
+p95:        72.0 ms
+p99:        115.3 ms
+p99.9:      450.2 ms
 ```
 
-### Command-Line Arguments for `histo fill --2d`
-- `--2d`: Enable 2D bivariate ingestion mode.
-- `--xbins <N>`, `--xmin <val>`, `--xmax <val>`: X axis grid configuration.
-- `--ybins <N>`, `--ymin <val>`, `--ymax <val>`: Y axis grid configuration.
-- `--delimiter, -d <char>`: Column delimiter (optional override; default: auto-detection).
-- `--xcol <N>`, `--ycol <N>`, `--wcol <N>`: 1-based column indices for $X$, $Y$, and optional weight $W$.
-- `--binary, -b`: Emit Format V3 Little-Endian binary blob instead of JSON.
+### 3. Heatmaps (2D Histograms)
+For 2D histograms, the CLI can render dense information using block characters and color gradients.
 
-### Delimiter Auto-Detection Heuristic
-When parsing tabular streams without an explicit `--delimiter` flag:
-1. The parser peeks at the initial non-empty, non-comment line.
-2. It counts candidate separator occurrences (`,`, `\t`, `;`, `|`).
-3. If a structured separator appears at least once, the candidate with the highest frequency is chosen as the active field delimiter.
-4. If no structured delimiter is present, the parser defaults to standard contiguous whitespace tokenization (`isspace`).
+**Example Output (ASCII Representation):**
+```
+$ histo-cli heatmap 2d_data.bin
+  Y \ X |  0-10  10-20  20-30  30-40
+  ----------------------------------
+  40-50 |   ..     ..     ++     ##
+  30-40 |   ..     ++     ##     ++
+  20-30 |   ++     ##     ++     ..
+  10-20 |   ##     ++     ..     ..
+```
+*(In a real terminal, this would utilize ANSI color codes ranging from dark blue for low density to bright red/white for high density).*
 
+## Doxygen Compatibility
 
+This markdown file is structured to be parsed by Doxygen. Ensure that all headers, code blocks, and lists adhere to standard GitHub Flavored Markdown (GFM) which Doxygen correctly interprets when `USE_MDFILE_AS_MAINPAGE` or standard markdown processing is enabled.
