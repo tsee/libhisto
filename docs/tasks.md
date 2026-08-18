@@ -72,3 +72,18 @@
 - [x] **G1** Coverage-guided & standalone fuzzing harnesses (`fuzz_deserialize_binary`, `fuzz_deserialize_json`, `fuzz_sketch_binary`, `fuzz_fill`)
 - [x] **G2** Modern CMake integration (`LIBHISTO_ENABLE_FUZZING`, LLVM `libFuzzer` Clang support & portable standalone mutation engine)
 - [x] **G3** Curated seed corpora in `tests/fuzz/corpus/`, corpus generator tool, and 100% leak-free ASan/UBSan verification
+
+---
+
+## Phase H: 2-Dimensional Histograms (`histo2d_t`)
+- [x] **H1** High-Level Architectural Blueprint & Specification (`docs/design_2d_histograms.md`)
+- [x] **H2** Proposed Public C API Header Draft (`docs/proposed_histo2d_header.h`)
+- [x] **H3** Wire Format V3 & 2D JSON Schema Specification (`docs/serialization_format.md`)
+- [ ] **H4** Core 2D Internal Memory & Ingestion Pipeline Implementation (`src/histo2d.c`)
+- [ ] **H5** Online 2D Welford Moments & Bivariate Statistics Routines
+- [ ] **H6** 1D Projections, Slices & Profile Histograms (`histo2d_project_*`, `histo2d_profile_*`)
+- [ ] **H7** 2D Transformations, Rebinning & Arithmetic
+- [ ] **H8** Little-Endian Wire Serialization (Format V3) & Deserialization
+- [ ] **H9** Terminal Heatmap & 2D CLI Tooling Integration (`histo-plot --heatmap`)
+- [ ] **H10** 2D Unit Tests, AVX2 SIMD Acceleration, & ASan/UBSan Verification
+
