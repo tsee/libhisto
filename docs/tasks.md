@@ -117,13 +117,11 @@
 
 ---
 
-## Phase M: Release Packaging & CLI Toolkit Extensions
-- [x] **M1** Repository hygiene: Prune merged subagent branches and detached worktrees.
-- [x] **M2** Release packaging: Add CMake package export (`libhistoConfig.cmake`, `libhistoTargets.cmake`), `pkg-config` (`libhisto.pc`), and CPack release generators (`.tar.gz`, `.deb`, `.rpm`).
-- [x] **M3** CLI Toolkit Extensions Specification (`docs/design_cli_extensions.md`): Binned curve fitting (`histo fit` with formula header and parameter table) and 2D stream ingestion (`histo fill --2d`).
-- [x] **M4** Implement `histo-fit` CLI tool (`tools/src/cmd_fit.c`) and CLI multi-call alias.
-- [x] **M5** Implement `histo-fill --2d` multi-column coordinate parser with delimiter auto-detection (`tools/src/cmd_fill.c`).
-- [x] **M6** CLI integration test suite additions (`tests/integration/test_cli.c`), docs updates, and sanitizer verification.
+## Phase N: Documentation Testing, Hygiene & Parallel Test Automation
+- [x] **N1** Automated Inline Documentation Test Harness (`tests/scripts/test_doc_examples.py`, `make test-doc-examples`, CTest integration): verifies all 18 C99 examples and 10 CLI pipelines.
+- [x] **N2** Documentation Pruning & Index Consolidation: Removed outdated Phase A/B design drafts (`docs/api_specification.md`, `docs/proposed_histo2d_header.h`, `docs/design_*.md`) in favor of live Doxygen headers and comprehensive guides.
+- [x] **N3** Multi-Core Parallel Test & Build Execution (`make -j`, `ctest -j`, `test_doc_examples.py -j`): Full multi-core concurrency across CMake, CTest, and documentation tests.
+
 
 
 
