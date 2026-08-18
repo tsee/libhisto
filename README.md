@@ -4,7 +4,7 @@
 
 ## Key Features
 
-- **2-Dimensional Histograms (`histo2d_t`):** Full support for bivariate distributions across all 4 binning combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region guard partitioning, 2D online Welford covariance $\operatorname{Cov}(X,Y)$ and Pearson correlation $\rho_{xy}$, 1D marginal projections (`project_x/y`), sub-interval slices (`slice_x/y`), profile histograms (`profile_x/y`), and TrueColor terminal heatmaps.
+- **2-Dimensional Histograms (`histo2d_t`):** Full support for bivariate distributions across all 4 binning combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region guard partitioning, 2D online Welford covariance $\mathrm{Cov}(X, Y)$ and Pearson correlation $\rho_{xy}$, 1D marginal projections (`project_x/y`), sub-interval slices (`slice_x/y`), profile histograms (`profile_x/y`), and TrueColor terminal heatmaps.
 - **Curve Fitting & Non-Linear Regression:** Built-in models (Gaussian, Exponential, Polynomials $d \le 10$, Breit-Wigner, Power Law) and custom user callbacks with Levenberg-Marquardt optimizer, parameter constraints/freezing, $\chi^2$ and Poisson MLE Cash deviance.
 - **Flexible Binning:** Uniform ($O(1)$) and Variable-width ($O(\log N)$) binning configurations with boundary-guarded floating-point indexing.
 - **SIMD Vector Acceleration:** AVX-512 and AVX2 / FMA vectorized batch ingestion (`histo_fill_n`) with automatic runtime CPUID feature detection and scalar fallback.

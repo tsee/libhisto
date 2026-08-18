@@ -42,7 +42,7 @@ with the convention \f$0 \ln(0 / f) \equiv 0\f$. The gradient and Fisher Informa
 The Levenberg-Marquardt algorithm adaptively interpolates between Gradient Descent (when far from the optimum) and Gauss-Newton optimization (near the optimum). At iteration \f$k\f$, the step \f$\Delta \mathbf{p}\f$ is solved from:
 
 \f[
-\left(\mathbf{J}^T \mathbf{W} \mathbf{J} + \lambda \operatorname{diag}(\mathbf{J}^T \mathbf{W} \mathbf{J})\right) \Delta \mathbf{p} = \mathbf{J}^T \mathbf{W} (\mathbf{y} - \mathbf{f}(\mathbf{p}))
+\left(\mathbf{J}^T \mathbf{W} \mathbf{J} + \lambda \mathrm{diag}(\mathbf{J}^T \mathbf{W} \mathbf{J})\right) \Delta \mathbf{p} = \mathbf{J}^T \mathbf{W} (\mathbf{y} - \mathbf{f}(\mathbf{p}))
 \f]
 
 - **Damping parameter \f$\lambda\f$**: Updated via the Marquardt-Nielsen gain ratio \f$\rho = \frac{S(\mathbf{p}) - S(\mathbf{p} + \Delta \mathbf{p})}{L(\mathbf{0}) - L(\Delta \mathbf{p})}\f$. When \f$\rho > 0.75\f$, \f$\lambda\f$ is decreased; when \f$\rho < 0.25\f$, \f$\lambda\f$ is increased and the step is rejected.
