@@ -100,10 +100,46 @@ void test_tui_engine_streaming_and_snapshot(void) {
     fclose(in_fp);
 }
 
+void test_tui_visual_width(void) {
+    TEST_ASSERT_EQUAL_INT(0, tui_visual_width(""));
+    TEST_ASSERT_EQUAL_INT(5, tui_visual_width("hello"));
+    TEST_ASSERT_EQUAL_INT(5, tui_visual_width("\033[1;31mhello\033[0m")); // ANSI escapes = 0 cols
+    TEST_ASSERT_EQUAL_INT(1, tui_visual_width("│")); // 3-byte UTF-8 box char = 1 col
+    TEST_ASSERT_EQUAL_INT(1, tui_visual_width("±")); // 2-byte UTF-8 symbol = 1 col
+    TEST_ASSERT_EQUAL_INT(1, tui_visual_width("Δ")); // 2-byte UTF-8 symbol = 1 col
+    TEST_ASSERT_EQUAL_INT(4, tui_visual_width("┌─┐│")); // 4 box chars = 4 cols
+}
+
+void test_tui_render_row_geometry(void) {
+    int test_widths[] = { 40, 60, 80, 120, 160 };
+    const char *test_contents[] = {
+        "",
+        "Short text",
+        "Mean: 45.23 ± 5.12 │ Med: 45.00 │ IQR: 7.20 │ P95: 55.30 │ P99: 62.10",
+        "\033[38;2;255;0;0m[  0.00,  10.00) │   1520 │ ████████████████████████████████████████\033[0m",
+        "An extremely excessively long row of text designed to test boundary truncation when the line exceeds terminal column limits"
+    };
+
+    for (size_t w = 0; w < sizeof(test_widths) / sizeof(test_widths[0]); ++w) {
+        int width = test_widths[w];
+        for (size_t c = 0; c < sizeof(test_contents) / sizeof(test_contents[0]); ++c) {
+            tui_frame_t frame;
+            tui_frame_init(&frame, 256);
+            tui_render_row(&frame, test_contents[c], width, false);
+
+            int vis_width = tui_visual_width(frame.buf);
+            TEST_ASSERT_EQUAL_INT_MESSAGE(width, vis_width, "Row visual width must strictly match target terminal width");
+            tui_frame_free(&frame);
+        }
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
     RUN_TEST(test_tui_color_and_mono);
+    RUN_TEST(test_tui_visual_width);
+    RUN_TEST(test_tui_render_row_geometry);
     RUN_TEST(test_tui_engine_streaming_and_snapshot);
     return UNITY_END();
 }

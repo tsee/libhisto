@@ -355,3 +355,90 @@ void tui_term_get_color(double fraction, bool monochrome, char *out_ansi, size_t
     }
     snprintf(out_ansi, max_len, "\033[38;2;%d;%d;%dm", r, g, b);
 }
+
+int tui_visual_width(const char *str) {
+    if (!str) return 0;
+    int cols = 0;
+    const unsigned char *p = (const unsigned char *)str;
+    while (*p) {
+        if (*p == '\033') {
+            p++;
+            if (*p == '[') {
+                p++;
+                while (*p && (*p < 0x40 || *p > 0x7E)) p++;
+                if (*p) p++;
+            }
+        } else if (*p < 0x80) {
+            if (*p >= 32 && *p <= 126) cols++;
+            p++;
+        } else if ((*p & 0xE0) == 0xC0) {
+            cols++;
+            p += (*(p + 1)) ? 2 : 1;
+        } else if ((*p & 0xF0) == 0xE0) {
+            cols++;
+            p += (*(p + 1) && *(p + 2)) ? 3 : 1;
+        } else if ((*p & 0xF8) == 0xF0) {
+            cols += 2;
+            p += (*(p + 1) && *(p + 2) && *(p + 3)) ? 4 : 1;
+        } else {
+            p++;
+        }
+    }
+    return cols;
+}
+
+void tui_render_row(tui_frame_t *f, const char *content, int width, bool newline) {
+    if (!f) return;
+    tui_frame_puts(f, "│ ");
+    int vis = tui_visual_width(content);
+    int inner_width = width - 4;
+    if (inner_width < 1) inner_width = 1;
+
+    if (vis <= inner_width) {
+        tui_frame_puts(f, content ? content : "");
+        int pad = inner_width - vis;
+        for (int i = 0; i < pad; ++i) tui_frame_puts(f, " ");
+    } else {
+        const unsigned char *p = (const unsigned char *)(content ? content : "");
+        int cur_cols = 0;
+        while (*p && cur_cols < inner_width) {
+            if (*p == '\033') {
+                const unsigned char *start = p++;
+                if (*p == '[') {
+                    p++;
+                    while (*p && (*p < 0x40 || *p > 0x7E)) p++;
+                    if (*p) p++;
+                }
+                tui_frame_append(f, (const char *)start, (size_t)(p - start));
+            } else if (*p < 0x80) {
+                if (*p >= 32 && *p <= 126) cur_cols++;
+                tui_frame_append(f, (const char *)p, 1);
+                p++;
+            } else if ((*p & 0xE0) == 0xC0) {
+                cur_cols++;
+                size_t len = (*(p + 1)) ? 2 : 1;
+                tui_frame_append(f, (const char *)p, len);
+                p += len;
+            } else if ((*p & 0xF0) == 0xE0) {
+                cur_cols++;
+                size_t len = (*(p + 1) && *(p + 2)) ? 3 : 1;
+                tui_frame_append(f, (const char *)p, len);
+                p += len;
+            } else if ((*p & 0xF8) == 0xF0) {
+                if (cur_cols + 2 <= inner_width) {
+                    cur_cols += 2;
+                    size_t len = (*(p + 1) && *(p + 2) && *(p + 3)) ? 4 : 1;
+                    tui_frame_append(f, (const char *)p, len);
+                    p += len;
+                } else break;
+            } else {
+                p++;
+            }
+        }
+        int pad = inner_width - cur_cols;
+        for (int i = 0; i < pad; ++i) tui_frame_puts(f, " ");
+    }
+
+    tui_frame_puts(f, " │");
+    if (newline) tui_frame_puts(f, "\n");
+}

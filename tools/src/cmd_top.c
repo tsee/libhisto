@@ -59,83 +59,45 @@ typedef struct {
 
 static const char *const BLOCKS_UTF8[9] = { " ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█" };
 
-static void render_header(tui_frame_t *f, const tui_state_t *st, const tui_engine_t *eng, const histo_t *h, int width) {
-    uint64_t n = h ? histo_num_entries(h) : 0;
-    double w = h ? histo_total_weight(h) : 0.0;
-    double rate = eng ? eng->current_rate_ops : 0.0;
-
-    char badge[64];
-    if (st->paused) {
-        snprintf(badge, sizeof(badge), "[PAUSED (VIEW FROZEN) | N=%lu]", (unsigned long)n);
-    } else if (eng && eng->finished_reading) {
-        snprintf(badge, sizeof(badge), "[STREAM FINISHED | N=%lu]", (unsigned long)n);
+static void render_top_border(tui_frame_t *f, const char *title, const char *badge, int width) {
+    tui_frame_printf(f, "\033[1m┌─ %s ", title);
+    int title_cols = 1 + 2 + (int)strlen(title) + 1; // "┌─ " + title + " "
+    int badge_cols = (badge && badge[0]) ? (tui_visual_width(badge) + 3) : 2;
+    int dashes = width - title_cols - badge_cols;
+    if (dashes < 0) dashes = 0;
+    for (int i = 0; i < dashes; ++i) tui_frame_puts(f, "─");
+    if (badge && badge[0]) {
+        tui_frame_printf(f, " %s ─┐\033[0m\n", badge);
     } else {
-        if (rate >= 1e6) {
-            snprintf(badge, sizeof(badge), "[LIVE: %.1f M-ops/s | N=%lu]", rate / 1e6, (unsigned long)n);
-        } else if (rate >= 1e3) {
-            snprintf(badge, sizeof(badge), "[LIVE: %.1f k-ops/s | N=%lu]", rate / 1e3, (unsigned long)n);
-        } else {
-            snprintf(badge, sizeof(badge), "[LIVE: %.0f ops/s | N=%lu]", rate, (unsigned long)n);
-        }
+        tui_frame_puts(f, "─┐\033[0m\n");
     }
+}
 
-    tui_frame_printf(f, "\033[1m┌─ libhisto top ");
-    int pad1 = width - 18 - (int)strlen(badge);
-    for (int i = 0; i < pad1; ++i) tui_frame_puts(f, "─");
-    tui_frame_printf(f, " %s ─┐\033[0m\n", badge);
-
-    if (h && n > 0) {
-        double mean = 0.0, sdev = 0.0, median = 0.0, iqr = 0.0, p95 = 0.0, p99 = 0.0;
-        histo_mean(h, &mean);
-        histo_std_dev(h, &sdev);
-        histo_median(h, &median);
-        histo_iqr(h, &iqr);
-        histo_quantile(h, 0.95, &p95);
-        histo_quantile(h, 0.99, &p99);
-
-        char stats_line[512];
-        snprintf(stats_line, sizeof(stats_line),
-                 "│ Mean: %.2f ± %.2f │ Med: %.2f │ IQR: %.2f │ P95: %.2f │ P99: %.2f │ W: %.1f",
-                 mean, sdev, median, iqr, p95, p99, w);
-        int pad2 = width - (int)strlen(stats_line) - 1;
-        tui_frame_puts(f, stats_line);
-        for (int i = 0; i < pad2; ++i) tui_frame_puts(f, " ");
-        tui_frame_puts(f, "│\n");
-    } else {
-        char empty_line[] = "│ Waiting for streaming samples...";
-        tui_frame_puts(f, empty_line);
-        int pad2 = width - (int)strlen(empty_line) - 1;
-        for (int i = 0; i < pad2; ++i) tui_frame_puts(f, " ");
-        tui_frame_puts(f, "│\n");
-    }
-
+static void render_divider(tui_frame_t *f, int width) {
     tui_frame_puts(f, "├");
     for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
     tui_frame_puts(f, "┤\n");
 }
 
-static void render_1d_bars(tui_frame_t *f, const tui_state_t *st, const histo_t *h, int width, int height) {
-    if (!h) return;
+static void render_bottom_border(tui_frame_t *f, int width, bool newline) {
+    tui_frame_puts(f, "└");
+    for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
+    tui_frame_puts(f, "┘");
+    if (newline) tui_frame_puts(f, "\n");
+}
+
+static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const histo_t *h, int width, int max_rows) {
+    if (!h || max_rows <= 0) {
+        for (int r = 0; r < max_rows; ++r) tui_render_row(f, "", width, true);
+        return;
+    }
+
     uint32_t nbins = histo_nbins(h);
-    if (nbins == 0) return;
+    if (nbins == 0) {
+        for (int r = 0; r < max_rows; ++r) tui_render_row(f, "", width, true);
+        return;
+    }
 
-    double rmin = 0.0, rmax = 0.0;
-    histo_range(h, &rmin, &rmax);
-
-    const char *scale_str = (st->scale_mode == SCALE_LOG_Y) ? "LOG Y" :
-                            (st->scale_mode == SCALE_LOG_X) ? "LOG X" :
-                            (st->scale_mode == SCALE_LOG_LOG) ? "LOG-LOG" : "LINEAR";
-
-    char subhdr[256];
-    snprintf(subhdr, sizeof(subhdr), "│ Range: [%.2f, %.2f] │ Bins: %u (Δx=%.2f) │ Scale: %s %s",
-             rmin, rmax, nbins, (rmax - rmin) / (double)nbins, scale_str,
-             st->show_kde ? "│ KDE: ON " : st->show_fit ? "│ FIT: ON " : "");
-    tui_frame_puts(f, subhdr);
-    int pad = width - (int)strlen(subhdr) - 1;
-    for (int i = 0; i < pad; ++i) tui_frame_puts(f, " ");
-    tui_frame_puts(f, "│\n");
-
-    /* Find max bin content */
     double max_content = 0.0;
     for (uint32_t i = 0; i < nbins; ++i) {
         double c = 0.0;
@@ -147,16 +109,15 @@ static void render_1d_bars(tui_frame_t *f, const tui_state_t *st, const histo_t 
                         log10(max_content + 1.0) : max_content;
     if (max_scaled <= 0.0) max_scaled = 1.0;
 
-    int max_rows = height - 7;
-    if (max_rows < 3) max_rows = 3;
     uint32_t step = (nbins > (uint32_t)max_rows) ? (nbins + (uint32_t)max_rows - 1) / (uint32_t)max_rows : 1;
+    int rows_drawn = 0;
 
-    for (uint32_t i = 0; i < nbins; i += step) {
-        double lower = 0.0, upper = 0.0, content = 0.0, err = 0.0;
+    for (uint32_t i = 0; i < nbins && rows_drawn < max_rows; i += step) {
+        double lower = 0.0, upper = 0.0, content = 0.0;
         histo_bin_bounds(h, i, &lower, &upper);
         histo_bin_content(h, i, &content);
-        if (st->show_errors) histo_bin_error(h, i, &err);
 
+        char row_buf[1024];
         char bounds_str[32];
         snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
 
@@ -167,11 +128,11 @@ static void render_1d_bars(tui_frame_t *f, const tui_state_t *st, const histo_t 
             snprintf(count_str, sizeof(count_str), "%6.2g", content);
         }
 
-        tui_frame_printf(f, "│ %-16s │ %s │ ", bounds_str, count_str);
-
-        int prefix_len = 16 + 2 + 6 + 3 + 2; /* bounds + count + separators */
-        int bar_max_chars = width - prefix_len - 3;
-        if (bar_max_chars < 5) bar_max_chars = 5;
+        // Available width for bar: width - prefix - borders
+        // prefix: bounds (16) + " │ " (3) + count (6) + " │ " (3) = 28 columns
+        int prefix_cols = 28;
+        int bar_max = width - 4 - prefix_cols;
+        if (bar_max < 5) bar_max = 5;
 
         double val_scaled = (st->scale_mode == SCALE_LOG_Y || st->scale_mode == SCALE_LOG_LOG) ?
                             log10(content + 1.0) : content;
@@ -179,7 +140,7 @@ static void render_1d_bars(tui_frame_t *f, const tui_state_t *st, const histo_t 
         if (frac < 0.0) frac = 0.0;
         if (frac > 1.0) frac = 1.0;
 
-        double bar_len = frac * (double)bar_max_chars;
+        double bar_len = frac * (double)bar_max;
         int full_chars = (int)bar_len;
         int rem_eighths = (int)((bar_len - (double)full_chars) * 8.0);
         if (rem_eighths > 8) rem_eighths = 8;
@@ -187,75 +148,59 @@ static void render_1d_bars(tui_frame_t *f, const tui_state_t *st, const histo_t 
 
         char color_ansi[32] = "";
         tui_term_get_color(frac, st->monochrome, color_ansi, sizeof(color_ansi));
-        if (color_ansi[0]) tui_frame_puts(f, color_ansi);
 
-        for (int k = 0; k < full_chars; ++k) tui_frame_puts(f, "█");
-        if (rem_eighths > 0 && full_chars < bar_max_chars) {
-            tui_frame_puts(f, BLOCKS_UTF8[rem_eighths]);
-            full_chars++;
+        int pos = snprintf(row_buf, sizeof(row_buf), "%-16s │ %6s │ %s", bounds_str, count_str, color_ansi);
+
+        for (int k = 0; k < full_chars && pos + 4 < (int)sizeof(row_buf); ++k) {
+            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "█");
         }
-        if (color_ansi[0]) tui_frame_puts(f, "\033[0m");
+        if (rem_eighths > 0 && full_chars < bar_max && pos + 4 < (int)sizeof(row_buf)) {
+            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", BLOCKS_UTF8[rem_eighths]);
+        }
+        if (color_ansi[0] && pos + 8 < (int)sizeof(row_buf)) {
+            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m");
+        }
 
-        int line_pad = bar_max_chars - full_chars;
-        for (int k = 0; k < line_pad; ++k) tui_frame_puts(f, " ");
-        tui_frame_puts(f, "│\n");
+        tui_render_row(f, row_buf, width, true);
+        rows_drawn++;
+    }
+
+    // Fill remaining budget rows so height is strictly invariant
+    while (rows_drawn < max_rows) {
+        tui_render_row(f, "", width, true);
+        rows_drawn++;
     }
 }
 
-static void render_help_modal(tui_frame_t *f, int width, int height) {
-    (void)height;
+static void render_help_viewport(tui_frame_t *f, int width, int max_rows) {
     const char *help_lines[] = {
-        "┌─ libhisto top ─ Interactive Help Cheatsheet ──────────────────────────────────────────────┐",
-        "│                                                                                           │",
-        "│ NAVIGATION & VIEWPORT              DISPLAY & SCALING              ANALYSIS & CURVES       │",
-        "│   + / -       Zoom range in / out    l     Cycle Log scale (X/Y)    k   Toggle KDE curve  │",
-        "│   h / l, ←/→  Pan view left / right  L     Scale Selector Modal     f   Toggle Curve Fit  │",
-        "│   0           Reset to full range    e     Toggle Error bars (±σ)   C   Toggle Color/Mono │",
-        "│   r / R       Rebin coarser / finer  S     Toggle Sparkline mode    Tab Cycle 1D/2D/CDF   │",
-        "│                                                                                           │",
-        "│ COMMANDS & PROMPT (:)              STREAM CONTROL                                         │",
-        "│   :bins <N>   Set exact bin count    Space Pause / Freeze display (Ingestion continues)   │",
-        "│   :range A B  Set bounds [A, B]      c     Clear / Reset all counters                     │",
-        "│   :fit <m>    Fit (gauss, exp, poly) s     Export snapshot to JSON                        │",
-        "│   :kde <k>    KDE (gauss, epanech)   q     Quit and restore terminal                      │",
-        "│                                                                                           │",
-        "│ Press [?], [Esc], or [Space] to dismiss this help window.                                 │",
-        "└───────────────────────────────────────────────────────────────────────────────────────────┘"
+        "── Interactive Help Cheatsheet ───────────────────────────────────────────",
+        "",
+        "NAVIGATION & VIEWPORT              DISPLAY & SCALING",
+        "  + / -       Zoom in / out          l   Cycle Log scales (Y, X, Log-Log)",
+        "  h / l, ←/→  Pan viewport left/right  L   Scale Selector Modal",
+        "  0           Reset to full range    C   Toggle TrueColor / Monochrome",
+        "  r / R       Rebin coarser / finer  k   Toggle KDE continuous curve",
+        "                                     f   Toggle Curve Fit overlay",
+        "COMMANDS & PROMPT (:)",
+        "  :bins <N>   Set bin count (e.g. :b 80)    [Space] Freeze / Unfreeze display",
+        "  :range A B  Set range (e.g. :r 0 100)     c       Clear all accumulators",
+        "  :help       Open full help modal          q       Quit cleanly",
+        "",
+        "Press [?], [Esc], or [Space] to dismiss this help window."
     };
 
     size_t n_lines = sizeof(help_lines) / sizeof(help_lines[0]);
-    int modal_width = (int)strlen(help_lines[0]);
-    int left_margin = (width > modal_width) ? (width - modal_width) / 2 : 0;
+    int rows_drawn = 0;
 
-    for (size_t i = 0; i < n_lines; ++i) {
-        for (int m = 0; m < left_margin; ++m) tui_frame_puts(f, " ");
-        tui_frame_puts(f, "\033[1;37;44m");
-        tui_frame_puts(f, help_lines[i]);
-        tui_frame_puts(f, "\033[0m\n");
+    for (size_t i = 0; i < n_lines && rows_drawn < max_rows; ++i) {
+        tui_render_row(f, help_lines[i], width, true);
+        rows_drawn++;
     }
-}
-
-static void render_footer(tui_frame_t *f, const tui_state_t *st, int width) {
-    tui_frame_puts(f, "├");
-    for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
-    tui_frame_puts(f, "┤\n");
-
-    if (st->cmd_active) {
-        tui_frame_printf(f, "│ :%s\033[7m \033[0m", st->cmd_buf);
-        int pad = width - 4 - (int)strlen(st->cmd_buf);
-        for (int i = 0; i < pad; ++i) tui_frame_puts(f, " ");
-        tui_frame_puts(f, "│\n");
-    } else {
-        const char *hints = "│ [Space] Freeze  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [+/-] Zoom  [:] Cmd  [?] Help  [q]";
-        tui_frame_puts(f, hints);
-        int pad = width - (int)strlen(hints) - 1;
-        for (int i = 0; i < pad; ++i) tui_frame_puts(f, " ");
-        tui_frame_puts(f, "│\n");
+    while (rows_drawn < max_rows) {
+        tui_render_row(f, "", width, true);
+        rows_drawn++;
     }
-
-    tui_frame_puts(f, "└");
-    for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
-    tui_frame_puts(f, "┘\n");
 }
 
 static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) {
@@ -444,19 +389,93 @@ int cmd_top_main(int argc, char **argv) {
 
         int cols = 80, rows = 24;
         tui_term_get_size(&cols, &rows);
+        if (cols < 40) cols = 40;
+        if (rows < 10) rows = 10;
 
         histo_t *snap = st.paused ? st.frozen_snapshot : tui_engine_get_snapshot_1d(&eng);
 
         tui_frame_clear(&frame);
         tui_frame_puts(&frame, "\033[H"); // Cursor home
-        render_header(&frame, &st, &eng, snap, cols);
-        render_1d_bars(&frame, &st, snap, cols, rows);
+
+        // Row 1: Top border with badge
+        char badge[64] = "";
+        uint64_t n_entries = snap ? histo_num_entries(snap) : 0;
+        if (st.paused) {
+            snprintf(badge, sizeof(badge), "[PAUSED | N=%lu]", (unsigned long)n_entries);
+        } else if (tui_engine_is_finished(&eng)) {
+            snprintf(badge, sizeof(badge), "[EOF | N=%lu]", (unsigned long)n_entries);
+        } else {
+            double rate = eng.current_rate_ops;
+            if (rate >= 1e6) snprintf(badge, sizeof(badge), "[LIVE: %.1fM/s | N=%lu]", rate / 1e6, (unsigned long)n_entries);
+            else if (rate >= 1e3) snprintf(badge, sizeof(badge), "[LIVE: %.1fk/s | N=%lu]", rate / 1e3, (unsigned long)n_entries);
+            else snprintf(badge, sizeof(badge), "[LIVE: %.0f/s | N=%lu]", rate, (unsigned long)n_entries);
+        }
+        render_top_border(&frame, "libhisto top", badge, cols);
+
+        // Row 2: Stats summary
+        char stats_buf[256];
+        if (snap && n_entries > 0) {
+            double mean = 0, sdev = 0, med = 0, iqr = 0, p95 = 0, p99 = 0;
+            histo_mean(snap, &mean);
+            histo_std_dev(snap, &sdev);
+            histo_median(snap, &med);
+            histo_iqr(snap, &iqr);
+            histo_quantile(snap, 0.95, &p95);
+            histo_quantile(snap, 0.99, &p99);
+            snprintf(stats_buf, sizeof(stats_buf), "Mean: %.2f ± %.2f │ Med: %.2f │ IQR: %.2f │ P95: %.2f │ P99: %.2f",
+                     mean, sdev, med, iqr, p95, p99);
+        } else {
+            snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming samples...");
+        }
+        tui_render_row(&frame, stats_buf, cols, true);
+
+        // Row 3: Divider
+        render_divider(&frame, cols);
+
+        // Row 4: Subheader
+        char subhdr[256];
+        if (snap) {
+            double r_min = 0, r_max = 0;
+            histo_range(snap, &r_min, &r_max);
+            uint32_t nb = histo_nbins(snap);
+            const char *sc = (st.scale_mode == SCALE_LOG_Y) ? "LOG-Y" :
+                             (st.scale_mode == SCALE_LOG_X) ? "LOG-X" :
+                             (st.scale_mode == SCALE_LOG_LOG) ? "LOG-LOG" : "LIN";
+            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s %s%s",
+                     r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
+                     st.show_kde ? "│ KDE " : "", st.show_fit ? "│ FIT " : "");
+        } else {
+            snprintf(subhdr, sizeof(subhdr), "Initializing...");
+        }
+        tui_render_row(&frame, subhdr, cols, true);
+
+        // Viewport rows budget: rows - 7 lines (Top, Stats, Div, Subhdr, Div, Footer, Bottom)
+        int viewport_rows = rows - 7;
+        if (viewport_rows < 3) viewport_rows = 3;
 
         if (st.modal == MODAL_HELP) {
-            render_help_modal(&frame, cols, rows);
+            render_help_viewport(&frame, cols, viewport_rows);
+        } else {
+            render_1d_bars_viewport(&frame, &st, snap, cols, viewport_rows);
         }
 
-        render_footer(&frame, &st, cols);
+        // Row rows - 2: Divider
+        render_divider(&frame, cols);
+
+        // Row rows - 1: Footer / Command
+        if (st.cmd_active) {
+            char cmd_line[300];
+            snprintf(cmd_line, sizeof(cmd_line), ":%s\033[7m \033[0m", st.cmd_buf);
+            tui_render_row(&frame, cmd_line, cols, true);
+        } else {
+            const char *hints = "[Space] Freeze  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [+/-] Zoom  [:] Cmd  [?] Help  [q]";
+            tui_render_row(&frame, hints, cols, true);
+        }
+
+        // Row rows: Bottom border (no trailing newline to avoid scrolling on final cell)
+        render_bottom_border(&frame, cols, false);
+        tui_frame_puts(&frame, "\033[J"); // Erase below in case window grew or shrank
+
         tui_frame_flush(&frame, stdout);
 
         if (!st.paused && snap) {
