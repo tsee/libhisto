@@ -18,18 +18,25 @@ When binning continuous data, choosing an inappropriate bin width $h$ or bin cou
 
 ### C99 API Usage
 ```c
+#include <stdio.h>
 #include <histo/histo.h>
 
-double samples[1000];
-/* populate samples */
+int main(void) {
+    double samples[] = { 1.2, 2.3, 2.5, 3.1, 4.8, 5.0, 5.2, 6.1 };
+    size_t n = sizeof(samples) / sizeof(samples[0]);
 
-/* Option A: One-liner automatic histogram creation and fill */
-histo_t *h = histo_create_auto(1000, samples, HISTO_BIN_RULE_AUTO, HISTO_FLAG_TRACK_SUMW2);
+    /* Option A: One-liner automatic histogram creation and fill */
+    histo_t *h = histo_create_auto(n, samples, HISTO_BIN_RULE_AUTO, HISTO_FLAG_TRACK_SUMW2);
+    printf("Auto-binned histogram created with %u bins\n", histo_nbins(h));
+    histo_destroy(h);
 
-/* Option B: Estimate parameters explicitly */
-uint32_t nbins = 0;
-double min_val = 0.0, max_val = 0.0;
-histo_estimate_bins_fd(1000, samples, &nbins, &min_val, &max_val);
+    /* Option B: Estimate parameters explicitly */
+    uint32_t nbins = 0;
+    double min_val = 0.0, max_val = 0.0;
+    histo_estimate_bins_fd(n, samples, &nbins, &min_val, &max_val);
+    printf("Freedman-Diaconis estimate: %u bins on [%.2f, %.2f]\n", nbins, min_val, max_val);
+    return 0;
+}
 ```
 
 ### Python API Usage

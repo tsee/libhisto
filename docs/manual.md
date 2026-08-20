@@ -1,24 +1,26 @@
-# libhisto User Manual & Progressive Architecture Guide {#mainpage}
+# libhisto User Manual & Architecture Guide {#mainpage}
 
-Welcome to **libhisto**! This manual follows an incremental learning architecture (**Levels 0 through 5**). Whether you want a 30-second CLI pipeline, a 10-line C99 integration, or deep control over SIMD vector acceleration and DDSketch streaming math, you will find the relevant information below.
+Welcome to **libhisto**! This manual is organized as a progressive-disclosure guide across **Levels 0 through 6**. Whether you want a 30-second CLI pipeline, a 3-line Python/Perl script, a lightweight C99 integration, or full control over SIMD vector acceleration and DDSketch streaming math, you will find clear, copy-pasteable examples below.
 
 ---
 
-## 1. Feature Map & Progressive Learning Path
+## 1. Feature Map & Learning Path
 
 ```text
  ┌────────────────────────────────────────────────────────────────────────┐
- │ Level 0: 30-Second Quickstart (1D Ingestion & Terminal Plots)           │
+ │ Level 0: 30-Second Quickstart (CLI, Python, Perl, C99)                 │
  ├────────────────────────────────────────────────────────────────────────┤
- │ Level 1: Summary Statistics & Moment Analysis (Welford, Quantiles, IQR) │
+ │ Level 1: Summary Statistics, Auto-Binning & Plotting                   │
  ├────────────────────────────────────────────────────────────────────────┤
- │ Level 2: Parametric Curve Fitting & Regression (Gaussian, LM, Chi2/MLE)│
+ │ Level 2: Kernel Density Estimation (KDE) & Smooth Curves               │
  ├────────────────────────────────────────────────────────────────────────┤
- │ Level 3: 2D Histograms & Heatmaps (Bivariate Welford, Projections)     │
+ │ Level 3: Parametric Curve Fitting & Regression (Gaussian, LM, Chi2/MLE)│
  ├────────────────────────────────────────────────────────────────────────┤
- │ Level 4: Streaming Dynamic Quantile Sketches (DDSketch, Log-Bins)      │
+ │ Level 4: 2D Histograms, Heatmaps & Marginal Projections                │
  ├────────────────────────────────────────────────────────────────────────┤
- │ Level 5: High Performance, SIMD Vectorization & System Architecture    │
+ │ Level 5: Streaming Dynamic Quantile Sketches (DDSketch, Log-Bins)      │
+ ├────────────────────────────────────────────────────────────────────────┤
+ │ Level 6: High Performance, SIMD Vectorization & System Architecture    │
  └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -26,46 +28,65 @@ Welcome to **libhisto**! This manual follows an incremental learning architectur
 
 ## Level 0: 30-Second Quickstart
 
-`libhisto` is a fast, zero-dependency ISO C99 library and Unix CLI toolkit for distribution tracking, statistical estimation, curve fitting, and terminal visualization.
+`libhisto` is a high-performance, zero-dependency ISO C99 library and Unix CLI toolkit for distribution tracking, statistical estimation, curve fitting, and terminal visualization.
 
-### 0.1 Instant CLI Pipeline
+### 0.1 CLI Pipeline
 
-Pipe any numeric stream into `histo fill` and visualize it immediately with `histo plot`:
+Pipe any numeric stream directly into `histo plot` (or `histo fill` + `histo plot`):
 
 ```bash
-# Generate 1,000 Gaussian random numbers and plot in terminal
+# Generate 1,000 Gaussian numbers and render an instant terminal histogram
 python3 -c "import random; print('\n'.join(str(random.gauss(50, 10)) for _ in range(1000)))" \
-  | histo fill --bins 20 --min 10 --max 90 \
   | histo plot
 ```
 
 **Terminal Output:**
 ```text
-── Histogram (20 bins, range: [10, 90), entries: 998, weight: 998.0) ──
- [10.00, 14.00)     0 │ 
- [14.00, 18.00)     1 │ ▏
- [18.00, 22.00)     4 │ ▌
- [22.00, 26.00)    10 │ █▎
- [26.00, 30.00)    22 │ ██▉
- [30.00, 34.00)    48 │ ██████▍
- [34.00, 38.00)    74 │ █████████▉
- [38.00, 42.00)   115 │ ███████████████▍
- [42.00, 46.00)   162 │ █████████████████████▋
- [46.00, 50.00)   190 │ █████████████████████████▍
- [50.00, 54.00)   158 │ █████████████████████▏
- [54.00, 58.00)   102 │ █████████████▋
- [58.00, 62.00)    61 │ ████████▏
- [62.00, 66.00)    31 │ ████▏
- [66.00, 70.00)    13 │ █▋
- [70.00, 74.00)     5 │ ▋
- [74.00, 78.00)     2 │ ▎
- [78.00, 82.00)     0 │ 
- [82.00, 86.00)     0 │ 
- [86.00, 90.00)     0 │ 
- ─────────────────────┴────────────────────────────────────────────────
+── Histogram (20 bins, range: [18.2, 81.6), entries: 1000, weight: 1000.0) ──
+ [18.20, 21.37)     2 │ ▎
+ [21.37, 24.54)     4 │ ▌
+ [24.54, 27.71)     9 │ █▏
+ [27.71, 30.88)    21 │ ██▋
+ [30.88, 34.05)    45 │ █████▋
+ [34.05, 37.22)    78 │ █████████▋
+ [37.22, 40.39)   118 │ ██████████████▋
+ [40.39, 43.56)   156 │ ███████████████████▍
+ [43.56, 46.73)   188 │ ███████████████████████▎
+ [46.73, 49.90)   160 │ ████████████████████
+ [49.90, 53.07)   105 │ █████████████▏
+ [53.07, 56.24)    59 │ ███████▍
+ [56.24, 59.41)    32 │ ████
+ [59.41, 62.58)    15 │ █▉
+ [62.58, 65.75)     6 │ ▋
+ [65.75, 68.92)     2 │ ▎
+ ─────────────────────┴──────────────────────────────────────────────────────
 ```
 
-### 0.2 Minimal C99 Program
+### 0.2 Python 3 API
+
+```python
+import histo
+import random
+
+# Ingest data with automatic Freedman-Diaconis bin sizing and plot
+data = [random.gauss(50, 10) for _ in range(1000)]
+h = histo.Histogram.auto(data)
+print(f"Mean: {h.mean():.2f} ± {h.std_dev():.2f} | Median: {h.median():.2f}")
+h.plot()
+```
+
+### 0.3 Perl API
+
+```perl
+use Math::Histo;
+
+my @data = map { 50 + 10 * rand() } 1..1000;
+my $h = Math::Histo->create_auto(\@data);
+printf "Mean: %.2f | StdDev: %.2f | Median: %.2f\n", $h->mean, $h->std_dev, $h->median;
+$h->plot();
+```
+
+### 0.4 Minimal C99 Program
 
 ```c
 #include <stdio.h>
@@ -73,18 +94,18 @@ python3 -c "import random; print('\n'.join(str(random.gauss(50, 10)) for _ in ra
 
 int main(void) {
     // 1. Create a uniform histogram: 10 bins over [0.0, 100.0]
-    histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_NONE);
+    histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
     if (!h) return 1;
 
-    // 2. Ingest samples (unit weight and explicit weight)
+    // 2. Ingest samples
     histo_fill(h, 25.4);
-    histo_fill_w(h, 50.0, 2.5);
+    histo_fill_w(h, 50.0, 2.5); // Weighted sample
 
     // 3. Inspect summary
     printf("Total entries: %lu | Total weight: %.2f\n",
            (unsigned long)histo_num_entries(h), histo_total_weight(h));
 
-    // 4. Clean teardown (0 memory leaks)
+    // 4. Clean teardown
     histo_destroy(h);
     return 0;
 }
@@ -92,22 +113,21 @@ int main(void) {
 
 ---
 
-## Level 1: Summary Statistics & Moment Analysis
+## Level 1: Summary Statistics, Auto-Binning & Plotting
 
-Enable exact online Welford statistics (`HISTO_FLAG_EXACT_MOMENTS`) and per-bin uncertainty tracking (`HISTO_FLAG_TRACK_SUMW2`) to compute higher moments and robust dispersion metrics without discretisation error.
+`libhisto` tracks exact online Welford statistics (`HISTO_FLAG_EXACT_MOMENTS`) and per-bin uncertainty (`HISTO_FLAG_TRACK_SUMW2`) without bin discretisation error.
 
 ### 1.1 CLI Inspection (`histo stats` & Sparklines)
 
 ```bash
-# Ingest CSV/TSV data and output comprehensive statistical report
+# Ingest CSV/TSV data and output comprehensive statistical summary
 python3 -c "import random; print('\n'.join(f'{random.gauss(100, 10):.2f}\t{random.uniform(0.5, 2.0):.2f}' for _ in range(1000)))" | \
     histo fill -w --auto-range | histo stats
 
-# Compact single-line sparkline for dashboards or log summaries
+# Compact single-line sparkline for logs, scripts, and monitoring dashboards
 python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(10000)))" | \
     histo fill --bins=20 --auto-range | histo plot -S
 ```
-
 
 **Sparkline Output:**
 ```text
@@ -121,35 +141,21 @@ python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15)
 #include <histo/histo.h>
 
 int main(void) {
-    // Enable sum_w2 error tracking and exact online Welford moments
     histo_t *h = histo_create_uniform(100, 0.0, 100.0,
                                       HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
 
-    // Ingest data stream
     for (int i = 1; i <= 100; ++i) {
-        histo_fill_w(h, (double)i, 1.0);
+        histo_fill(h, (double)i);
     }
 
-    // Query standard moments
-    double mean = 0.0, std_dev = 0.0, skewness = 0.0, kurtosis = 0.0;
+    double mean = 0.0, std_dev = 0.0, median = 0.0, iqr = 0.0;
     histo_mean(h, &mean);
     histo_std_dev(h, &std_dev);
-    histo_skewness(h, &skewness);
-    histo_excess_kurtosis(h, &kurtosis);
-
-    // Query robust non-parametric metrics
-    double median = 0.0, iqr = 0.0, mad = 0.0;
     histo_median(h, &median);
-    histo_iqr(h, &iqr); // Interquartile range (Q75 - Q25)
-    histo_mad(h, &mad); // Median Absolute Deviation: median(|x - median|)
+    histo_iqr(h, &iqr);
 
-    // Query continuous peak mode & FWHM
-    double peak_coord = 0.0, fwhm = 0.0;
-    histo_mode_continuous(h, &peak_coord); // 3-point parabolic peak interpolation
-    histo_fwhm(h, &fwhm);                 // Full Width at Half Maximum
-
-    printf("Mean: %.2f | StdDev: %.2f | Median: %.2f | IQR: %.2f | FWHM: %.2f\n",
-           mean, std_dev, median, iqr, fwhm);
+    printf("Mean: %.2f | StdDev: %.2f | Median: %.2f | IQR: %.2f\n",
+           mean, std_dev, median, iqr);
 
     histo_destroy(h);
     return 0;
@@ -158,14 +164,61 @@ int main(void) {
 
 ---
 
-## Level 2: Parametric Curve Fitting & Regression
+## Level 2: Kernel Density Estimation (KDE) & Smooth Curves
 
-`libhisto` includes a non-linear least squares engine in `histo/fit.h` powered by the Levenberg-Marquardt algorithm and Direct Linear Least Squares for polynomials.
+Non-parametric continuous density estimation with standard kernels (Gaussian, Epanechnikov, Boxcar, Triangular, Biweight, Cosine) and automated bandwidth selection (Silverman's rule of thumb, Scott's rule).
 
-### 2.1 CLI Curve Fitting (`histo fit`)
+### 2.1 C99 KDE Recipe
 
-Fit a Gaussian peak with standard errors, 95% confidence intervals, \f$\chi^2/\mathrm{NDF}\f$, and visual ASCII curve overlay:
+```c
+#include <stdio.h>
+#include <histo/kde.h>
 
+int main(void) {
+    double samples[] = { 1.2, 2.3, 2.5, 3.1, 4.8, 5.0, 5.2, 6.1 };
+    size_t n = sizeof(samples) / sizeof(samples[0]);
+
+    // Construct model with default Gaussian kernel & Silverman bandwidth
+    histo_kde_t *kde = histo_kde_create(n, samples, NULL, NULL);
+
+    double pdf = histo_kde_eval(kde, 3.0);
+    double cdf = histo_kde_cdf(kde, 3.0);
+    double p50 = 0.0;
+    histo_kde_quantile(kde, 0.50, &p50);
+
+    printf("KDE Bandwidth: %.3f | PDF(3.0): %.4f | CDF(3.0): %.4f | Median: %.3f\n",
+           histo_kde_get_bandwidth(kde), pdf, cdf, p50);
+
+    histo_kde_destroy(kde);
+    return 0;
+}
+```
+
+### 2.2 Python & Perl KDE
+
+```python
+from histo import KDE
+
+kde = KDE(samples, kernel="gaussian", bw_method="silverman")
+print(f"Density at 3.0: {kde.eval(3.0):.4f} | Median: {kde.quantile(0.50):.3f}")
+synthetic_data = kde.sample(100, seed=42)
+```
+
+```perl
+use Math::Histo::KDE;
+
+my $kde = Math::Histo::KDE->new(samples => \@samples, kernel => 'gaussian', bw_method => 'silverman');
+my $pdf = $kde->eval(3.0);
+my $median = $kde->quantile(0.50);
+```
+
+---
+
+## Level 3: Parametric Curve Fitting & Regression
+
+`libhisto` includes a non-linear least squares engine in `histo/fit.h` powered by the Levenberg-Marquardt optimizer with parameter box constraints and Poisson Maximum Likelihood Estimation (MLE).
+
+### 3.1 CLI Curve Fitting (`histo fit`)
 
 ```bash
 python3 -c "import random; print('\n'.join(str(random.gauss(50.0, 5.0)) for _ in range(10000)))" \
@@ -173,42 +226,7 @@ python3 -c "import random; print('\n'.join(str(random.gauss(50.0, 5.0)) for _ in
   | histo fit -p
 ```
 
-**Terminal Output:**
-```text
-  Data Overlay Plot [ █ Data Bins, * Fitted Curve ]:
-    962.0 ┤                                 ***                                 
-    881.8 ┤                                *███**                               
-    801.7 ┤                               *██████*                              
-    721.5 ┤                              *████████*                             
-    641.3 ┤                              █████████                              
-    561.2 ┤                             *██████████*                            
-    481.0 ┤                            *████████████*                           
-    400.8 ┤                           *██████████████*                          
-    320.7 ┤                          *████████████████*                         
-    240.5 ┤                         *██████████████████*                        
-    160.3 ┤                        *████████████████████*                       
-     80.2 ┤                     ***██████████████████████***                    
-      0.0 ┤ ********************████████████████████████████********************
-          ┼────────────────────────────────────────────────────────────────────
-          20                                                                 80
-
-================================================================================
- MODEL: Gaussian Peak [ f(x) = A · exp(-(x - μ)² / (2σ²)) ]
-================================================================================
-  Param  Name                   Estimate      Std. Error       95% Conf. Interval
-  [0]    Amplitude (A)            955.3531     ±   11.6695        [   932.4813,   978.2249 ]
-  [1]    Mean (μ)                 49.9559     ±    0.0502        [    49.8575,    50.0543 ]
-  [2]    Std Dev (σ)               5.0019     ±    0.0352        [     4.9330,     5.0708 ]
---------------------------------------------------------------------------------
- GOODNESS OF FIT:
-  χ² / NDF       = 21.37 / 47 (0.455)
-  p-value        = 0.9995 (Consistent with model)
-  Log-Likelihood = -126.80  |  AIC = 259.60  |  BIC = 265.33
-  Convergence    = Converged (3 iterations, Relative reduction in loss below tolerance (ftol))
-================================================================================
-```
-
-### 2.2 C99 Curve Fitting Recipe
+### 3.2 C99 Curve Fitting Recipe
 
 ```c
 #include <stdio.h>
@@ -217,22 +235,20 @@ python3 -c "import random; print('\n'.join(str(random.gauss(50.0, 5.0)) for _ in
 
 int main(void) {
     histo_t *h = histo_create_uniform(50, 20.0, 80.0, HISTO_FLAG_TRACK_SUMW2);
-    // (Populate histogram with experimental or simulated data...)
+    // (Fill h with data...)
 
-    // 1. Initialize options with defaults
     histo_fit_options_t opts;
     histo_fit_options_init(&opts);
-    opts.loss_type = HISTO_FIT_LOSS_CHI2; // Or HISTO_FIT_LOSS_POISSON_MLE for sparse counts
+    opts.loss_type = HISTO_FIT_LOSS_CHI2;
 
-    // 2. Perform Gaussian fit (initial parameters estimated automatically)
     histo_fit_result_t *res = NULL;
     histo_status_t st = histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN, NULL, &opts, &res);
 
     if (st == HISTO_OK && res->converged) {
         printf("Fit Converged in %u iterations!\n", res->iterations);
-        printf("Amplitude: %.3f +/- %.3f\n", res->params[0], res->param_errors[0]);
-        printf("Mean (mu): %.3f +/- %.3f\n", res->params[1], res->param_errors[1]);
-        printf("Sigma:     %.3f +/- %.3f\n", res->params[2], res->param_errors[2]);
+        printf("Amplitude: %.3f ± %.3f\n", res->params[0], res->param_errors[0]);
+        printf("Mean (μ):  %.3f ± %.3f\n", res->params[1], res->param_errors[1]);
+        printf("Sigma (σ): %.3f ± %.3f\n", res->params[2], res->param_errors[2]);
         printf("Reduced Chi2: %.3f (p-value: %.4f)\n", res->reduced_chi2, res->p_value);
     }
 
@@ -244,42 +260,38 @@ int main(void) {
 
 ---
 
-## Level 3: 2-Dimensional Histograms & Spatial Heatmaps
+## Level 4: 2-Dimensional Histograms & Spatial Heatmaps
 
-Track bivariate distributions (X, Y) across all 4 binning combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform) with online running covariance \f$\mathrm{Cov}(X, Y)\f$, marginal projections, and terminal heatmaps.
+Track bivariate distributions (X, Y) with online running covariance Cov(X, Y), Pearson correlation rho_xy, 9-region partitioned guard matrices, and marginal projections.
 
-
-### 3.1 CLI 2D Pipeline with Delimiter Auto-Detection
+### 4.1 CLI 2D Pipeline
 
 ```bash
-# Ingest CSV/TSV bivariate data and render 24-bit TrueColor terminal heatmap
+# Ingest bivariate coordinates and render 24-bit TrueColor terminal heatmap
 python3 -c "import random; print('\n'.join(f'{random.gauss(-1.5, 1.0)},{random.gauss(-1.5, 1.0)}' if random.random() < 0.55 else f'{random.gauss(2.0, 0.8)},{random.gauss(2.0, 0.8)}' for _ in range(25000)))" \
   | histo fill --2d --xbins 30 --ybins 18 \
   | histo plot
 ```
 
-### 3.2 C99 2D Histogram Recipe
+### 4.2 C99 2D Histogram Recipe
 
 ```c
 #include <stdio.h>
 #include <histo/histo2d.h>
 
 int main(void) {
-    // 1. Create a 50x50 2D histogram over [-5, 5] x [-5, 5]
     histo2d_t *h2d = histo2d_create_uniform(50, -5.0, 5.0, 50, -5.0, 5.0,
                                             HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
 
-    // 2. Ingest bivariate samples
     histo2d_fill(h2d, 1.2, 2.4);
-    histo2d_fill_w(h2d, -0.5, 0.5, 3.0); // Weighted coordinate pair
+    histo2d_fill_w(h2d, -0.5, 0.5, 3.0);
 
-    // 3. Compute bivariate statistics & Pearson correlation coefficient
     histo2d_stats_t stats;
     histo2d_get_stats(h2d, &stats);
     printf("2D Entries: %lu | Cov(X,Y): %.4f | Pearson Rho: %.4f\n",
            (unsigned long)stats.n_entries, stats.covariance, stats.correlation);
 
-    // 4. Extract 1D marginal projection along X
+    // Extract 1D marginal projection along X
     histo_t *proj_x = NULL;
     histo2d_project_x(h2d, &proj_x);
     printf("Projected X total weight: %.2f\n", histo_total_weight(proj_x));
@@ -292,34 +304,31 @@ int main(void) {
 
 ---
 
-## Level 4: Streaming Dynamic Quantile Sketches (DDSketch)
+## Level 5: Streaming Dynamic Quantile Sketches (DDSketch)
 
-For streaming telemetry, response latencies, and distributed workloads spanning unbounded numeric ranges, DDSketch (`include/histo/sketch.h`) guarantees a relative error bound \f$\alpha\f$ (e.g. \f$\pm 1\%\f$) using dynamic logarithmic binning.
+For streaming telemetry spanning unbounded numeric ranges, DDSketch (`include/histo/sketch.h`) guarantees a relative error bound alpha (e.g. +/- 1%) using dynamic logarithmic binning.
 
-
-### 4.1 C99 DDSketch Recipe
+### 5.1 C99 DDSketch Recipe
 
 ```c
 #include <stdio.h>
 #include <histo/sketch.h>
 
 int main(void) {
-    // 1. Create DDSketch: alpha = 0.01 (+/- 1% relative error), max 1024 bins
+    // Relative error guarantee alpha = 0.01 (+/- 1%), max 1024 bins
     histo_sketch_t *sketch = histo_sketch_create(0.01, 1024);
     if (!sketch) return 1;
 
-    // 2. Ingest unbounded streaming latencies (microseconds to seconds)
     histo_sketch_insert(sketch, 0.045);
     histo_sketch_insert(sketch, 1.250);
     histo_sketch_insert_w(sketch, 45.100, 3.0);
 
-    // 3. Query percentiles
     double p50 = 0.0, p90 = 0.0, p99 = 0.0;
     histo_sketch_quantile(sketch, 0.50, &p50);
     histo_sketch_quantile(sketch, 0.90, &p90);
     histo_sketch_quantile(sketch, 0.99, &p99);
 
-    printf("Latency Percentiles -> P50: %.3f | P90: %.3f | P99: %.3f\n", p50, p90, p99);
+    printf("Quantiles -> P50: %.3f | P90: %.3f | P99: %.3f\n", p50, p90, p99);
 
     histo_sketch_destroy(sketch);
     return 0;
@@ -328,14 +337,13 @@ int main(void) {
 
 ---
 
-## Level 5: High Performance, Vectorization & Systems Engineering
+## Level 6: High Performance, Vectorization & Systems Engineering
 
-### 5.1 SIMD Vector Acceleration Architecture
+### 6.1 SIMD Vector Acceleration
 
-`histo_fill_n` evaluates batch coordinate arrays using vectorized hardware pipelines:
-- **Runtime CPU Detection**: On x86_64 architectures, CPU features dynamically select AVX-512 (8-wide `double` vectors) or AVX2/FMA (4-wide `double` vectors). On ARM64, NEON vector kernels accelerate batch operations.
-- **Branchless Masking**: Out-of-bounds (< min, >= max) and non-finite (NaN / Inf) samples are filtered with vector comparison masks.
-
+`histo_fill_n` and `histo2d_fill_n` evaluate batch coordinate arrays using vectorized hardware pipelines:
+- **Runtime CPU Detection**: Dynamically selects AVX-512 (8-wide `double` vectors) or AVX2/FMA (4-wide `double` vectors) on x86_64, or NEON vector kernels on ARM64.
+- **Branchless Masking**: Out-of-bounds (< min, >= max) and non-finite (`NaN` / `Inf`) samples are filtered with vector comparison masks.
 
 ```c
 #define N_SAMPLES 1000000
@@ -344,7 +352,7 @@ double values[N_SAMPLES];
 histo_fill_n(h, N_SAMPLES, values, NULL);
 ```
 
-### 5.2 Algorithmic Complexity Reference Table
+### 6.2 Algorithmic Complexity Reference Table
 
 | Function | Time Complexity | Auxiliary Space | Description |
 | :--- | :--- | :--- | :--- |
@@ -357,15 +365,16 @@ histo_fill_n(h, N_SAMPLES, values, NULL);
 | `histo_fill_n` (SIMD) | O(K / V) | O(1) | Vectorized batch ingest of K samples (V=4 or 8) |
 | `histo_mean` / `histo_variance` | O(1) | O(1) | Direct query from online Welford accumulators |
 | `histo_quantile` / `histo_median` | O(N) | O(1) | Single-pass cumulative inverse CDF scan |
+| `histo_kde_eval` | O(n) | O(1) | Continuous density sum across n points |
+| `histo_kde_quantile` | O(n * iter) | O(1) | Hybrid bisection / Newton-Raphson CDF root solver |
 | `histo_fit_model` (LM) | O(I * (N * P + P^3)) | O(N * P + P^2) | Levenberg-Marquardt non-linear regression |
 | `histo2d_fill` (Uniform) | O(1) | O(1) | 2D coordinate lookup & Welford comoments |
 | `histo2d_project_x/y` | O(Nx * Ny) | O(Nx) or O(Ny) | Integrates across orthogonal axis |
 | `histo_sketch_insert` | O(1) | O(1) | DDSketch dynamic logarithmic mapping |
 
-
 ---
 
-## 6. Building & Installation
+## 7. Building & Installation
 
 ### CMake Integration (`FetchContent`)
 ```cmake
