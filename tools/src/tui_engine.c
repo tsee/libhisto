@@ -69,6 +69,7 @@ static void *ingest_worker_thread(void *arg) {
     char line[4096];
     const size_t batch_max = 64;
     double batch_x[64];
+    double batch_y[64];
     double batch_w[64];
     size_t batch_len = 0;
 
@@ -80,7 +81,11 @@ static void *ingest_worker_thread(void *arg) {
         if (!fgets(line, sizeof(line), eng->in_stream)) {
             histo_mutex_lock(&eng->mutex);
             if (batch_len > 0) {
-                if (eng->live_1d) {
+                if (eng->is_2d && eng->live_2d) {
+                    for (size_t i = 0; i < batch_len; ++i) {
+                        histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
+                    }
+                } else if (eng->live_1d) {
                     if (eng->has_weights) {
                         histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
                     } else {
@@ -105,10 +110,22 @@ static void *ingest_worker_thread(void *arg) {
         if (*p == '\0' || *p == '#') continue;
 
         char *endp = NULL;
-        double val = strtod(p, &endp);
+        double val_x = strtod(p, &endp);
         if (endp == p) continue;
 
+        double val_y = 0.0;
         double weight = 1.0;
+
+        if (eng->is_2d) {
+            /* 2D mode: parse second column as Y */
+            while (*endp && (isspace((unsigned char)*endp) || *endp == ',' || *endp == '\t' || *endp == ';')) endp++;
+            if (*endp == '\0') continue; /* need at least x y */
+            char *y_end = NULL;
+            val_y = strtod(endp, &y_end);
+            if (y_end == endp) continue;
+            endp = y_end;
+        }
+
         if (eng->has_weights && *endp != '\0') {
             while (*endp && (isspace((unsigned char)*endp) || *endp == ',' || *endp == '\t' || *endp == ';')) endp++;
             if (*endp != '\0') {
@@ -118,14 +135,19 @@ static void *ingest_worker_thread(void *arg) {
             }
         }
 
-        batch_x[batch_len] = val;
+        batch_x[batch_len] = val_x;
+        batch_y[batch_len] = val_y;
         batch_w[batch_len] = weight;
         batch_len++;
 
         double now = get_time_now_sec();
         if (batch_len >= batch_max || (batch_len > 0 && now - last_flush_time >= 0.05)) {
             histo_mutex_lock(&eng->mutex);
-            if (eng->live_1d) {
+            if (eng->is_2d && eng->live_2d) {
+                for (size_t i = 0; i < batch_len; ++i) {
+                    histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
+                }
+            } else if (eng->live_1d) {
                 if (eng->has_weights) {
                     histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
                 } else {
@@ -154,7 +176,11 @@ static void *ingest_worker_thread(void *arg) {
 
     if (batch_len > 0) {
         histo_mutex_lock(&eng->mutex);
-        if (eng->live_1d) {
+        if (eng->is_2d && eng->live_2d) {
+            for (size_t i = 0; i < batch_len; ++i) {
+                histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
+            }
+        } else if (eng->live_1d) {
             if (eng->has_weights) {
                 histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
             } else {

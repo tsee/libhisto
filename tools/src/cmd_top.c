@@ -86,6 +86,144 @@ static void render_bottom_border(tui_frame_t *f, int width, bool newline) {
     if (newline) tui_frame_puts(f, "\r\n");
 }
 
+static void get_viridis_bg(double fraction, bool monochrome, char *out_ansi, size_t max_len) {
+    if (monochrome) {
+        static const char density[] = " .:-=+*#%@";
+        int idx = (int)(fraction * 9.0);
+        if (idx < 0) idx = 0;
+        if (idx > 9) idx = 9;
+        snprintf(out_ansi, max_len, "%c", density[idx]);
+        return;
+    }
+    if (fraction < 0.0) fraction = 0.0;
+    if (fraction > 1.0) fraction = 1.0;
+    int r = 0, g = 0, b = 0;
+    if (fraction < 0.25) {
+        double t = fraction / 0.25;
+        r = (int)((1.0 - t) * 68 + t * 59);
+        g = (int)((1.0 - t) * 1 + t * 82);
+        b = (int)((1.0 - t) * 84 + t * 139);
+    } else if (fraction < 0.5) {
+        double t = (fraction - 0.25) / 0.25;
+        r = (int)((1.0 - t) * 59 + t * 33);
+        g = (int)((1.0 - t) * 82 + t * 145);
+        b = (int)((1.0 - t) * 139 + t * 140);
+    } else if (fraction < 0.75) {
+        double t = (fraction - 0.5) / 0.25;
+        r = (int)((1.0 - t) * 33 + t * 94);
+        g = (int)((1.0 - t) * 145 + t * 201);
+        b = (int)((1.0 - t) * 140 + t * 98);
+    } else {
+        double t = (fraction - 0.75) / 0.25;
+        r = (int)((1.0 - t) * 94 + t * 253);
+        g = (int)((1.0 - t) * 201 + t * 231);
+        b = (int)((1.0 - t) * 98 + t * 37);
+    }
+    snprintf(out_ansi, max_len, "\033[48;2;%d;%d;%dm", r, g, b);
+}
+
+static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, const histo2d_t *h, int width, int max_rows) {
+    if (!h || max_rows <= 0) {
+        for (int r = 0; r < max_rows; ++r) tui_render_row(f, "", width, true);
+        return;
+    }
+
+    uint32_t nx = histo2d_nbins_x(h);
+    uint32_t ny = histo2d_nbins_y(h);
+    if (nx == 0 || ny == 0) {
+        for (int r = 0; r < max_rows; ++r) tui_render_row(f, "", width, true);
+        return;
+    }
+
+    histo2d_axis_t ax, ay;
+    histo2d_axis_x(h, &ax);
+    histo2d_axis_y(h, &ay);
+
+    double max_content = 0.0;
+    for (uint32_t ix = 0; ix < nx; ++ix) {
+        for (uint32_t iy = 0; iy < ny; ++iy) {
+            double c = 0.0;
+            histo2d_bin_content(h, ix, iy, &c);
+            if (c > max_content) max_content = c;
+        }
+    }
+    if (max_content <= 0.0) max_content = 1.0;
+
+    /* Y-axis label width: "  yval │ " = ~10 chars */
+    int label_cols = 10;
+    /* Available width for heatmap cells: 2 chars per X bin */
+    int avail_cols = width - label_cols - 4;
+    uint32_t x_step = 1;
+    if ((int)(nx * 2) > avail_cols && avail_cols > 0) {
+        x_step = (nx * 2 + (uint32_t)avail_cols - 1) / (uint32_t)avail_cols;
+    }
+
+    /* Y rows: map ny bins to max_rows, stepping if needed */
+    /* Reserve 2 rows for X-axis line and labels */
+    int heatmap_rows = max_rows - 2;
+    if (heatmap_rows < 1) heatmap_rows = 1;
+    uint32_t y_step = (ny > (uint32_t)heatmap_rows) ? (ny + (uint32_t)heatmap_rows - 1) / (uint32_t)heatmap_rows : 1;
+
+    int rows_drawn = 0;
+
+    /* Render Y rows from top (ny-1) to bottom (0) */
+    for (int iy = (int)ny - 1; iy >= 0 && rows_drawn < heatmap_rows; iy -= (int)y_step) {
+        char row_buf[4096];
+        double ymin_b, ymax_b, dummy;
+        histo2d_bin_bounds(h, 0, (uint32_t)iy, &dummy, &dummy, &ymin_b, &ymax_b);
+        double y_center = 0.5 * (ymin_b + ymax_b);
+
+        int pos = snprintf(row_buf, sizeof(row_buf), "%7.1f │ ", y_center);
+
+        for (uint32_t ix = 0; ix < nx && pos + 32 < (int)sizeof(row_buf); ix += x_step) {
+            double c = 0.0;
+            histo2d_bin_content(h, ix, (uint32_t)iy, &c);
+            double frac = (c > 0.0) ? (c / max_content) : 0.0;
+
+            if (st->monochrome) {
+                static const char density[] = " .:-=+*#%@";
+                int idx = (int)(frac * 9.0);
+                if (idx < 0) idx = 0;
+                if (idx > 9) idx = 9;
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%c ", density[idx]);
+            } else {
+                char bg[32];
+                get_viridis_bg(frac, false, bg, sizeof(bg));
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s  \033[0m", bg);
+            }
+        }
+
+        tui_render_row(f, row_buf, width, true);
+        rows_drawn++;
+    }
+
+    /* X-axis border row */
+    if (rows_drawn < max_rows) {
+        char axis_buf[4096];
+        int pos = snprintf(axis_buf, sizeof(axis_buf), "        └");
+        uint32_t x_cells = (nx + x_step - 1) / x_step;
+        for (uint32_t ix = 0; ix < x_cells && pos + 8 < (int)sizeof(axis_buf); ++ix) {
+            pos += snprintf(axis_buf + pos, sizeof(axis_buf) - pos, "──");
+        }
+        pos += snprintf(axis_buf + pos, sizeof(axis_buf) - pos, "─┘");
+        tui_render_row(f, axis_buf, width, true);
+        rows_drawn++;
+    }
+
+    /* X-axis labels row */
+    if (rows_drawn < max_rows) {
+        char label_buf[256];
+        snprintf(label_buf, sizeof(label_buf), "         %-7.1f                              %7.1f", ax.min, ax.max);
+        tui_render_row(f, label_buf, width, true);
+        rows_drawn++;
+    }
+
+    while (rows_drawn < max_rows) {
+        tui_render_row(f, "", width, true);
+        rows_drawn++;
+    }
+}
+
 static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const histo_t *h, int width, int max_rows) {
     if (!h || max_rows <= 0) {
         for (int r = 0; r < max_rows; ++r) tui_render_row(f, "", width, true);
@@ -537,15 +675,26 @@ int cmd_top_main(int argc, char **argv) {
         int cols = term_cols - 1;
         int rows = term_rows;
 
-        histo_t *snap = st.paused ? st.frozen_snapshot : tui_engine_get_snapshot_1d(&eng);
+        histo_t *snap = NULL;
+        histo2d_t *snap_2d = NULL;
+        uint64_t n_entries = 0;
+        double tot_w = 0.0;
+
+        if (eng.is_2d) {
+            snap_2d = tui_engine_get_snapshot_2d(&eng);
+            n_entries = snap_2d ? histo2d_num_entries(snap_2d) : 0;
+            tot_w = snap_2d ? histo2d_total_weight(snap_2d) : 0.0;
+        } else {
+            snap = st.paused ? st.frozen_snapshot : tui_engine_get_snapshot_1d(&eng);
+            n_entries = snap ? histo_num_entries(snap) : 0;
+            tot_w = snap ? histo_total_weight(snap) : 0.0;
+        }
 
         tui_frame_clear(&frame);
         tui_frame_puts(&frame, "\033[H"); // Cursor home
 
         // Row 1: Top border with badge
-        char badge[64] = "";
-        uint64_t n_entries = snap ? histo_num_entries(snap) : 0;
-        double tot_w = snap ? histo_total_weight(snap) : 0.0;
+        char badge[96] = "";
         if (st.paused) {
             if (eng.has_weights) {
                 snprintf(badge, sizeof(badge), "[PAUSED | N=%lu | W=%.2f]", (unsigned long)n_entries, tot_w);
@@ -571,22 +720,37 @@ int cmd_top_main(int argc, char **argv) {
                 snprintf(badge, sizeof(badge), "[LIVE: %s | N=%lu]", rate_str, (unsigned long)n_entries);
             }
         }
-        render_top_border(&frame, "libhisto top", badge, cols);
+        render_top_border(&frame, eng.is_2d ? "libhisto top (2D)" : "libhisto top", badge, cols);
 
         // Row 2: Stats summary
         char stats_buf[256];
-        if (snap && n_entries > 0) {
-            double mean = 0, sdev = 0, med = 0, iqr = 0, p95 = 0, p99 = 0;
-            histo_mean(snap, &mean);
-            histo_std_dev(snap, &sdev);
-            histo_median(snap, &med);
-            histo_iqr(snap, &iqr);
-            histo_quantile(snap, 0.95, &p95);
-            histo_quantile(snap, 0.99, &p99);
-            snprintf(stats_buf, sizeof(stats_buf), "Mean: %.2f ± %.2f │ Med: %.2f │ IQR: %.2f │ P95: %.2f │ P99: %.2f",
-                     mean, sdev, med, iqr, p95, p99);
+        if (eng.is_2d) {
+            if (snap_2d && n_entries > 0) {
+                histo2d_axis_t ax, ay;
+                histo2d_axis_x(snap_2d, &ax);
+                histo2d_axis_y(snap_2d, &ay);
+                snprintf(stats_buf, sizeof(stats_buf),
+                         "X: [%.2f, %.2f] %ux │ Y: [%.2f, %.2f] %uy │ Entries: %lu │ Weight: %.2f",
+                         ax.min, ax.max, histo2d_nbins_x(snap_2d),
+                         ay.min, ay.max, histo2d_nbins_y(snap_2d),
+                         (unsigned long)n_entries, tot_w);
+            } else {
+                snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming 'x y' samples...");
+            }
         } else {
-            snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming samples...");
+            if (snap && n_entries > 0) {
+                double mean = 0, sdev = 0, med = 0, iqr = 0, p95 = 0, p99 = 0;
+                histo_mean(snap, &mean);
+                histo_std_dev(snap, &sdev);
+                histo_median(snap, &med);
+                histo_iqr(snap, &iqr);
+                histo_quantile(snap, 0.95, &p95);
+                histo_quantile(snap, 0.99, &p99);
+                snprintf(stats_buf, sizeof(stats_buf), "Mean: %.2f ± %.2f │ Med: %.2f │ IQR: %.2f │ P95: %.2f │ P99: %.2f",
+                         mean, sdev, med, iqr, p95, p99);
+            } else {
+                snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming samples...");
+            }
         }
         tui_render_row(&frame, stats_buf, cols, true);
 
@@ -594,8 +758,20 @@ int cmd_top_main(int argc, char **argv) {
         render_divider(&frame, cols);
 
         // Row 4: Subheader
-        char subhdr[256];
-        if (snap) {
+        char subhdr[384];
+        if (eng.is_2d) {
+            if (snap_2d) {
+                histo2d_axis_t ax, ay;
+                histo2d_axis_x(snap_2d, &ax);
+                histo2d_axis_y(snap_2d, &ay);
+                snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Max bin: %.0f",
+                         histo2d_nbins_x(snap_2d), ax.min, ax.max,
+                         histo2d_nbins_y(snap_2d), ay.min, ay.max,
+                         tot_w);
+            } else {
+                snprintf(subhdr, sizeof(subhdr), "Initializing 2D...");
+            }
+        } else if (snap) {
             double r_min = 0, r_max = 0;
             histo_range(snap, &r_min, &r_max);
             uint32_t nb = histo_nbins(snap);
@@ -640,6 +816,8 @@ int cmd_top_main(int argc, char **argv) {
 
         if (st.modal == MODAL_HELP) {
             render_help_viewport(&frame, cols, viewport_rows);
+        } else if (eng.is_2d) {
+            render_2d_heatmap_viewport(&frame, &st, snap_2d, cols, viewport_rows);
         } else {
             render_1d_bars_viewport(&frame, &st, snap, cols, viewport_rows);
         }
@@ -665,6 +843,9 @@ int cmd_top_main(int argc, char **argv) {
 
         if (!st.paused && snap) {
             histo_destroy(snap);
+        }
+        if (snap_2d) {
+            histo2d_destroy(snap_2d);
         }
     }
 
