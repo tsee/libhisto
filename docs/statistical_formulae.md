@@ -133,7 +133,7 @@ A robust measure of variability:
 $$
 \text{MAD} = \text{median}(|x - \text{median}(x)|)
 $$
-Computed in $O(N \log N)$ time by extracting non-empty bin deviations $d_i = |x_{c, i} - Q(0.5)|$, sorting them, and finding the weighted 50th percentile.
+Computed in optimal $O(N)$ deterministic time and $O(1)$ auxiliary space via a two-pointer monotonic merge over pre-sorted histogram bins, expanding outward from the median bin without memory allocations or comparison sorting.
 
 ---
 

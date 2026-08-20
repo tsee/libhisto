@@ -1129,19 +1129,6 @@ histo_status_t histo_iqr(const histo_t *h, double *out_iqr) {
     return HISTO_OK;
 }
 
-typedef struct {
-    double dev;
-    double weight;
-} histo_dev_pair_t;
-
-static int histo_dev_pair_cmp(const void *a, const void *b) {
-    const histo_dev_pair_t *pa = (const histo_dev_pair_t *)a;
-    const histo_dev_pair_t *pb = (const histo_dev_pair_t *)b;
-    if (pa->dev < pb->dev) return -1;
-    if (pa->dev > pb->dev) return 1;
-    return 0;
-}
-
 histo_status_t histo_mad(const histo_t *h, double *out_mad) {
     if (!h || !out_mad) {
         return HISTO_ERR_INVALID_ARG;
@@ -1154,47 +1141,52 @@ histo_status_t histo_mad(const histo_t *h, double *out_mad) {
     histo_status_t st = histo_median(h, &med);
     if (st != HISTO_OK) return st;
 
-    histo_dev_pair_t stack_buf[256];
-    histo_dev_pair_t *pairs = stack_buf;
-    if (h->nbins > 256) {
-        pairs = (histo_dev_pair_t *)malloc((size_t)h->nbins * sizeof(histo_dev_pair_t));
-        if (!pairs) {
-            return HISTO_ERR_NOMEM;
+    /* Locate the bin index containing the median */
+    int64_t med_bin = 0;
+    if (histo_find_bin(h, med, &med_bin) != HISTO_OK || med_bin < 0) {
+        med_bin = 0;
+    } else if ((uint32_t)med_bin >= h->nbins) {
+        med_bin = (int64_t)h->nbins - 1;
+    }
+
+    /* Two-pointer merge over pre-sorted histogram bins:
+     * Deviations |center - med| are monotonically increasing to the left and right of med_bin.
+     * We merge both halves in O(N) time using O(1) auxiliary space without comparisons/sort. */
+    int64_t left = med_bin - 1;
+    int64_t right = med_bin;
+    double cum_weight = 0.0;
+    double target_weight = 0.5 * h->total_weight;
+    double result = 0.0;
+
+    while (left >= 0 || right < (int64_t)h->nbins) {
+        double d_left = INFINITY;
+        double d_right = INFINITY;
+
+        if (left >= 0) {
+            double c_left = 0.0;
+            histo_bin_center(h, (uint32_t)left, &c_left);
+            d_left = fabs(c_left - med);
         }
-    }
-
-    size_t count = 0;
-    for (uint32_t i = 0; i < h->nbins; ++i) {
-        double w = h->bins[i];
-        if (w <= 0.0) continue;
-        double center = 0.0;
-        histo_bin_center(h, i, &center);
-        pairs[count].dev = fabs(center - med);
-        pairs[count].weight = w;
-        count++;
-    }
-
-    if (count == 0) {
-        if (pairs != stack_buf) free(pairs);
-        return HISTO_ERR_EMPTY;
-    }
-
-    qsort(pairs, count, sizeof(histo_dev_pair_t), histo_dev_pair_cmp);
-
-    double target = 0.5 * h->total_weight;
-    double cum = 0.0;
-    double result = pairs[count - 1].dev;
-
-    for (size_t i = 0; i < count; ++i) {
-        cum += pairs[i].weight;
-        if (cum >= target) {
-            result = pairs[i].dev;
-            break;
+        if (right < (int64_t)h->nbins) {
+            double c_right = 0.0;
+            histo_bin_center(h, (uint32_t)right, &c_right);
+            d_right = fabs(c_right - med);
         }
-    }
 
-    if (pairs != stack_buf) {
-        free(pairs);
+        if (d_left <= d_right) {
+            cum_weight += h->bins[left];
+            result = d_left;
+            left--;
+        } else {
+            cum_weight += h->bins[right];
+            result = d_right;
+            right++;
+        }
+
+        if (cum_weight >= target_weight) {
+            *out_mad = result;
+            return HISTO_OK;
+        }
     }
 
     *out_mad = result;

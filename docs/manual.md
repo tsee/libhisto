@@ -401,6 +401,8 @@ histo_fill_n(h, N_SAMPLES, values, NULL);
 | `histo_fill_n` (SIMD) | O(K / V) | O(1) | Vectorized batch ingest of K samples (V=4 or 8) |
 | `histo_mean` / `histo_variance` | O(1) | O(1) | Direct query from online Welford accumulators |
 | `histo_quantile` / `histo_median` | O(N) | O(1) | Single-pass cumulative inverse CDF scan |
+| `histo_iqr` / `histo_trimmed_mean` | O(N) | O(1) | Cumulative percentile integration |
+| `histo_mad` | O(N) | O(1) | Two-pointer monotonic merge for weighted median absolute deviation |
 | `histo_kde_eval` | O(n) | O(1) | Continuous density sum across n points |
 | `histo_kde_quantile` | O(n * iter) | O(1) | Hybrid bisection / Newton-Raphson CDF root solver |
 | `histo_fit_model` (LM) | O(I * (N * P + P^3)) | O(N * P + P^2) | Levenberg-Marquardt non-linear regression |

@@ -469,22 +469,49 @@ void test_mode_continuous_variable_bins(void) {
     histo_destroy(h);
 }
 
-/* Test MAD with large bin count (> 256) exercising dynamic buffer allocation */
+/* Test MAD with large bin count exercising O(N) two-pointer merge */
 void test_mad_large_bins(void) {
-    const uint32_t nbins = 500;
-    histo_t *h = histo_create_uniform(nbins, 0.0, 500.0, HISTO_FLAG_NONE);
+    const uint32_t nbins = 5000;
+    histo_t *h = histo_create_uniform(nbins, 0.0, 5000.0, HISTO_FLAG_NONE);
     TEST_ASSERT_NOT_NULL(h);
 
-    /* Symmetrically fill bins around center 250.0 */
+    /* Symmetrically fill bins around center 2500.0 */
     for (uint32_t i = 0; i < nbins; ++i) {
         histo_fill_bin(h, i, 1.0);
     }
 
     double mad = 0.0;
     TEST_ASSERT_EQUAL(HISTO_OK, histo_mad(h, &mad));
-    TEST_ASSERT_DOUBLE_WITHIN(1.0, 125.0, mad);
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, 1250.0, mad);
 
     histo_destroy(h);
+}
+
+/* Test MAD on variable binning grids and single-entry histograms */
+void test_mad_variable_bins_and_edge_cases(void) {
+    /* 1. Variable binning grid: [0, 10), [10, 30), [30, 70), [70, 100) */
+    const double edges[] = {0.0, 10.0, 30.0, 70.0, 100.0};
+    histo_t *h_var = histo_create_variable(4, edges, HISTO_FLAG_NONE);
+    TEST_ASSERT_NOT_NULL(h_var);
+
+    /* Centers: 5.0, 20.0, 50.0, 85.0 */
+    histo_fill_bin(h_var, 0, 10.0);
+    histo_fill_bin(h_var, 1, 20.0);
+    histo_fill_bin(h_var, 2, 20.0);
+    histo_fill_bin(h_var, 3, 10.0);
+
+    double mad = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mad(h_var, &mad));
+    TEST_ASSERT_TRUE(mad > 0.0);
+
+    histo_destroy(h_var);
+
+    /* 2. Single-entry histogram: MAD must be 0.0 */
+    histo_t *h_single = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_NONE);
+    histo_fill(h_single, 45.0);
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mad(h_single, &mad));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, mad);
+    histo_destroy(h_single);
 }
 
 int main(void) {
@@ -501,5 +528,6 @@ int main(void) {
     RUN_TEST(test_trimmed_and_winsorized_mean_edge_cases);
     RUN_TEST(test_mode_continuous_variable_bins);
     RUN_TEST(test_mad_large_bins);
+    RUN_TEST(test_mad_variable_bins_and_edge_cases);
     return UNITY_END();
 }

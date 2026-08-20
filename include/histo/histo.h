@@ -416,6 +416,9 @@ histo_status_t histo_iqr(const histo_t *h, double *out_iqr);
 /**
  * @brief Computes the Median Absolute Deviation (MAD = median(|x - median|)).
  *
+ * Implemented using an optimal two-pointer monotonic merge over pre-sorted histogram
+ * bins in O(N) deterministic time and O(1) auxiliary space without heap allocations.
+ *
  * @param[in]  h       Histogram handle.
  * @param[out] out_mad Output pointer for calculated MAD.
  * @return HISTO_OK on success, or HISTO_ERR_EMPTY if histogram has zero weight.
