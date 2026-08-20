@@ -1,6 +1,6 @@
 # Interactive Terminal Mode (`histo top` / `histo plot -i`): User-Centric Design Specification
 
-This document defines the architectural, visual, and user-experience design for the interactive terminal monitoring mode in `libhisto`.
+This document defines the architectural, visual, and user-experience design for the interactive terminal monitoring and exploration mode (`histo top`) in `libhisto`.
 
 ---
 
@@ -9,172 +9,200 @@ This document defines the architectural, visual, and user-experience design for 
 ### Target Personas
 1. **Performance Engineer / SRE**:
    - *Use Case*: Piping streaming latencies (`tail -f access.log | awk '{print $NF}' | histo top`) to monitor P95/P99 latency spikes in real time.
-   - *Need*: Instant visual feedback on distribution shape shifts, live percentile badges, and the ability to freeze/pause the frame when an anomaly occurs.
+   - *Need*: Instant visual feedback on distribution shifts, live percentile badges, and freezing the view without causing upstream pipe stalls.
 2. **Data Scientist / Experimentalist**:
-   - *Use Case*: Live telemetry from a sensor, Monte Carlo simulation, or particle detector.
-   - *Need*: Interactive zooming into resonance peaks, toggling between linear and log scales, dynamic rebinning without restarting the process, and instant Gaussian/KDE curve overlays.
-3. **Command-Line Enthusiast**:
-   - *Use Case*: Ad-hoc distribution exploration on large CSV files.
-   - *Need*: Zero-configuration, zero-dependency TUI (no ncurses requirement), lightning-fast startup (<5ms), and intuitive Vim-style keybindings.
+   - *Use Case*: Live telemetry from a sensor, Monte Carlo simulation, or particle physics detector.
+   - *Need*: Interactive zooming into resonance peaks, flexible logarithmic scaling across coordinates and counts, dynamic rebinning without restarting, and instant curve fitting overlays.
+3. **CLI & Terminal Power Users**:
+   - *Use Case*: Ad-hoc distribution exploration on large CSV/TSV files with Vim-style keyboard navigation and a command prompt.
+   - *Need*: Zero external dependencies (no ncurses), instant startup (<5ms), prompt bar (`:bins 100`, `:range 0 500`), and interactive help (`?`).
 
 ---
 
-## 2. CLI Invocation & Pipeline Ergonomics
+## 2. Multi-Threaded Architecture & Snapshot Concurrency
 
-The interactive mode is accessible via the multi-call alias `histo top` or flag `histo plot -i` / `histo plot --interactive`:
+To eliminate pipe backpressure stalls and guarantee smooth 60 FPS UI rendering, `histo top` uses a **2-Thread Decoupled Architecture**:
 
-```bash
-# Live stream monitoring from a pipe (default 10 Hz refresh or event-driven)
-tail -f request_latencies.log | awk '{print $9}' | histo top
+```text
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                         INGESTION THREAD                               │
+ │                                                                        │
+ │   stdin / Stream ──► Fast Ingestion Loop ──► histo_t (Live Accumulator)│
+ │   (Unblocked wire    (Reads 64KB blocks,    ▲                          │
+ │    speed)             never touches UI)     │ 50ms Snapshot            │
+ └─────────────────────────────────────────────┼──────────────────────────┘
+                                               │ (1µs Cloned Deep Copy)
+ ┌─────────────────────────────────────────────┼──────────────────────────┐
+ │                            UI THREAD        │                          │
+ │                                             ▼                          │
+ │   /dev/tty ──► Keypress / Command ──► histo_t (Display Snapshot)       │
+ │   (Instant       - Space (View Freeze)      │                          │
+ │    0ms latency)  - ':' (Command Prompt)     ▼                          │
+ │                  - '?' (Help Overlay)    Double-Buffered Frame Engine  │
+ │                  - Fit / KDE / Log       (60 FPS ANSI Terminal)        │
+ └────────────────────────────────────────────────────────────────────────┘
+```
 
-# Interactive exploration of an existing file
-histo top data.csv
+### Snapshot Cloning & Zero Display Artifacts
+1. **Zero Data Races**: The UI thread never reads the active live histogram while the ingestion thread is modifying it.
+2. **Atomic 1µs Snapshot**: Every 33–50 ms, the UI thread acquires a mutex for $< 1\ \mu\text{s}$ to clone `H_live` into `H_display` (or pointer-swap twin buffers).
+3. **View Freezing (`Space`)**:
+   - Pausing the display freezes `H_display` in place.
+   - The ingestion thread continues draining `stdin` into `H_live` in the background, completely preventing pipe buffer overflow ($64\text{ KB}$ Linux limit) and avoiding upstream producer stalls.
+   - Pressing `Space` again unfreezes the view, instantly snapping to the current live distribution.
 
-# 2D Bivariate interactive heatmap monitoring
-tail -f coordinates.tsv | histo top --2d
+---
 
-# Interactive exploration with specific initial options
-histo top --log --kde --bins=50 benchmark_results.dat
+## 3. Dynamic Rebinning & Reservoir Sample Cache
+
+### The Challenge of Lossy Rebinning
+In classical fixed-bin histograms, merging adjacent bins ($N \to N/2$) is mathematically exact, but splitting bins ($N \to 2N$) is impossible without the original data. Rebinning back and forth without raw samples causes irreversible loss of resolution.
+
+### The Solution: Rolling Reservoir Cache
+1. **In-Memory Rolling Cache**: The engine maintains a circular ring buffer of the most recent $K$ raw samples (e.g. $100,000$ samples, occupying $\approx 800\text{ KB}$ of RAM).
+2. **Lossless Resizing & Re-ranging**: When the user changes bin count (`:bins 100` or `r`/`R`) or zooms into a sub-range, the histogram is dynamically reconstructed on the fly from the rolling sample cache.
+3. **Graceful Degraded Mode**: If the stream exceeds the cache size and raw samples are evicted, the UI clearly indicates:
+   - `Bins: 50 (Rebinned from Cache: Lossless)` vs `Bins: 25 (Integer Merged: Exact Sum)`.
+
+---
+
+## 4. Multi-Axis Logarithmic Scaling (1D & 2D)
+
+Distributions often span multiple orders of magnitude across **counts** (frequency) and **coordinates** (values).
+
+### 4.1 1D Logarithmic Modes
+- **Log Y (Counts / Height)**: $\log_{10}(\text{count} + 1)$. Essential for exposing faint background tails and rare outliers.
+- **Log X (Coordinates / Bins)**: Logarithmically spaced bins $[10^0, 10^1, 10^2, 10^3, \dots]$. Essential for wide dynamic range data (e.g., latencies spanning $1\ \mu\text{s}$ to $10\text{ s}$).
+- **Log-Log**: Both axes logarithmic.
+
+### 4.2 2D Logarithmic Modes
+- **Log Z (Color / Density)**: Logarithmic mapping for the TrueColor intensity gradient.
+- **Log X**: Logarithmic binning along the X coordinate axis.
+- **Log Y**: Logarithmic binning along the Y coordinate axis.
+- **Log XY / Log XYZ**: Full logarithmic coordinate and density mapping.
+
+### 4.3 Log Scale UX & Cycling
+- Pressing **`l`** cycles through the most common logarithmic modes:
+  - 1D: `[LIN] ──► [LOG Y (Counts)] ──► [LOG X (Values)] ──► [LOG-LOG] ──► [LIN]`
+  - 2D: `[LIN] ──► [LOG Z (Color)] ──► [LOG XY] ──► [LOG XYZ] ──► [LIN]`
+- Pressing **`L`** opens the **Axis Scale Selector Modal**:
+  ```text
+  ┌─ Select Axis Scale ───────────┐
+  │ [1] Linear (All axes)         │
+  │ [2] Log Y (Counts / Height)   │
+  │ [3] Log X (Value Coordinates) │
+  │ [4] Log-Log (X and Y)         │
+  │ [Esc] Cancel                  │
+  └───────────────────────────────┘
+  ```
+- The active scale is prominently displayed in the status header: `Scale: [X: LIN | Y: LOG]`.
+
+---
+
+## 5. Command Prompt Bar (`:`)
+
+For explicit configuration and precise numeric inputs, pressing **`:`** opens an interactive command prompt at the bottom of the screen:
+
+```text
+:[ prompt cursor ]
+```
+
+### Supported Commands
+
+| Command | Shorthand | Description & Example |
+| :--- | :--- | :--- |
+| `:bins <N>` | `:b <N>` | Set exact number of bins (e.g. `:bins 100`, `:b 250`). |
+| `:range <MIN> <MAX>` | `:r <MIN> <MAX>` | Set explicit visible coordinate range (e.g. `:range 0 500`). |
+| `:min <X>`, `:max <X>` | | Set single boundary (e.g. `:min 10.5`). |
+| `:fit <MODEL>` | `:f <MODEL>` | Run parametric fit (`:fit gaussian`, `:fit exp`, `:fit poly 3`, `:fit bw`). |
+| `:kde [on|off|<KERNEL>]`| `:k` | Configure KDE overlay (`:kde gaussian`, `:kde epanechnikov`, `:kde off`). |
+| `:scale <MODE>` | | Set scale (`:scale logy`, `:scale logx`, `:scale loglog`, `:scale lin`). |
+| `:title <STRING>` | | Set custom chart header title. |
+| `:export <FILE>` | `:w <FILE>`, `:s`| Export current snapshot (`:export latencies.json`, `:export dump.lhisto`). |
+| `:clear` | `:reset` | Flush accumulators and restart ingestion from sample zero. |
+| `:help` | `:h`, `?` | Open the interactive help and keybinding cheatsheet modal. |
+| `:quit` | `:q` | Cleanly exit interactive mode and restore terminal state. |
+
+### Command Prompt UX Features
+- **Tab Completion**: Typing `:b<Tab>` auto-completes to `:bins `.
+- **Command History**: `Up` / `Down` arrow keys recall previous commands.
+- **Inline Error Feedback**: If an invalid command or parameter is entered (e.g. `:range 100 50`), a clear red error message appears inline (`Error: MIN must be strictly less than MAX`) without crashing or interrupting stream ingestion.
+- **Cancel**: Pressing `Esc` or `Ctrl+C` clears the prompt and returns to normal navigation.
+
+---
+
+## 6. Online Help Modal (`?`)
+
+Pressing **`?`** (or typing `:help`) displays an in-terminal interactive help cheatsheet centered over the viewport:
+
+```text
+┌─ libhisto top ─ Interactive Help Cheatsheet ──────────────────────────────────────────────┐
+│                                                                                           │
+│ NAVIGATION & VIEWPORT              DISPLAY & SCALING              ANALYSIS & CURVES       │
+│   + / -       Zoom range in / out    l     Cycle Log scale (X/Y)    k   Toggle KDE curve  │
+│   h / l, ←/→  Pan view left / right  L     Scale Selector Modal     f   Toggle Curve Fit  │
+│   0           Reset to full range    e     Toggle Error bars (±σ)   m   Cycle Moments mode│
+│   r / R       Rebin coarser / finer  S     Toggle Sparkline mode    Tab Cycle 1D/2D/CDF   │
+│                                                                                           │
+│ COMMANDS & SNAPSHOTS               STREAM CONTROL                                         │
+│   :           Open Command Prompt    Space Pause / Freeze display (Ingestion continues)   │
+│   s           Quick-export JSON      c     Clear / Reset all counters                     │
+│   ?           Toggle this Help box   q     Quit and restore terminal                      │
+│                                                                                           │
+│ Press [?], [Esc], or [Space] to dismiss this help window.                                 │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Terminal Screen Layout & Wireframes
+## 7. Complete Visual Wireframes
 
-The TUI maintains a 3-region responsive layout:
-1. **Header Bar**: Stream status, ingestion rate (ops/s), sample count, and summary moments.
-2. **Main Viewport**: High-resolution Unicode chart (1D histogram, KDE curve overlay, CDF, or 2D TrueColor heatmap).
-3. **Footer & Status Line**: Interactive keybind hints, zoom window coordinates, and status notifications.
-
-### 3.1 Wireframe: 1D Live Histogram with KDE Overlay (`histo top`)
+### 7.1 Main Live View with Log-Y & KDE Overlay (`histo top`)
 
 ```text
 ┌─ libhisto top ────────────────────────── [LIVE: 142.5 k-ops/s | N=250,000 | W=250,000.0] ───┐
-│ Mean: 45.21 ± 8.12 │ Median: 44.95 │ IQR: 10.42 │ P95: 58.80 │ P99: 64.12 │ Mode: 44.80 (peak)│
+│ Mean: 45.21 ± 8.12 │ Median: 44.95 │ IQR: 10.42 │ P95: 58.80 │ P99: 64.12 │ Mode: 44.80     │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Range: [10.00, 80.00] │ Bins: 35 (Δx=2.00) │ Scale: LINEAR │ KDE: GAUSSIAN (h=1.42)         │
+│ Range: [10.00, 80.00] │ Bins: 35 (Δx=2.00) │ Scale: [X: LIN | Y: LOG10] │ KDE: GAUSSIAN     │
 │                                                                                             │
-│ [10.0, 12.0)      12 │ ▏                                                                    │
-│ [12.0, 14.0)      45 │ ▍                                                                    │
-│ [14.0, 16.0)     128 │ █▏                                                                   │
-│ [16.0, 18.0)     390 │ ███                                                                  │
-│ [18.0, 20.0)    1120 │ █████████                                                            │
-│ [20.0, 22.0)    2890 │ ████████████████████▎                                                │
-│ [22.0, 24.0)    5410 │ ███████████████████████████████████▌                                 │
-│ [24.0, 26.0)    8120 │ █████████████████████████████████████████████████████▌  <-- [KDE Peak]│
-│ [26.0, 28.0)    7980 │ ████████████████████████████████████████████████████▍                │
-│ [28.0, 30.0)    5200 │ ████████████████████████████████████                                 │
-│ [30.0, 32.0)    2740 │ ███████████████████                                                  │
-│ [32.0, 34.0)    1050 │ ███████▍                                                             │
-│ [34.0, 36.0)     380 │ ██▋                                                                  │
-│ [36.0, 38.0)     110 │ ▉                                                                    │
-│ [38.0, 40.0)      32 │ ▎                                                                    │
+│ [10.0, 12.0)      12 │ █▎                                                                   │
+│ [12.0, 14.0)      45 │ ██▏                                                                  │
+│ [14.0, 16.0)     128 │ ███                                                                  │
+│ [16.0, 18.0)     390 │ ████                                                                 │
+│ [18.0, 20.0)    1120 │ █████▎                                                               │
+│ [20.0, 22.0)    2890 │ ██████▏                                                              │
+│ [22.0, 24.0)    5410 │ ███████                                                              │
+│ [24.0, 26.0)    8120 │ ████████  <-- [KDE Peak: 8,150.2]                                    │
+│ [26.0, 28.0)    7980 │ ███████▉                                                             │
+│ [28.0, 30.0)    5200 │ ███████                                                              │
+│ [30.0, 32.0)    2740 │ ██████▏                                                              │
+│ [32.0, 34.0)    1050 │ █████▎                                                               │
+│ [34.0, 36.0)     380 │ ████                                                                 │
+│ [36.0, 38.0)     110 │ ██▉                                                                  │
+│ [38.0, 40.0)      32 │ █▉                                                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ [Space] Pause  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [+/-] Zoom  [h/l] Pan  [s] Save  [q]│
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 3.2 Wireframe: Live Fitted Peak View (`f` key active)
-
-```text
-┌─ libhisto top [FIT MODE] ─────────────── [PAUSED | Model: GAUSSIAN | Loss: CHI2] ───────────┐
-│ Amplitude: 8150.2 ± 32.1 │ Mean (μ): 25.12 ± 0.04 │ Sigma (σ): 4.15 ± 0.03 │ χ²/NDF: 1.04   │
-├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Visual Fit Curve Overlay:  [█ = Bin Data | · = Gaussian Fit Function]                       │
-│                                                                                             │
-│ [20.0, 22.0)    2890 │ ████████████████████▎   ·                                            │
-│ [22.0, 24.0)    5410 │ ███████████████████████████████████▌        ·                        │
-│ [24.0, 26.0)    8120 │ █████████████████████████████████████████████████████▌·              │
-│ [26.0, 28.0)    7980 │ ████████████████████████████████████████████████████▍·               │
-│ [28.0, 30.0)    5200 │ ████████████████████████████████████        ·                        │
-├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Fit converged in 6 iterations. p-value: 0.4120. Press [f] to toggle fit overlay.             │
+│ [Space] Freeze  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [+/-] Zoom  [:] Cmd  [?] Help  [q]  │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Interactive Keybindings & Controls
+## 8. Summary of Keyboard Shortcuts
 
-All keybindings use single keystrokes without requiring `Enter`:
-
-| Keybinding | Action | User Experience & Feedback |
-| :--- | :--- | :--- |
-| **`Space`** | **Pause / Resume** | Freezes incoming stream ingestion into the display; buffers incoming data in the background so no samples are dropped. |
-| **`l`** | **Toggle Log Scale** | Toggles bar heights between linear ($y$) and logarithmic ($\log_{10}(y + 1)$) scales to expose faint background tails. |
-| **`k`** | **Toggle KDE Overlay** | Computes and displays continuous density estimation points and bandwidth ($h$) alongside discrete bins. |
-| **`f`** | **Toggle Curve Fit** | Fits built-in model (Gaussian, Exponential, Polynomial) and displays parameter table + overlay curve. |
-| **`e`** | **Toggle Error Bars** | Toggles $\sqrt{\sum w^2}$ Poisson uncertainty bars on/off. |
-| **`r` / `R`** | **Rebin Coarser / Finer** | `r` merges adjacent bins ($N/2$); `R` splits bins ($2N$) when raw sample cache is available. |
-| **`+` / `-`** (or `z` / `Z`) | **Zoom Range** | Expands or contracts the visible range $[\min, \max]$ around the median. |
-| **`h` / `l`** (or `←` / `→`) | **Pan Range** | Shifts the visible viewport left or right along the X-axis. |
-| **`0`** | **Reset View** | Resets zoom and pan to the global bounds $[x_{\min}, x_{\max}]$. |
-| **`c`** | **Clear / Reset** | Flushes accumulator counters and restarts ingestion from sample zero. |
-| **`Tab`** | **Cycle View Mode** | Cycles between **1D Bar Plot**, **Sparkline Strip**, **Cumulative CDF**, and **2D Heatmap**. |
-| **`s`** | **Save Snapshot** | Prompts for filename (e.g. `snapshot.json` or `snapshot.lhisto`) and exports binary/JSON wire format. |
-| **`?`** | **Help Modal** | Pops up an in-terminal overlay window with full documentation and keybind reference. |
-| **`q` / `Ctrl+C`** | **Quit** | Cleanly restores terminal cursor, disables raw mode, and exits. |
-
----
-
-## 5. Technical Architecture & Engineering Standards
-
-### 5.1 Zero-Dependency Pure C99 Terminal Driver
-To ensure portability across Linux, macOS, BSD, and Windows WSL without external link dependencies:
-- **Raw Mode**: Uses POSIX `termios` (`tcgetattr`, `tcsetattr` with `ECHO` and `ICANON` disabled).
-- **ANSI / VT100 Sequences**:
-  - Alternate screen buffer: `\033[?1049h` (enter) / `\033[?1049l` (exit).
-  - Cursor hiding: `\033[?25l` (hide) / `\033[?25h` (show).
-  - Cursor positioning: `\033[H` (home) / `\033[K` (clear line).
-- **No ncurses dependency**: Pure standard C99, compiling into a tiny standalone binary with instant startup.
-
-### 5.2 Non-Blocking Event Loop & Stream Multiplexing
-The interactive engine multiplexes terminal user input (`stdin` on `/dev/tty` when piping) and data stream input:
-```c
-// Event loop pseudo-architecture
-int tty_fd = open("/dev/tty", O_RDONLY | O_NONBLOCK);
-int data_fd = fileno(stdin); // When piped, data comes from stdin
-
-while (running) {
-    struct pollfd fds[2] = {
-        { .fd = tty_fd, .events = POLLIN },
-        { .fd = data_fd, .events = POLLIN }
-    };
-    int ret = poll(fds, 2, 50); // 50ms tick = 20 FPS UI refresh
-
-    if (fds[0].revents & POLLIN) {
-        handle_keyboard_input(tty_fd);
-    }
-    if (fds[1].revents & POLLIN) {
-        ingest_streaming_batch(data_fd);
-    }
-    if (needs_redraw || time_for_frame()) {
-        render_double_buffered_frame();
-    }
-}
-```
-
-### 5.3 Double-Buffering for Zero Flicker
-- Screen output is rendered into an in-memory string buffer (`char frame_buf[65536]`).
-- The entire buffer is flushed to the terminal in a single `write()` call, eliminating tearing and terminal cursor flicker.
-
-### 5.4 Live Terminal Resize Handling (`SIGWINCH`)
-- Listens for `SIGWINCH` signals.
-- Automatically queries terminal columns and rows (`ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)`) and dynamically resizes bin bar lengths, padding, and layout without dropping stream state.
-
----
-
-## 6. Implementation Roadmap
-
-1. **Phase 1: Terminal Control Core (`tools/src/tui_core.c`)**:
-   - Terminal raw mode enter/exit with `atexit` cleanup guards.
-   - Non-blocking keyboard input parser (arrow keys, escape sequences, single keys).
-   - Double-buffered ANSI renderer.
-2. **Phase 2: Live Ingestion Engine (`tools/src/tui_engine.c`)**:
-   - Multiplexed `poll()` loop separating data stream and `/dev/tty` user input.
-   - Ring buffer sample cache for dynamic rebinning and zooming.
-3. **Phase 3: Interactive Visualizations (`tools/src/cmd_top.c`)**:
-   - 1D histogram bar view, Sparkline strip view, KDE density curve overlay, and Levenberg-Marquardt fit inspector.
-4. **Phase 4: CLI Wiring & Manpages**:
-   - Register `histo top` subcommand in `tools/src/main.c`.
-   - Update `docs/manual.md` Level 1 CLI documentation.
+| Key | Action |
+| :--- | :--- |
+| **`Space`** | **Pause / Freeze Display** (background ingestion continues without pipe backpressure). |
+| **`:`** | **Open Command Prompt** (`:bins 100`, `:range 0 500`, `:fit gaussian`, `:export out.json`). |
+| **`?`** | **Open Online Help Modal** with full interactive keybinding cheatsheet. |
+| **`l` / `L`** | **Toggle / Select Logarithmic Scale** (Log Y counts, Log X coordinates, Log-Log, Log Color). |
+| **`k`** | **Toggle KDE Density Curve Overlay** and Silverman bandwidth estimation. |
+| **`f`** | **Toggle Levenberg-Marquardt Curve Fit** with parameter error badges. |
+| **`e`** | **Toggle Poisson Uncertainty Error Bars** ($\pm \sqrt{\sum w^2}$). |
+| **`r` / `R`** | **Rebin Coarser / Finer** (reconstructed losslessly via rolling reservoir sample cache). |
+| **`+` / `-`** | **Zoom Coordinate Range** around the distribution center. |
+| **`h` / `l`** (or `←` / `→`) | **Pan Viewport** across distribution coordinates. |
+| **`0`** | **Reset Viewport** to global bounds $[x_{\min}, x_{\max}]$. |
+| **`c`** | **Clear Accumulators** and restart sample count from zero. |
+| **`Tab`** | **Cycle Views** (1D Bars $\to$ Sparklines $\to$ Cumulative CDF $\to$ 2D Heatmap). |
+| **`s`** | **Quick Export Snapshot** to JSON or binary `.lhisto`. |
+| **`q`** / **`Ctrl+C`** | **Quit** and cleanly restore terminal state. |
