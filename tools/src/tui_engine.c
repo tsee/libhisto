@@ -172,16 +172,17 @@ static void *ingest_worker_thread(void *arg) {
     return NULL;
 }
 
-bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nbins, double rmin, double rmax, uint32_t flags) {
+bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nbins, double rmin, double rmax, uint32_t flags, bool has_weights) {
     if (!eng) return false;
     memset(eng, 0, sizeof(*eng));
 
     eng->in_stream = in_stream;
     eng->is_2d = is_2d;
+    eng->has_weights = has_weights;
     eng->val_col = 1;
     eng->x_col = 1;
     eng->y_col = 2;
-    eng->w_col = 2;
+    eng->w_col = has_weights ? 2 : 0;
     eng->flags = flags;
     eng->running = false;
     eng->finished_reading = false;

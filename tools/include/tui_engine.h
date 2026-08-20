@@ -62,7 +62,7 @@ typedef struct {
 } tui_engine_t;
 
 /* Lifecycle */
-bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nbins, double rmin, double rmax, uint32_t flags);
+bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nbins, double rmin, double rmax, uint32_t flags, bool has_weights);
 bool tui_engine_start(tui_engine_t *eng);
 void tui_engine_stop(tui_engine_t *eng);
 void tui_engine_free(tui_engine_t *eng);

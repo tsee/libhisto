@@ -351,6 +351,7 @@ int cmd_top_main(int argc, char **argv) {
     uint32_t nbins = 50;
     double rmin = 0.0, rmax = 100.0;
     bool monochrome = false;
+    bool has_weights = false;
     uint32_t flags = HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS;
     const char *file_arg = NULL;
 
@@ -364,6 +365,7 @@ int cmd_top_main(int argc, char **argv) {
                    "      --min=<X>      Initial lower boundary\n"
                    "      --max=<X>      Initial upper boundary\n"
                    "      --2d           Enable 2D bivariate mode\n"
+                   "  -w, --weights      Input stream contains 'value weight' pairs\n"
                    "  -M, --mono         Monochrome mode (disable ANSI colors)\n"
                    "  -h, --help         Show this help message\n");
             return 0;
@@ -371,6 +373,8 @@ int cmd_top_main(int argc, char **argv) {
             nbins = (uint32_t)atoi(arg + 7);
         } else if (strcmp(arg, "--2d") == 0) {
             is_2d = true;
+        } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--weights") == 0) {
+            has_weights = true;
         } else if (strcmp(arg, "-M") == 0 || strcmp(arg, "--mono") == 0) {
             monochrome = true;
         } else if (arg[0] != '-') {
@@ -388,7 +392,7 @@ int cmd_top_main(int argc, char **argv) {
     }
 
     tui_engine_t eng;
-    if (!tui_engine_init(&eng, in_fp, is_2d, nbins, rmin, rmax, flags)) {
+    if (!tui_engine_init(&eng, in_fp, is_2d, nbins, rmin, rmax, flags, has_weights)) {
         fprintf(stderr, "Error: Failed to initialize TUI engine.\n");
         if (in_fp != stdin) fclose(in_fp);
         return 1;
@@ -541,15 +545,31 @@ int cmd_top_main(int argc, char **argv) {
         // Row 1: Top border with badge
         char badge[64] = "";
         uint64_t n_entries = snap ? histo_num_entries(snap) : 0;
+        double tot_w = snap ? histo_total_weight(snap) : 0.0;
         if (st.paused) {
-            snprintf(badge, sizeof(badge), "[PAUSED | N=%lu]", (unsigned long)n_entries);
+            if (eng.has_weights) {
+                snprintf(badge, sizeof(badge), "[PAUSED | N=%lu | W=%.2f]", (unsigned long)n_entries, tot_w);
+            } else {
+                snprintf(badge, sizeof(badge), "[PAUSED | N=%lu]", (unsigned long)n_entries);
+            }
         } else if (tui_engine_is_finished(&eng)) {
-            snprintf(badge, sizeof(badge), "[EOF | N=%lu]", (unsigned long)n_entries);
+            if (eng.has_weights) {
+                snprintf(badge, sizeof(badge), "[EOF | N=%lu | W=%.2f]", (unsigned long)n_entries, tot_w);
+            } else {
+                snprintf(badge, sizeof(badge), "[EOF | N=%lu]", (unsigned long)n_entries);
+            }
         } else {
             double rate = eng.current_rate_ops;
-            if (rate >= 1e6) snprintf(badge, sizeof(badge), "[LIVE: %.1fM/s | N=%lu]", rate / 1e6, (unsigned long)n_entries);
-            else if (rate >= 1e3) snprintf(badge, sizeof(badge), "[LIVE: %.1fk/s | N=%lu]", rate / 1e3, (unsigned long)n_entries);
-            else snprintf(badge, sizeof(badge), "[LIVE: %.0f/s | N=%lu]", rate, (unsigned long)n_entries);
+            char rate_str[32];
+            if (rate >= 1e6) snprintf(rate_str, sizeof(rate_str), "%.1fM/s", rate / 1e6);
+            else if (rate >= 1e3) snprintf(rate_str, sizeof(rate_str), "%.1fk/s", rate / 1e3);
+            else snprintf(rate_str, sizeof(rate_str), "%.0f/s", rate);
+
+            if (eng.has_weights) {
+                snprintf(badge, sizeof(badge), "[LIVE: %s | N=%lu | W=%.2f]", rate_str, (unsigned long)n_entries, tot_w);
+            } else {
+                snprintf(badge, sizeof(badge), "[LIVE: %s | N=%lu]", rate_str, (unsigned long)n_entries);
+            }
         }
         render_top_border(&frame, "libhisto top", badge, cols);
 

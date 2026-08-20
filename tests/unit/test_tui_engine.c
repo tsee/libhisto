@@ -51,7 +51,7 @@ void test_tui_engine_streaming_and_snapshot(void) {
     TEST_ASSERT_NOT_NULL(in_fp);
 
     tui_engine_t eng;
-    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2));
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2, false));
     TEST_ASSERT_TRUE(tui_engine_start(&eng));
 
     /* Write 50 lines to the pipe */
@@ -152,7 +152,7 @@ void test_tui_engine_autorange_p1_p99(void) {
 
     tui_engine_t eng;
     /* Initial range [0, 10], but stream samples will be [100, 200] with extreme outliers */
-    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 10.0, HISTO_FLAG_TRACK_SUMW2));
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 10.0, HISTO_FLAG_TRACK_SUMW2, false));
     eng.last_autorange_time_sec = 0.0; /* Reset timer so autorange can trigger immediately */
     TEST_ASSERT_TRUE(tui_engine_start(&eng));
 
@@ -206,6 +206,50 @@ void test_tui_engine_autorange_p1_p99(void) {
     fclose(in_fp);
 }
 
+void test_tui_engine_weights(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    /* Ingest with weights = true */
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2, true));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Write 20 lines with weight 2.5: "50.0 2.5\n" */
+    for (int i = 0; i < 20; i++) {
+        const char *line = "50.0 2.5\n";
+        TEST_ASSERT_EQUAL((int)strlen(line), write(fds[1], line, strlen(line)));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    histo_t *snap = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(snap);
+    TEST_ASSERT_EQUAL_UINT64(20, histo_num_entries(snap));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 50.0, histo_total_weight(snap)); // 20 * 2.5 = 50.0
+    histo_destroy(snap);
+
+    /* Test reservoir rebuild with weights preserved */
+    histo_t *rebuilt = NULL;
+    TEST_ASSERT_TRUE(tui_engine_rebuild_1d(&eng, 25, 0.0, 100.0, &rebuilt));
+    TEST_ASSERT_NOT_NULL(rebuilt);
+    TEST_ASSERT_EQUAL_UINT64(20, histo_num_entries(rebuilt));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 50.0, histo_total_weight(rebuilt));
+    histo_destroy(rebuilt);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
@@ -214,5 +258,6 @@ int main(void) {
     RUN_TEST(test_tui_render_row_geometry);
     RUN_TEST(test_tui_engine_streaming_and_snapshot);
     RUN_TEST(test_tui_engine_autorange_p1_p99);
+    RUN_TEST(test_tui_engine_weights);
     return UNITY_END();
 }
