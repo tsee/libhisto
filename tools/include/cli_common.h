@@ -3,23 +3,26 @@
 
 #include "histo/histo.h"
 #include "histo/histo2d.h"
+#include "histo/cli.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
+#include <getopt.h>
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Command entry points */
+/* Command entry points (backwards-compatible internal signatures) */
 int cmd_fill_main(int argc, char **argv);
 int cmd_plot_main(int argc, char **argv);
 int cmd_stats_main(int argc, char **argv);
 int cmd_fit_main(int argc, char **argv);
 int cmd_cmp_main(int argc, char **argv);
-
 
 /* Terminal utilities */
 int cli_get_terminal_width(int default_width);
@@ -46,7 +49,6 @@ histo_status_t cli_read_histo2d_from_file(const char *path, histo2d_t **out_h);
 
 histo_status_t cli_read_any_histogram_from_stream(FILE *fp, histo_t **out_1d, histo2d_t **out_2d);
 histo_status_t cli_read_any_histogram_from_file(const char *path, histo_t **out_1d, histo2d_t **out_2d);
-
 
 /* Time utilities */
 double cli_get_time_sec(void);

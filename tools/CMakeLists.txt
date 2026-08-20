@@ -1,5 +1,6 @@
-add_library(histo_tools_lib STATIC
+add_library(histocli
     src/cli_common.c
+    src/cli_main.c
     src/cmd_fill.c
     src/cmd_plot.c
     src/cmd_stats.c
@@ -7,12 +8,21 @@ add_library(histo_tools_lib STATIC
     src/cmd_cmp.c
 )
 
-target_include_directories(histo_tools_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/include
+set_target_properties(histocli PROPERTIES
+    OUTPUT_NAME "histocli"
+    POSITION_INDEPENDENT_CODE ON
 )
 
-target_link_libraries(histo_tools_lib PUBLIC histo)
+target_include_directories(histocli PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+target_link_libraries(histocli PUBLIC histo)
+
+# Alias for backwards compatibility with tests
+add_library(histo_tools_lib ALIAS histocli)
 
 add_executable(histo-cli
     src/main.c
@@ -25,7 +35,7 @@ target_include_directories(histo-cli PRIVATE
     ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(histo-cli PRIVATE histo_tools_lib)
+target_link_libraries(histo-cli PRIVATE histocli)
 
 # Create symlink aliases in build directory
 set(TOOL_ALIASES histo-fill histo-plot histo-stats histo-fit histo-cmp)
@@ -37,7 +47,12 @@ foreach(alias ${TOOL_ALIASES})
     )
 endforeach()
 
-install(TARGETS histo-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS histocli histo-cli
+    EXPORT libhistoTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
 
 foreach(alias ${TOOL_ALIASES})
     install(CODE "
@@ -46,5 +61,3 @@ foreach(alias ${TOOL_ALIASES})
         )
     ")
 endforeach()
-
-

@@ -6,47 +6,51 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
+#include <unistd.h>
 
-static void print_fill_usage(void) {
-    printf("Usage: histo-fill [OPTIONS] [FILE...]\n");
-    printf("       histo fill [OPTIONS] [FILE...]\n\n");
-    printf("Reads streaming data, aggregates into a histogram (1D or 2D), and emits the serialized result.\n\n");
-    printf("1D Geometry Options:\n");
-    printf("  -n, --bins=<N>           Number of uniform bins (default: 50)\n");
-    printf("      --min=<X>            Lower boundary (required unless --auto-range)\n");
-    printf("      --max=<X>            Upper boundary (required unless --auto-range)\n");
-    printf("      --edges=<E0,E1,...>  Variable bin edges (comma-separated)\n");
-    printf("      --auto-range         Buffer input to determine min/max automatically\n\n");
-    printf("2D Geometry Options:\n");
-    printf("      --2d                 Enable 2D bivariate histogramming mode\n");
-    printf("      --xbins=<N>          Number of bins along X axis (default: 50)\n");
-    printf("      --xmin=<X>, --xmax=<X> X axis bounds\n");
-    printf("      --ybins=<N>          Number of bins along Y axis (default: 50)\n");
-    printf("      --ymin=<Y>, --ymax=<Y> Y axis bounds\n\n");
-    printf("Input Parsing & Columns:\n");
-    printf("  -w, --weights            Input contains weights: reads 'x weight' pairs\n");
-    printf("      --value-col=<COL>    1-based column for sample coordinate (default: 1)\n");
-    printf("      --xcol=<COL>         1-based column for X coordinate in 2D mode (default: 1)\n");
-    printf("      --ycol=<COL>         1-based column for Y coordinate in 2D mode (default: 2)\n");
-    printf("      --weights-col=<COL>  1-based column for sample weight (default: 2 for 1D, 3 for 2D)\n");
-    printf("  -d, --delimiter=<CHAR>   Field delimiter character (default: auto-detect comma/tab/semicolon/space)\n");
-    printf("      --binary-f64         Read raw Little-Endian double binary stream\n");
-    printf("      --merge              Read and add/merge incoming serialized histograms\n\n");
-    printf("Histogram Features & Transformations:\n");
-    printf("      --sumw2              Enable sum_w2 error tracking (default: ON)\n");
-    printf("      --no-sumw2           Disable sum_w2 error tracking\n");
-    printf("      --exact-moments      Enable online exact Welford moments\n");
-    printf("      --rebin=<FACTOR>     Rebin uniform histogram by integer factor (1D only)\n");
-    printf("      --slice=<MIN:MAX>    Slice bin sub-range [MIN, MAX]\n");
-    printf("      --cdf                Generate Cumulative Distribution Function (CDF)\n");
-    printf("      --normalize=<AREA>   Scale histogram total weight to target area\n\n");
-    printf("Output & Streaming Options:\n");
-    printf("  -o, --output=<FORMAT>    Output format: binary (default for pipes), json, tsv, table\n");
-    printf("  -f, --output-file=<FILE> Output destination (default: stdout)\n");
-    printf("      --emit-every=<N>     Emit intermediate snapshot every N samples\n");
-    printf("      --emit-interval=<S>  Emit intermediate snapshot every S seconds\n");
-    printf("  -h, --help               Show this help message\n");
+
+static void print_fill_usage(FILE *out) {
+    if (!out) out = stdout;
+    fprintf(out, "Usage: histo-fill [OPTIONS] [FILE...]\n");
+    fprintf(out, "       histo fill [OPTIONS] [FILE...]\n\n");
+    fprintf(out, "Reads streaming data, aggregates into a histogram (1D or 2D), and emits the serialized result.\n\n");
+    fprintf(out, "1D Geometry Options:\n");
+    fprintf(out, "  -n, --bins=<N>           Number of uniform bins (default: 50)\n");
+    fprintf(out, "      --min=<X>            Lower boundary (required unless --auto-range)\n");
+    fprintf(out, "      --max=<X>            Upper boundary (required unless --auto-range)\n");
+    fprintf(out, "      --edges=<E0,E1,...>  Variable bin edges (comma-separated)\n");
+    fprintf(out, "      --auto-range         Buffer input to determine min/max automatically\n\n");
+    fprintf(out, "2D Geometry Options:\n");
+    fprintf(out, "      --2d                 Enable 2D bivariate histogramming mode\n");
+    fprintf(out, "      --xbins=<N>          Number of bins along X axis (default: 50)\n");
+    fprintf(out, "      --xmin=<X>, --xmax=<X> X axis bounds\n");
+    fprintf(out, "      --ybins=<N>          Number of bins along Y axis (default: 50)\n");
+    fprintf(out, "      --ymin=<Y>, --ymax=<Y> Y axis bounds\n\n");
+    fprintf(out, "Input Parsing & Columns:\n");
+    fprintf(out, "  -w, --weights            Input contains weights: reads 'x weight' pairs\n");
+    fprintf(out, "      --value-col=<COL>    1-based column for sample coordinate (default: 1)\n");
+    fprintf(out, "      --xcol=<COL>         1-based column for X coordinate in 2D mode (default: 1)\n");
+    fprintf(out, "      --ycol=<COL>         1-based column for Y coordinate in 2D mode (default: 2)\n");
+    fprintf(out, "      --weights-col=<COL>  1-based column for sample weight (default: 2 for 1D, 3 for 2D)\n");
+    fprintf(out, "  -d, --delimiter=<CHAR>   Field delimiter character (default: auto-detect comma/tab/semicolon/space)\n");
+    fprintf(out, "      --binary-f64         Read raw Little-Endian double binary stream\n");
+    fprintf(out, "      --merge              Read and add/merge incoming serialized histograms\n\n");
+    fprintf(out, "Histogram Features & Transformations:\n");
+    fprintf(out, "      --sumw2              Enable sum_w2 error tracking (default: ON)\n");
+    fprintf(out, "      --no-sumw2           Disable sum_w2 error tracking\n");
+    fprintf(out, "      --exact-moments      Enable online exact Welford moments\n");
+    fprintf(out, "      --rebin=<FACTOR>     Rebin uniform histogram by integer factor (1D only)\n");
+    fprintf(out, "      --slice=<MIN:MAX>    Slice bin sub-range [MIN, MAX]\n");
+    fprintf(out, "      --cdf                Generate Cumulative Distribution Function (CDF)\n");
+    fprintf(out, "      --normalize=<AREA>   Scale histogram total weight to target area\n\n");
+    fprintf(out, "Output & Streaming Options:\n");
+    fprintf(out, "  -o, --output=<FORMAT>    Output format: binary (default for pipes), json, tsv, table\n");
+    fprintf(out, "  -f, --output-file=<FILE> Output destination (default: stdout)\n");
+    fprintf(out, "      --emit-every=<N>     Emit intermediate snapshot every N samples\n");
+    fprintf(out, "      --emit-interval=<S>  Emit intermediate snapshot every S seconds\n");
+    fprintf(out, "  -h, --help               Show this help message\n");
 }
+
 
 static char auto_detect_delimiter(const char *line) {
     int commas = 0, tabs = 0, semicolons = 0, pipes = 0;
@@ -189,7 +193,11 @@ static histo_status_t emit_histo2d(const histo2d_t *h2, const char *fmt, FILE *o
     return status;
 }
 
-int cmd_fill_main(int argc, char **argv) {
+int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
+    if (!out) out = stdout;
+    if (!err) err = stderr;
+    optind = 1;
+
     bool is_2d = false;
     uint32_t nbins = 50;
     double range_min = 0.0, range_max = 0.0;
@@ -224,13 +232,14 @@ int cmd_fill_main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_fill_usage();
+            print_fill_usage(out);
             if (var_edges) free(var_edges);
             return 0;
         } else if (strcmp(arg, "--2d") == 0) {
             is_2d = true;
             if (!w_col_set) w_col = 3;
-        } else if (strncmp(arg, "-n=", 3) == 0 || strncmp(arg, "--bins=", 7) == 0 || strcmp(arg, "-n") == 0 || strcmp(arg, "--bins") == 0) {
+        }
+ else if (strncmp(arg, "-n=", 3) == 0 || strncmp(arg, "--bins=", 7) == 0 || strcmp(arg, "-n") == 0 || strcmp(arg, "--bins") == 0) {
             const char *val = (arg[1] == 'n' && arg[2] == '=') ? arg + 3 :
                               (strncmp(arg, "--bins=", 7) == 0) ? arg + 7 :
                               (i + 1 < argc) ? argv[++i] : NULL;
@@ -345,18 +354,19 @@ int cmd_fill_main(int argc, char **argv) {
     }
 
     if (!out_format) {
-        out_format = (cli_is_stdout_tty() && !out_file) ? "json" : "binary";
+        out_format = ((out == stdout) && cli_is_stdout_tty() && !out_file) ? "json" : "binary";
     }
 
-    FILE *out_fp = stdout;
+    FILE *out_fp = out;
     if (out_file && strcmp(out_file, "-") != 0) {
         out_fp = fopen(out_file, "wb");
         if (!out_fp) {
-            fprintf(stderr, "Error: Cannot open output file '%s'\n", out_file);
+            fprintf(err, "Error: Cannot open output file '%s'\n", out_file);
             if (var_edges) free(var_edges);
             return 1;
         }
     }
+
 
     int num_files = argc - file_start;
     const char *default_files[] = {"-"};
@@ -490,7 +500,7 @@ int cmd_fill_main(int argc, char **argv) {
             emit_histo2d(h2, out_format, out_fp);
             histo2d_destroy(h2);
         }
-        if (out_fp != stdout) fclose(out_fp);
+        if (out_fp != out && out_fp != stdout) fclose(out_fp);
         return 0;
     }
 
@@ -686,6 +696,6 @@ int cmd_fill_main(int argc, char **argv) {
     }
 
     if (var_edges) free(var_edges);
-    if (out_fp != stdout) fclose(out_fp);
+    if (out_fp != out && out_fp != stdout) fclose(out_fp);
     return 0;
 }

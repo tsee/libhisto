@@ -7,24 +7,25 @@
 #include <unistd.h>
 #include <ctype.h>
 
-static void print_plot_usage(void) {
-    printf("Usage: histo-plot [OPTIONS] [HISTOGRAM_FILE...]\n");
-    printf("       histo plot [OPTIONS] [HISTOGRAM_FILE...]\n\n");
-    printf("Renders 1D histograms as beautiful ASCII / Unicode terminal charts.\n\n");
-    printf("Display Options:\n");
-    printf("  -W, --width=<COLS>       Plot width in characters (default: auto terminal width)\n");
-    printf("  -s, --style=<STYLE>      Glyph style: blocks (default), ascii, shaded, sparkline\n");
-    printf("  -S, --sparkline          Render compact single-line sparkline (e.g.  ▂▃▅██▆▃▂ )\n");
-    printf("  -c, --color=<MODE>       Color mode: auto (default), always, never\n");
-    printf("  -l, --log                Use logarithmic scale for bar lengths\n");
-    printf("  -e, --errors             Display error bars (when sum_w2 is tracked)\n");
-    printf("      --stats              Show full statistical summary header/footer (default: ON)\n");
-    printf("      --no-stats           Suppress statistical summary header\n");
-    printf("      --title=<TITLE>      Set custom plot title\n\n");
-    printf("Live Streaming / Watch Mode:\n");
-    printf("  -w, --watch              Continuously render incoming snapshots from stream\n");
-    printf("      --clear              Clear entire screen between updates\n");
-    printf("  -h, --help               Show this help message\n");
+static void print_plot_usage(FILE *out) {
+    if (!out) out = stdout;
+    fprintf(out, "Usage: histo-plot [OPTIONS] [HISTOGRAM_FILE...]\n");
+    fprintf(out, "       histo plot [OPTIONS] [HISTOGRAM_FILE...]\n\n");
+    fprintf(out, "Renders 1D histograms as beautiful ASCII / Unicode terminal charts.\n\n");
+    fprintf(out, "Display Options:\n");
+    fprintf(out, "  -W, --width=<COLS>       Plot width in characters (default: auto terminal width)\n");
+    fprintf(out, "  -s, --style=<STYLE>      Glyph style: blocks (default), ascii, shaded, sparkline\n");
+    fprintf(out, "  -S, --sparkline          Render compact single-line sparkline (e.g.  ▂▃▅██▆▃▂ )\n");
+    fprintf(out, "  -c, --color=<MODE>       Color mode: auto (default), always, never\n");
+    fprintf(out, "  -l, --log                Use logarithmic scale for bar lengths\n");
+    fprintf(out, "  -e, --errors             Display error bars (when sum_w2 is tracked)\n");
+    fprintf(out, "      --stats              Show full statistical summary header/footer (default: ON)\n");
+    fprintf(out, "      --no-stats           Suppress statistical summary header\n");
+    fprintf(out, "      --title=<TITLE>      Set custom plot title\n\n");
+    fprintf(out, "Live Streaming / Watch Mode:\n");
+    fprintf(out, "  -w, --watch              Continuously render incoming snapshots from stream\n");
+    fprintf(out, "      --clear              Clear entire screen between updates\n");
+    fprintf(out, "  -h, --help               Show this help message\n");
 }
 
 /* Unicode horizontal sub-bin fractions (1/8ths) */
@@ -49,12 +50,12 @@ static void get_ansi_gradient_color(double fraction, char *out_ansi, size_t max_
     if (fraction < 0.25) {
         double t = fraction / 0.25;
         r = 0;
-        g = (int)(t * 200.0);
+        g = (int)(t * 255.0);
         b = 255;
     } else if (fraction < 0.5) {
         double t = (fraction - 0.25) / 0.25;
         r = 0;
-        g = 200 + (int)(t * 55.0);
+        g = 255;
         b = (int)((1.0 - t) * 255.0);
     } else if (fraction < 0.75) {
         double t = (fraction - 0.5) / 0.25;
@@ -96,8 +97,8 @@ static void get_viridis_color(double fraction, int *r, int *g, int *b) {
     }
 }
 
-static void render_histo2d_heatmap(const histo2d_t *h, int term_width, bool use_color, const char *title) {
-    if (!h) return;
+static void render_histo2d_heatmap(const histo2d_t *h, int term_width, bool use_color, const char *title, FILE *out) {
+    if (!h || !out) return;
     (void)term_width;
 
     uint32_t nx = histo2d_nbins_x(h);
@@ -117,9 +118,9 @@ static void render_histo2d_heatmap(const histo2d_t *h, int term_width, bool use_
     if (max_content <= 0.0) max_content = 1.0;
 
     if (title && *title) {
-        printf("\n── %s ──\n", title);
+        fprintf(out, "\n── %s ──\n", title);
     } else {
-        printf("\n── 2D Histogram Heatmap (%u x %u bins, Entries: %llu, Weight: %.4g) ──\n",
+        fprintf(out, "\n── 2D Histogram Heatmap (%u x %u bins, Entries: %llu, Weight: %.4g) ──\n",
                nx, ny, (unsigned long long)histo2d_num_entries(h), histo2d_total_weight(h));
     }
 
@@ -127,7 +128,7 @@ static void render_histo2d_heatmap(const histo2d_t *h, int term_width, bool use_
     for (int iy = (int)ny - 1; iy >= 0; --iy) {
         double ymin_b, ymax_b, dummy;
         histo2d_bin_bounds(h, 0, (uint32_t)iy, &dummy, &dummy, &ymin_b, &ymax_b);
-        printf("%7.2f │ ", 0.5 * (ymin_b + ymax_b));
+        fprintf(out, "%7.2f │ ", 0.5 * (ymin_b + ymax_b));
 
         for (uint32_t ix = 0; ix < nx; ++ix) {
             double c = 0.0;
@@ -136,58 +137,55 @@ static void render_histo2d_heatmap(const histo2d_t *h, int term_width, bool use_
             if (use_color) {
                 int r, g, b;
                 get_viridis_color(frac, &r, &g, &b);
-                printf("\033[48;2;%d;%d;%dm  \033[0m", r, g, b);
+                fprintf(out, "\033[48;2;%d;%d;%dm  \033[0m", r, g, b);
             } else {
                 static const char density[] = " .:-=+*#%@";
                 int idx = (int)(frac * 9.0);
                 if (idx < 0) idx = 0;
                 if (idx > 9) idx = 9;
-                printf("%c ", density[idx]);
+                fprintf(out, "%c ", density[idx]);
             }
         }
-        printf(" │\n");
+        fprintf(out, " │\n");
     }
 
     /* X Axis line and ticks */
-    printf("        └");
-    for (uint32_t ix = 0; ix < nx; ++ix) printf("──");
-    printf("─┘\n");
+    fprintf(out, "        └");
+    for (uint32_t ix = 0; ix < nx; ++ix) fprintf(out, "──");
+    fprintf(out, "─┘\n");
 
-    printf("         ");
-    printf("%-7.2f", ax.min);
+    fprintf(out, "         ");
+    fprintf(out, "%-7.2f", ax.min);
     int mid_pad = (int)(nx * 2) - 14;
     if (mid_pad > 0) {
-        for (int p = 0; p < mid_pad / 2; ++p) printf(" ");
-        printf("%-7.2f", 0.5 * (ax.min + ax.max));
-        for (int p = 0; p < (mid_pad - mid_pad / 2); ++p) printf(" ");
+        for (int p = 0; p < mid_pad / 2; ++p) fputc(' ', out);
+        fprintf(out, "%-7.2f", 0.5 * (ax.min + ax.max));
+        for (int p = 0; p < (mid_pad - mid_pad / 2); ++p) fputc(' ', out);
     }
-    printf("%7.2f\n", ax.max);
+    fprintf(out, "%7.2f\n", ax.max);
 
     /* Color bar legend */
     if (use_color) {
-        printf("\n  Intensity: 0.00 ");
+        fprintf(out, "\n  Intensity: 0.00 ");
         for (int step = 0; step <= 20; ++step) {
             double frac = (double)step / 20.0;
             int r, g, b;
             get_viridis_color(frac, &r, &g, &b);
-            printf("\033[48;2;%d;%d;%dm \033[0m", r, g, b);
+            fprintf(out, "\033[48;2;%d;%d;%dm \033[0m", r, g, b);
         }
-        printf(" %.2e\n\n", max_content);
+        fprintf(out, " %.2e\n\n", max_content);
     } else {
-        printf("\n  Density scale: [ .:-=+*#%%@ ] (0.00 -> %.2e)\n\n", max_content);
+        fprintf(out, "\n  Density scale: [ .:-=+*#%%@ ] (0.00 -> %.2e)\n\n", max_content);
     }
 }
 
-static void render_histogram_console(const histo_t *h, int term_width, const char *style,
-                                     bool use_color, bool log_scale, bool show_errors,
-                                     bool show_stats, const char *title) {
-    if (!h) return;
+static void render_histogram_console(const histo_t *h, int term_width, const char *style, bool use_color, bool log_scale, bool show_errors, bool show_stats, const char *title, FILE *out) {
+    if (!h || !out) return;
 
     uint32_t nbins = histo_nbins(h);
     double total_w = histo_total_weight(h);
     uint64_t n_fills = histo_num_entries(h);
 
-    /* Find max bin content for scaling and compute column widths */
     double max_content = 0.0;
     int max_bounds_len = 0;
     int max_count_len = 0;
@@ -230,7 +228,7 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
     if (title && *title) {
         char tot_str[32];
         snprintf(tot_str, sizeof(tot_str), (total_w == floor(total_w) && total_w >= 0.0 && total_w < 1e12) ? "%.0f" : "%.4g", total_w);
-        printf("\033[1m%s\033[0m (Entries: %llu, Total Weight: %s)\n", title, (unsigned long long)n_fills, tot_str);
+        fprintf(out, "\033[1m%s\033[0m (Entries: %llu, Total Weight: %s)\n", title, (unsigned long long)n_fills, tot_str);
     }
 
     if (show_stats && total_w > 0.0) {
@@ -248,34 +246,30 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
         snprintf(s_iqr, sizeof(s_iqr), "IQR: %-6.4g", iqr);
         snprintf(s_mode, sizeof(s_mode), "Mode: %-6.4g", mode);
 
-        /* Inner content visual width:
-         * 1 (space) + 12 (s_mean) + 3 (" │ ") + 13 (s_sdev) + 3 (" │ ") +
-         * 13 (s_med) + 3 (" │ ") + 11 (s_iqr) + 3 (" │ ") + 12 (s_mode) + 1 (space) = 75
-         * Total box width = 77 cols (fits inside standard 80-col terminal) */
         int inner_width = 75;
 
         if (strcmp(style, "ascii") == 0) {
-            printf("+-- Statistics ");
-            for (int k = 0; k < inner_width - 14; ++k) putchar('-');
-            printf("+\n");
+            fprintf(out, "+-- Statistics ");
+            for (int k = 0; k < inner_width - 14; ++k) fputc('-', out);
+            fprintf(out, "+\n");
 
-            printf("| %-12s | %-13s | %-13s | %-11s | %-12s |\n",
+            fprintf(out, "| %-12s | %-13s | %-13s | %-11s | %-12s |\n",
                    s_mean, s_sdev, s_med, s_iqr, s_mode);
 
-            printf("+");
-            for (int k = 0; k < inner_width; ++k) putchar('-');
-            printf("+\n");
+            fprintf(out, "+");
+            for (int k = 0; k < inner_width; ++k) fputc('-', out);
+            fprintf(out, "+\n");
         } else {
-            printf("┌─ Statistics ");
-            for (int k = 0; k < inner_width - 13; ++k) printf("─");
-            printf("┐\n");
+            fprintf(out, "┌─ Statistics ");
+            for (int k = 0; k < inner_width - 13; ++k) fprintf(out, "─");
+            fprintf(out, "┐\n");
 
-            printf("│ %-12s │ %-13s │ %-13s │ %-11s │ %-12s │\n",
+            fprintf(out, "│ %-12s │ %-13s │ %-13s │ %-11s │ %-12s │\n",
                    s_mean, s_sdev, s_med, s_iqr, s_mode);
 
-            printf("└");
-            for (int k = 0; k < inner_width; ++k) printf("─");
-            printf("┘\n");
+            fprintf(out, "└");
+            for (int k = 0; k < inner_width; ++k) fprintf(out, "─");
+            fprintf(out, "┘\n");
         }
     }
 
@@ -299,7 +293,6 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
             histo_bin_error(h, i, &err);
         }
 
-        /* Bin bounds and count formatting */
         char bounds_str[64];
         snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
 
@@ -310,10 +303,10 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
             snprintf(count_str, sizeof(count_str), "%.4g", content);
         }
 
-        printf("%-*s │ %*s │ ", max_bounds_len, bounds_str, max_count_len, count_str);
+        fprintf(out, "%-*s │ %*s │ ", max_bounds_len, bounds_str, max_count_len, count_str);
 
         if (max_scaled <= 0.0 || content <= 0.0) {
-            printf("\n");
+            fprintf(out, "\n");
             continue;
         }
 
@@ -324,21 +317,21 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
         char color_ansi[32] = "";
         if (use_color) {
             get_ansi_gradient_color(frac_total, color_ansi, sizeof(color_ansi));
-            printf("%s", color_ansi);
+            fprintf(out, "%s", color_ansi);
         }
 
         if (strcmp(style, "ascii") == 0) {
             int full_chars = (int)bar_len_exact;
             for (int k = 0; k < full_chars; ++k) {
-                putchar('#');
+                fputc('#', out);
             }
             if (show_errors && err > 0.0 && full_chars < bar_max_chars) {
-                printf(" ±%.2g", err);
+                fprintf(out, " ±%.2g", err);
             }
         } else if (strcmp(style, "shaded") == 0) {
             int full_chars = (int)bar_len_exact;
             for (int k = 0; k < full_chars; ++k) {
-                printf("█");
+                fprintf(out, "█");
             }
         } else { /* blocks with 1/8th sub-character precision */
             int full_chars = (int)bar_len_exact;
@@ -347,21 +340,21 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
             if (remainder_eighths > 8) remainder_eighths = 8;
 
             for (int k = 0; k < full_chars; ++k) {
-                printf("█");
+                fprintf(out, "█");
             }
             if (remainder_eighths > 0 && full_chars < bar_max_chars) {
-                printf("%s", UNICODE_BLOCKS[remainder_eighths]);
+                fprintf(out, "%s", UNICODE_BLOCKS[remainder_eighths]);
             }
             if (show_errors && err > 0.0) {
-                if (use_color) printf("\033[0m\033[90m");
-                printf(" ╎±%.2g╎", err);
+                if (use_color) fprintf(out, "\033[0m\033[90m");
+                fprintf(out, " ╎±%.2g╎", err);
             }
         }
 
         if (use_color) {
-            printf("\033[0m");
+            fprintf(out, "\033[0m");
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
 
     /* Print out-of-range footer */
@@ -374,12 +367,12 @@ static void render_histogram_console(const histo_t *h, int term_width, const cha
     snprintf(oflow_str, sizeof(oflow_str), (oflow == floor(oflow) && oflow >= 0.0 && oflow < 1e12) ? "%.0f" : "%.4g", oflow);
     snprintf(tot_str, sizeof(tot_str), (total_w == floor(total_w) && total_w >= 0.0 && total_w < 1e12) ? "%.0f" : "%.4g", total_w);
 
-    printf(" Underflow: %s │ In-Range: %s │ Overflow: %s │ Non-Finite/NaN: %llu\n",
+    fprintf(out, " Underflow: %s │ In-Range: %s │ Overflow: %s │ Non-Finite/NaN: %llu\n",
            uflow_str, tot_str, oflow_str, (unsigned long long)n_nan);
 }
 
-static void render_histogram_sparkline(const histo_t *h, const char *style, bool use_color, bool log_scale, bool show_stats) {
-    if (!h) return;
+static void render_histogram_sparkline(const histo_t *h, const char *style, bool use_color, bool log_scale, bool show_stats, FILE *out) {
+    if (!h || !out) return;
 
     uint32_t nbins = histo_nbins(h);
     double max_content = 0.0;
@@ -397,7 +390,7 @@ static void render_histogram_sparkline(const histo_t *h, const char *style, bool
         histo_bin_content(h, i, &content);
 
         if (content <= 0.0 || max_scaled <= 0.0) {
-            printf(" ");
+            fputc(' ', out);
             continue;
         }
 
@@ -410,17 +403,17 @@ static void render_histogram_sparkline(const histo_t *h, const char *style, bool
         if (use_color) {
             char color_ansi[32] = "";
             get_ansi_gradient_color(frac, color_ansi, sizeof(color_ansi));
-            printf("%s", color_ansi);
+            fprintf(out, "%s", color_ansi);
         }
 
         if (is_ascii) {
-            printf("%s", SPARKLINE_ASCII[level]);
+            fprintf(out, "%s", SPARKLINE_ASCII[level]);
         } else {
-            printf("%s", SPARKLINE_UNICODE[level]);
+            fprintf(out, "%s", SPARKLINE_UNICODE[level]);
         }
 
         if (use_color) {
-            printf("\033[0m");
+            fprintf(out, "\033[0m");
         }
     }
 
@@ -431,21 +424,25 @@ static void render_histogram_sparkline(const histo_t *h, const char *style, bool
         histo_range(h, &rmin, &rmax);
         uint64_t entries = histo_num_entries(h);
 
-        printf("  [N=%llu, range=[%.2g, %.2g), μ=%.2g, σ=%.2g]",
+        fprintf(out, "  [N=%llu, range=[%.2g, %.2g), μ=%.2g, σ=%.2g]",
                (unsigned long long)entries, rmin, rmax, mean, sdev);
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
-static void render_histogram_dispatch(const histo_t *h, int term_width, const char *style, bool use_color, bool log_scale, bool show_errors, bool show_stats, const char *title, bool sparkline) {
+static void render_histogram_dispatch(const histo_t *h, int term_width, const char *style, bool use_color, bool log_scale, bool show_errors, bool show_stats, const char *title, bool sparkline, FILE *out) {
     if (sparkline) {
-        render_histogram_sparkline(h, style, use_color, log_scale, show_stats);
+        render_histogram_sparkline(h, style, use_color, log_scale, show_stats, out);
     } else {
-        render_histogram_console(h, term_width, style, use_color, log_scale, show_errors, show_stats, title);
+        render_histogram_console(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, out);
     }
 }
 
-int cmd_plot_main(int argc, char **argv) {
+int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
+    if (!out) out = stdout;
+    if (!err) err = stderr;
+    optind = 1;
+
     int term_width = cli_get_terminal_width(80);
     const char *style = "blocks";
     const char *color_mode = "auto";
@@ -461,7 +458,7 @@ int cmd_plot_main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_plot_usage();
+            print_plot_usage(out);
             return 0;
         } else if (strncmp(arg, "-W=", 3) == 0) {
             term_width = atoi(arg + 3);
@@ -501,9 +498,8 @@ int cmd_plot_main(int argc, char **argv) {
             title = arg + 8;
         } else if (strcmp(arg, "--title") == 0 && i + 1 < argc) {
             title = argv[++i];
-
         } else if (arg[0] == '-' && arg[1] != '\0') {
-            fprintf(stderr, "Unknown option '%s'. Run 'histo-plot --help' for usage.\n", arg);
+            fprintf(err, "Unknown option '%s'. Run 'histo-plot --help' for usage.\n", arg);
             return 1;
         } else {
             file_start = i;
@@ -521,7 +517,7 @@ int cmd_plot_main(int argc, char **argv) {
     } else if (strcmp(color_mode, "never") == 0) {
         use_color = false;
     } else {
-        use_color = cli_is_stdout_tty();
+        use_color = (out == stdout) && cli_is_stdout_tty();
     }
 
     int num_files = argc - file_start;
@@ -536,7 +532,7 @@ int cmd_plot_main(int argc, char **argv) {
         } else {
             in_fp = fopen(files[f], "rb");
             if (!in_fp) {
-                fprintf(stderr, "Error: Cannot open file '%s'\n", files[f]);
+                fprintf(err, "Error: Cannot open file '%s'\n", files[f]);
                 continue;
             }
         }
@@ -547,11 +543,11 @@ int cmd_plot_main(int argc, char **argv) {
             if (watch_mode) {
                 while (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
                     if (clear_screen) {
-                        printf("\033[2J\033[H");
+                        fprintf(out, "\033[2J\033[H");
                     } else {
-                        printf("\033[H");
+                        fprintf(out, "\033[H");
                     }
-                    render_histo2d_heatmap(h2d, term_width, use_color, title);
+                    render_histo2d_heatmap(h2d, term_width, use_color, title, out);
                     histo2d_destroy(h2d);
                     h2d = NULL;
                 }
@@ -559,31 +555,32 @@ int cmd_plot_main(int argc, char **argv) {
                     histo_t *h = NULL;
                     while (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
                         if (clear_screen) {
-                            printf("\033[2J\033[H");
+                            fprintf(out, "\033[2J\033[H");
                         } else {
-                            printf("\033[H");
+                            fprintf(out, "\033[H");
                         }
-                        render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
+                        render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline, out);
                         histo_destroy(h);
                         h = NULL;
                     }
                 }
             } else {
-                if (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
-                    render_histo2d_heatmap(h2d, term_width, use_color, title);
-                    histo2d_destroy(h2d);
-                } else {
-                    histo_t *h = NULL;
-                    if (cli_read_histogram_from_stream(in_fp, &h) == HISTO_OK) {
-                        render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
+                histo_t *h = NULL;
+                histo2d_t *h2d = NULL;
+                if (cli_read_any_histogram_from_stream(in_fp, &h, &h2d) == HISTO_OK) {
+                    if (h2d) {
+                        render_histo2d_heatmap(h2d, term_width, use_color, title, out);
+                        histo2d_destroy(h2d);
+                    } else if (h) {
+                        render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline, out);
                         histo_destroy(h);
-                    } else {
-                        fprintf(stderr, "Error: Failed to deserialize histogram from '%s'\n", files[f]);
                     }
+                } else {
+                    fprintf(err, "Error: Failed to deserialize histogram from '%s'\n", files[f]);
                 }
             }
-        } else {
 
+        } else {
             /* Raw numbers / text: ingest into auto-ranged histogram on the fly */
             char line[2048];
             size_t count = 0, cap = 1024;
@@ -618,7 +615,7 @@ int cmd_plot_main(int argc, char **argv) {
                 histo_t *h = histo_create_uniform(20, rmin, rmax, HISTO_FLAG_TRACK_SUMW2);
                 if (h) {
                     histo_fill_n(h, count, samples, NULL);
-                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline);
+                    render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline, out);
                     histo_destroy(h);
                 }
             }

@@ -6,26 +6,28 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
+#include <unistd.h>
 
-static void print_fit_usage(void) {
-    printf("Usage: histo-fit [OPTIONS] [HISTOGRAM_FILE...]\n");
-    printf("       histo fit [OPTIONS] [HISTOGRAM_FILE...]\n\n");
-    printf("Fits parametric models to 1D histograms using non-linear least squares / Poisson MLE.\n\n");
-    printf("Model & Optimization Options:\n");
-    printf("  -m, --model=<TYPE>       Model: gaussian (default), exponential, polynomial, breit-wigner, power-law\n");
-    printf("  -d, --degree=<N>         Degree for polynomial model (default: 1, range: 0..10)\n");
-    printf("      --mle                Use Poisson Maximum Likelihood Estimation (-2 ln L) instead of Chi-Square\n");
-    printf("      --unweighted         Use Unweighted Least Squares\n");
-    printf("  -b, --bounds=<IDX=MIN:MAX> Set parameter lower and upper bounds (e.g. --bounds=2=0.1:10.0)\n");
-    printf("  -f, --fix-param=<IDX=VAL>  Freeze parameter to constant value (e.g. --fix-param=1=0.0)\n");
-    printf("      --range=<MIN:MAX>    Sub-range window for fitting [MIN, MAX]\n");
-    printf("      --confidence=<LEV>   Confidence interval level (default: 0.95)\n\n");
-    printf("Output & Display Options:\n");
-    printf("  -j, --json               Emit structured JSON fit results\n");
-    printf("  -q, --quiet              Output only optimal parameter values (tab-separated)\n");
-    printf("  -p, --plot               Render optional ASCII curve overlay above parameter table\n");
-    printf("  -i, --input=<FILE>       Input histogram or raw sample stream file (default: stdin)\n");
-    printf("  -h, --help               Show this help message\n");
+static void print_fit_usage(FILE *out) {
+    if (!out) out = stdout;
+    fprintf(out, "Usage: histo-fit [OPTIONS] [HISTOGRAM_FILE...]\n");
+    fprintf(out, "       histo fit [OPTIONS] [HISTOGRAM_FILE...]\n\n");
+    fprintf(out, "Fits parametric models to 1D histograms using non-linear least squares / Poisson MLE.\n\n");
+    fprintf(out, "Model & Optimization Options:\n");
+    fprintf(out, "  -m, --model=<TYPE>       Model: gaussian (default), exponential, polynomial, breit-wigner, power-law\n");
+    fprintf(out, "  -d, --degree=<N>         Degree for polynomial model (default: 1, range: 0..10)\n");
+    fprintf(out, "      --mle                Use Poisson Maximum Likelihood Estimation (-2 ln L) instead of Chi-Square\n");
+    fprintf(out, "      --unweighted         Use Unweighted Least Squares\n");
+    fprintf(out, "  -b, --bounds=<IDX=MIN:MAX> Set parameter lower and upper bounds (e.g. --bounds=2=0.1:10.0)\n");
+    fprintf(out, "  -f, --fix-param=<IDX=VAL>  Freeze parameter to constant value (e.g. --fix-param=1=0.0)\n");
+    fprintf(out, "      --range=<MIN:MAX>    Sub-range window for fitting [MIN, MAX]\n");
+    fprintf(out, "      --confidence=<LEV>   Confidence interval level (default: 0.95)\n\n");
+    fprintf(out, "Output & Display Options:\n");
+    fprintf(out, "  -j, --json               Emit structured JSON fit results\n");
+    fprintf(out, "  -q, --quiet              Output only optimal parameter values (tab-separated)\n");
+    fprintf(out, "  -p, --plot               Render optional ASCII curve overlay above parameter table\n");
+    fprintf(out, "  -i, --input=<FILE>       Input histogram or raw sample stream file (default: stdin)\n");
+    fprintf(out, "  -h, --help               Show this help message\n");
 }
 
 static const char *get_param_name(histo_fit_model_t model, size_t idx, uint32_t poly_degree, char *buf, size_t buf_size) {
@@ -59,7 +61,7 @@ static const char *get_param_name(histo_fit_model_t model, size_t idx, uint32_t 
         default:
             break;
     }
-    snprintf(buf, buf_size, "Param[%zu]", idx);
+    snprintf(buf, buf_size, "p%zu", idx);
     return buf;
 }
 
@@ -111,8 +113,8 @@ static double eval_model_point(histo_fit_model_t model, uint32_t poly_degree, co
     }
 }
 
-static void print_fit_plot(const histo_t *h, histo_fit_model_t model, uint32_t poly_degree, const histo_fit_result_t *res) {
-    if (!h || !res || !res->params) return;
+static void print_fit_plot(const histo_t *h, histo_fit_model_t model, uint32_t poly_degree, const histo_fit_result_t *res, FILE *out) {
+    if (!h || !res || !res->params || !out) return;
     int width = cli_get_terminal_width(80);
     if (width > 80) width = 80;
     int height = 12;
@@ -136,10 +138,10 @@ static void print_fit_plot(const histo_t *h, histo_fit_model_t model, uint32_t p
     int plot_w = width - 12;
     if (plot_w < 20) plot_w = 20;
 
-    printf("\n  Data Overlay Plot [ █ Data Bins, * Fitted Curve ]:\n");
+    fprintf(out, "\n  Data Overlay Plot [ █ Data Bins, * Fitted Curve ]:\n");
     for (int row = height; row >= 0; --row) {
         double y_level = ((double)row / (double)height) * max_val;
-        printf("  %7.1f ┤ ", y_level);
+        fprintf(out, "  %7.1f ┤ ", y_level);
 
         for (int col = 0; col < plot_w; ++col) {
             double x_norm = (double)col / (double)(plot_w - 1);
@@ -158,38 +160,38 @@ static void print_fit_plot(const histo_t *h, histo_fit_model_t model, uint32_t p
             bool is_bin = (bin_c >= y_level);
 
             if (is_fit && is_bin) {
-                putchar('*');
+                fputc('*', out);
             } else if (is_fit) {
-                putchar('*');
+                fputc('*', out);
             } else if (is_bin) {
-                printf("█");
+                fputs("█", out);
             } else {
-                putchar(' ');
+                fputc(' ', out);
             }
         }
-        putchar('\n');
+        fputc('\n', out);
     }
-    printf("          ┼");
-    for (int col = 0; col < plot_w; ++col) fputs("─", stdout);
-    putchar('\n');
+    fprintf(out, "          ┼");
+    for (int col = 0; col < plot_w; ++col) fputs("─", out);
+    fputc('\n', out);
 
-    printf("          %-*.*g %*.*g\n\n", plot_w / 2, 6, h_min, plot_w - (plot_w / 2), 6, h_max);
+    fprintf(out, "          %-*.*g %*.*g\n\n", plot_w / 2, 6, h_min, plot_w - (plot_w / 2), 6, h_max);
 }
 
 static void print_fit_results_table(const histo_t *h, histo_fit_model_t model, uint32_t poly_degree,
-                                   const histo_fit_result_t *res, double confidence, bool do_plot) {
-    if (!res) return;
+                                   const histo_fit_result_t *res, double confidence, bool do_plot, FILE *out) {
+    if (!res || !out) return;
     char title_buf[128];
     const char *title = get_model_title_and_formula(model, poly_degree, title_buf, sizeof(title_buf));
 
     if (do_plot) {
-        print_fit_plot(h, model, poly_degree, res);
+        print_fit_plot(h, model, poly_degree, res, out);
     }
 
-    printf("================================================================================\n");
-    printf(" MODEL: %s\n", title);
-    printf("================================================================================\n");
-    printf("  Param  Name                   Estimate      Std. Error       %.0f%% Conf. Interval\n", confidence * 100.0);
+    fprintf(out, "================================================================================\n");
+    fprintf(out, " MODEL: %s\n", title);
+    fprintf(out, "================================================================================\n");
+    fprintf(out, "  Param  Name                   Estimate      Std. Error       %.0f%% Conf. Interval\n", confidence * 100.0);
 
     /* Normal z-score multiplier for confidence interval */
     double z = 1.95996;
@@ -206,75 +208,79 @@ static void print_fit_results_table(const histo_t *h, histo_fit_model_t model, u
         double ci_low = est - z * err;
         double ci_high = est + z * err;
 
-        printf("  [%zu]    %-20s %12.4f     \xc2\xb1 %9.4f        [ %10.4f, %10.4f ]\n",
+        fprintf(out, "  [%zu]    %-20s %12.4f     \xc2\xb1 %9.4f        [ %10.4f, %10.4f ]\n",
                i, pname, est, err, ci_low, ci_high);
     }
 
-    printf("--------------------------------------------------------------------------------\n");
-    printf(" GOODNESS OF FIT:\n");
+    fprintf(out, "--------------------------------------------------------------------------------\n");
+    fprintf(out, " GOODNESS OF FIT:\n");
     if (res->ndf > 0) {
-        printf("  \xcf\x87\xc2\xb2 / NDF       = %.2f / %d (%.3f)\n", res->chi2, res->ndf, res->reduced_chi2);
+        fprintf(out, "  \xcf\x87\xc2\xb2 / NDF       = %.2f / %d (%.3f)\n", res->chi2, res->ndf, res->reduced_chi2);
     } else {
-        printf("  \xcf\x87\xc2\xb2           = %.2f (NDF <= 0)\n", res->chi2);
+        fprintf(out, "  \xcf\x87\xc2\xb2           = %.2f (NDF <= 0)\n", res->chi2);
     }
-    printf("  p-value        = %.4g%s\n", res->p_value, res->p_value > 0.05 ? " (Consistent with model)" : " (Significant deviation)");
-    printf("  Log-Likelihood = %.2f  |  AIC = %.2f  |  BIC = %.2f\n", res->log_likelihood, res->aic, res->bic);
-    printf("  Convergence    = %s (%u iterations, %s)\n",
+    fprintf(out, "  p-value        = %.4g%s\n", res->p_value, res->p_value > 0.05 ? " (Consistent with model)" : " (Significant deviation)");
+    fprintf(out, "  Log-Likelihood = %.2f  |  AIC = %.2f  |  BIC = %.2f\n", res->log_likelihood, res->aic, res->bic);
+    fprintf(out, "  Convergence    = %s (%u iterations, %s)\n",
            res->converged ? "Converged" : "FAILED to converge",
            res->iterations, res->stop_reason ? res->stop_reason : "N/A");
-    printf("================================================================================\n");
+    fprintf(out, "================================================================================\n");
 }
 
-static void print_fit_results_json(histo_fit_model_t model, uint32_t poly_degree, const histo_fit_result_t *res) {
-    if (!res) return;
+static void print_fit_results_json(histo_fit_model_t model, uint32_t poly_degree, const histo_fit_result_t *res, FILE *out) {
+    if (!res || !out) return;
     char p_buf[64];
-    printf("{\n");
-    printf("  \"model\": \"%s\",\n",
+    fprintf(out, "{\n");
+    fprintf(out, "  \"model\": \"%s\",\n",
            model == HISTO_FIT_MODEL_GAUSSIAN ? "gaussian" :
            model == HISTO_FIT_MODEL_EXPONENTIAL ? "exponential" :
            model == HISTO_FIT_MODEL_POLYNOMIAL ? "polynomial" :
            model == HISTO_FIT_MODEL_BREIT_WIGNER ? "breit-wigner" : "power-law");
     if (model == HISTO_FIT_MODEL_POLYNOMIAL) {
-        printf("  \"poly_degree\": %u,\n", poly_degree);
+        fprintf(out, "  \"poly_degree\": %u,\n", poly_degree);
     }
-    printf("  \"converged\": %s,\n", res->converged ? "true" : "false");
-    printf("  \"status\": %d,\n", (int)res->status);
-    printf("  \"stop_reason\": \"%s\",\n", res->stop_reason ? res->stop_reason : "");
-    printf("  \"iterations\": %u,\n", res->iterations);
-    printf("  \"chi2\": %.8g,\n", res->chi2);
-    printf("  \"ndf\": %d,\n", res->ndf);
-    printf("  \"reduced_chi2\": %.8g,\n", res->reduced_chi2);
-    printf("  \"p_value\": %.8g,\n", res->p_value);
-    printf("  \"log_likelihood\": %.8g,\n", res->log_likelihood);
-    printf("  \"aic\": %.8g,\n", res->aic);
-    printf("  \"bic\": %.8g,\n", res->bic);
+    fprintf(out, "  \"converged\": %s,\n", res->converged ? "true" : "false");
+    fprintf(out, "  \"status\": %d,\n", (int)res->status);
+    fprintf(out, "  \"stop_reason\": \"%s\",\n", res->stop_reason ? res->stop_reason : "");
+    fprintf(out, "  \"iterations\": %u,\n", res->iterations);
+    fprintf(out, "  \"chi2\": %.8g,\n", res->chi2);
+    fprintf(out, "  \"ndf\": %d,\n", res->ndf);
+    fprintf(out, "  \"reduced_chi2\": %.8g,\n", res->reduced_chi2);
+    fprintf(out, "  \"p_value\": %.8g,\n", res->p_value);
+    fprintf(out, "  \"log_likelihood\": %.8g,\n", res->log_likelihood);
+    fprintf(out, "  \"aic\": %.8g,\n", res->aic);
+    fprintf(out, "  \"bic\": %.8g,\n", res->bic);
 
-    printf("  \"parameters\": [\n");
+    fprintf(out, "  \"parameters\": [\n");
     for (size_t i = 0; i < res->num_params; ++i) {
         const char *pname = get_param_name(model, i, poly_degree, p_buf, sizeof(p_buf));
-        printf("    {\n");
-        printf("      \"index\": %zu,\n", i);
-        printf("      \"name\": \"%s\",\n", pname);
-        printf("      \"estimate\": %.8g,\n", res->params[i]);
-        printf("      \"error\": %.8g\n", res->param_errors ? res->param_errors[i] : 0.0);
-        printf("    }%s\n", (i + 1 < res->num_params) ? "," : "");
+        fprintf(out, "    {\n");
+        fprintf(out, "      \"index\": %zu,\n", i);
+        fprintf(out, "      \"name\": \"%s\",\n", pname);
+        fprintf(out, "      \"estimate\": %.8g,\n", res->params[i]);
+        fprintf(out, "      \"error\": %.8g\n", res->param_errors ? res->param_errors[i] : 0.0);
+        fprintf(out, "    }%s\n", (i + 1 < res->num_params) ? "," : "");
     }
-    printf("  ],\n");
+    fprintf(out, "  ],\n");
 
-    printf("  \"covariance_matrix\": [\n");
+    fprintf(out, "  \"covariance_matrix\": [\n");
     for (size_t i = 0; i < res->num_params; ++i) {
-        printf("    [");
+        fprintf(out, "    [");
         for (size_t j = 0; j < res->num_params; ++j) {
             double c = res->cov_matrix ? res->cov_matrix[i * res->num_params + j] : 0.0;
-            printf("%.8g%s", c, (j + 1 < res->num_params) ? ", " : "");
+            fprintf(out, "%.8g%s", c, (j + 1 < res->num_params) ? ", " : "");
         }
-        printf("]%s\n", (i + 1 < res->num_params) ? "," : "");
+        fprintf(out, "]%s\n", (i + 1 < res->num_params) ? "," : "");
     }
-    printf("  ]\n");
-    printf("}\n");
+    fprintf(out, "  ]\n");
+    fprintf(out, "}\n");
 }
 
-int cmd_fit_main(int argc, char **argv) {
+int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
+    if (!out) out = stdout;
+    if (!err) err = stderr;
+    optind = 1;
+
     histo_fit_model_t model = HISTO_FIT_MODEL_GAUSSIAN;
     uint32_t poly_degree = 1;
     histo_fit_loss_t loss_type = HISTO_FIT_LOSS_CHI2;
@@ -299,7 +305,7 @@ int cmd_fit_main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_fit_usage();
+            print_fit_usage(out);
             return 0;
         } else if (strcmp(arg, "-j") == 0 || strcmp(arg, "--json") == 0) {
             do_json = true;
@@ -324,7 +330,7 @@ int cmd_fit_main(int argc, char **argv) {
                 else if (strcmp(val, "breit-wigner") == 0 || strcmp(val, "bw") == 0 || strcmp(val, "cauchy") == 0) model = HISTO_FIT_MODEL_BREIT_WIGNER;
                 else if (strcmp(val, "power-law") == 0 || strcmp(val, "power") == 0) model = HISTO_FIT_MODEL_POWER_LAW;
                 else {
-                    fprintf(stderr, "Error: Unknown model '%s'\n", val);
+                    fprintf(err, "Error: Unknown model '%s'\n", val);
                     return 1;
                 }
             }
@@ -360,9 +366,9 @@ int cmd_fit_main(int argc, char **argv) {
                 int pidx = 0;
                 double fval = 0.0;
                 if (sscanf(val, "%d=%lf", &pidx, &fval) == 2 && pidx >= 0 && pidx < 16) {
-                    fixed_params_arr[pidx] = true;
                     lower_bounds_arr[pidx] = fval;
                     upper_bounds_arr[pidx] = fval;
+                    fixed_params_arr[pidx] = true;
                     has_fixed = true;
                 }
             }
@@ -372,31 +378,32 @@ int cmd_fit_main(int argc, char **argv) {
             input_file = (arg[1] == 'i' && arg[2] == '=') ? arg + 3 :
                          (strncmp(arg, "--input=", 8) == 0) ? arg + 8 :
                          (i + 1 < argc) ? argv[++i] : NULL;
-        } else if (arg[0] != '-') {
-            input_file = arg;
-        }
-    }
-
-    FILE *fp = stdin;
-    if (input_file && strcmp(input_file, "-") != 0) {
-        fp = fopen(input_file, "rb");
-        if (!fp) {
-            fprintf(stderr, "Error: Cannot open input file '%s'\n", input_file);
+        } else if (arg[0] == '-' && arg[1] != '\0') {
+            fprintf(err, "Unknown option '%s'. Run 'histo-fit --help' for usage.\n", arg);
             return 1;
+        } else {
+            if (!input_file) input_file = arg;
         }
     }
 
     histo_t *h = NULL;
+    FILE *fp = stdin;
+    if (input_file && strcmp(input_file, "-") != 0) {
+        fp = fopen(input_file, "rb");
+        if (!fp) {
+            fprintf(err, "Error: Cannot open input file '%s'\n", input_file);
+            return 1;
+        }
+    }
+
     cli_input_format_t fmt = cli_detect_stream_format(fp);
     if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO) {
-        histo_status_t rst = cli_read_histogram_from_stream(fp, &h);
-        if (rst != HISTO_OK || !h) {
-            fprintf(stderr, "Error: Failed to deserialize input histogram (code %d)\n", (int)rst);
+        if (cli_read_histogram_from_stream(fp, &h) != HISTO_OK) {
+            fprintf(err, "Error: Failed to deserialize input histogram\n");
             if (fp != stdin) fclose(fp);
             return 1;
         }
     } else {
-        /* Raw stream of numbers: auto-bin */
         size_t cap = 1024, count = 0;
         double *buf = (double *)malloc(cap * sizeof(double));
         if (!buf) {
@@ -414,7 +421,7 @@ int cmd_fit_main(int argc, char **argv) {
             buf[count++] = v;
         }
         if (count < 5) {
-            fprintf(stderr, "Error: Insufficient samples in stream to fit (got %zu, need >= 5)\n", count);
+            fprintf(err, "Error: Insufficient samples in stream to fit (got %zu, need >= 5)\n", count);
             free(buf);
             if (fp != stdin) fclose(fp);
             return 1;
@@ -452,7 +459,7 @@ int cmd_fit_main(int argc, char **argv) {
     histo_fit_result_t *res = NULL;
     histo_status_t fit_st = histo_fit_model(h, model, NULL, &opts, &res);
     if (fit_st < 0 || !res) {
-        fprintf(stderr, "Error: Curve fitting failed with status code %d (%s)\n",
+        fprintf(err, "Error: Curve fitting failed with status code %d (%s)\n",
                 (int)fit_st, res && res->stop_reason ? res->stop_reason : "unspecified error");
         if (res) histo_fit_result_destroy(res);
         histo_destroy(h);
@@ -460,13 +467,13 @@ int cmd_fit_main(int argc, char **argv) {
     }
 
     if (do_json) {
-        print_fit_results_json(model, poly_degree, res);
+        print_fit_results_json(model, poly_degree, res, out);
     } else if (do_quiet) {
         for (size_t i = 0; i < res->num_params; ++i) {
-            printf("%.8g%s", res->params[i], (i + 1 < res->num_params) ? "\t" : "\n");
+            fprintf(out, "%.8g%s", res->params[i], (i + 1 < res->num_params) ? "\t" : "\n");
         }
     } else {
-        print_fit_results_table(h, model, poly_degree, res, confidence, do_plot);
+        print_fit_results_table(h, model, poly_degree, res, confidence, do_plot, out);
     }
 
     histo_fit_result_destroy(res);

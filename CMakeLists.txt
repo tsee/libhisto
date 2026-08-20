@@ -162,6 +162,18 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libhisto.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
 
+if(LIBHISTO_BUILD_TOOLS)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/libhistocli.pc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/libhistocli.pc
+        @ONLY
+    )
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libhistocli.pc
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    )
+endif()
+
+
 # CMake export configuration
 set(LIBHISTO_CMAKECONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/libhisto")
 
