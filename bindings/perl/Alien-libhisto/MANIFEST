@@ -35,6 +35,9 @@ bundled/src/vendor/cJSON/cJSON.h
 bundled/src/vendor/cJSON/LICENSE
 bundled/tools/CMakeLists.txt
 bundled/tools/include/cli_common.h
+bundled/tools/include/tui_engine.h
+bundled/tools/include/tui_term.h
+bundled/tools/include/tui_thread.h
 bundled/tools/scripts/bump_version.py
 bundled/tools/src/cli_common.c
 bundled/tools/src/cli_main.c
@@ -43,7 +46,10 @@ bundled/tools/src/cmd_fill.c
 bundled/tools/src/cmd_fit.c
 bundled/tools/src/cmd_plot.c
 bundled/tools/src/cmd_stats.c
+bundled/tools/src/cmd_top.c
 bundled/tools/src/main.c
+bundled/tools/src/tui_engine.c
+bundled/tools/src/tui_term.c
 Changes
 lib/Alien/libhisto.pm
 LICENSE
