@@ -414,7 +414,7 @@ def main():
     for filepath in sorted(doc_files):
         # Exclude task lists and internal guidelines from example execution
         rel = os.path.relpath(filepath, args.source_dir)
-        if rel in ["docs/tasks.md", "docs/coding_standards.md", "docs/goals.md"]:
+        if rel in ["docs/tasks.md", "CONTRIBUTING.md", "AGENTS.md"]:
             continue
 
         blocks = extract_code_blocks(filepath)

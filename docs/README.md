@@ -1,32 +1,19 @@
 # libhisto Documentation
 
-This directory contains technical guides, reference specifications, and historical research for `libhisto`.
+This directory contains technical guides, reference specifications, and manuals for `libhisto`.
 
 ## Core Guides & Manuals
-- [User Manual & Architecture Reference (Levels 0–5)](manual.md)
-- [Curve Fitting & Non-Linear Regression Guide](curve_fitting_guide.md)
-- [2D Histograms, Projections & Heatmaps Guide](histo2d_guide.md)
+- [User Manual & Architecture Reference (Levels 0–5)](manual.md): Comprehensive guide to 1D histograms, moments, CLI, bindings, and benchmarks.
+- [Curve Fitting & Non-Linear Regression Guide](curve_fitting_guide.md): Levenberg-Marquardt optimizer, built-in parametric models, custom callbacks, and covariance interpretation.
+- [2D Histograms, Projections & Heatmaps Guide](histo2d_guide.md): 2D histograms, axes, 9-region guards, projections, slices, profile histograms, and heatmaps.
+- [Release, Versioning & Tagging Guide](release_guide.md): Release checklist, version synchronization, tag naming, and distribution packaging.
 
 ## Technical & Mathematical Specifications
-- [Statistical & Analytical Formulae Reference](statistical_formulae.md)
-- [Numerical Behavior, Precision & IEEE-754 Rules](numerical_behavior.md)
-- [Serialization Wire Formats (V1, V2, V3, JSON)](serialization_format.md)
+- [Statistical & Analytical Formulae Reference](statistical_formulae.md): Exact mathematical formulations for Welford moments, robust dispersion, mode/peak estimation, and two-sample statistical distances.
+- [Numerical Behavior, Precision & IEEE-754 Rules](numerical_behavior.md): Floating-point edge cases, non-finite handling, subnormals, and precision boundaries.
+- [Serialization Wire Formats (V1, V2, V3, JSON)](serialization_format.md): Canonical Little-Endian binary format specifications, header schemas, and JSON representations.
 
-## Standards & Research
-- [Coding Standards & C Guidelines](coding_standards.md)
-- [High-Level Goals and Scope](goals.md)
-- [Work Items & Tasks Tracker](tasks.md)
-- [Prior Art: Math::SimpleHisto::XS](prior_art_simplehisto.md)
-- [Prior Art: Boost.Histogram](prior_art_boost_histogram.md)
-- [Prior Art: GSL, ROOT, & HdrHistogram](prior_art_gsl_and_root.md)
-- [Agent Guidelines & Operational Rules](../AGENTS.md)
-
-
-
-
-
-
-
-
-
-
+## Project Management & Guidelines
+- [Task Tracker & Roadmap](tasks.md): Active development tasks and feature roadmap.
+- [Contributing Guidelines](../CONTRIBUTING.md): C99 coding standards, memory safety rules, and verification requirements.
+- [Agent Guidelines & Operational Rules](../AGENTS.md): Operational instructions and engineering standards for AI agents.
