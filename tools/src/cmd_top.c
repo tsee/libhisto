@@ -220,7 +220,22 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
     /* X-axis labels row */
     if (rows_drawn < max_rows) {
         char label_buf[256];
-        snprintf(label_buf, sizeof(label_buf), "         %-7.1f                              %7.1f", ax.min, ax.max);
+        char min_str[32], max_str[32];
+        snprintf(min_str, sizeof(min_str), "%.1f", ax.min);
+        snprintf(max_str, sizeof(max_str), "%.1f", ax.max);
+        uint32_t x_cells = (nx + x_step - 1) / x_step;
+        int bar_w = (int)(x_cells * 2 + 1);
+        if (bar_w < 10) bar_w = 10;
+        char l_bar[256];
+        if (bar_w > (int)sizeof(l_bar) - 1) bar_w = (int)sizeof(l_bar) - 1;
+        memset(l_bar, ' ', bar_w);
+        l_bar[bar_w] = '\0';
+        memcpy(l_bar, min_str, strlen(min_str));
+        int max_st = bar_w - (int)strlen(max_str);
+        if (max_st > (int)strlen(min_str)) {
+            memcpy(l_bar + max_st, max_str, strlen(max_str));
+        }
+        snprintf(label_buf, sizeof(label_buf), "         %s", l_bar);
         tui_render_row(f, label_buf, width, true);
         rows_drawn++;
     }
@@ -304,24 +319,33 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         snprintf(v_mid, sizeof(v_mid), (mid_val < 1e4) ? "%.0f" : "%.2g", mid_val);
         snprintf(v_max, sizeof(v_max), (max_content < 1e4) ? "%.0f" : "%.2g", max_content);
 
-        int pos = snprintf(label_buf, sizeof(label_buf), "%-16s │ %6s │ ", "[Count Scale]", "");
-        pos += snprintf(label_buf + pos, sizeof(label_buf) - pos, "%s", v_zero);
+        char label_bar[256];
+        if (bar_max > (int)sizeof(label_bar) - 1) bar_max = (int)sizeof(label_bar) - 1;
+        memset(label_bar, ' ', bar_max);
+        label_bar[bar_max] = '\0';
+
+        /* Place "0" at index 0 */
+        memcpy(label_bar, v_zero, strlen(v_zero));
+
+        /* Place mid value centered at bar_max / 2 */
         int mid_pos = bar_max / 2;
-        int pad1 = mid_pos - (int)strlen(v_zero);
-        if (pad1 > 0) {
-            for (int k = 0; k < pad1 && pos + 2 < (int)sizeof(label_buf); ++k) label_buf[pos++] = ' ';
-            pos += snprintf(label_buf + pos, sizeof(label_buf) - pos, "%s", v_mid);
+        int mid_start = mid_pos - (int)strlen(v_mid) / 2;
+        if (mid_start > (int)strlen(v_zero)) {
+            memcpy(label_bar + mid_start, v_mid, strlen(v_mid));
         }
-        int pad2 = bar_max - mid_pos - (int)strlen(v_mid);
-        if (pad2 > 0) {
-            for (int k = 0; k < pad2 && pos + 2 < (int)sizeof(label_buf); ++k) label_buf[pos++] = ' ';
-            pos += snprintf(label_buf + pos, sizeof(label_buf) - pos, "%s", v_max);
+
+        /* Place max value right-aligned to end at bar_max - 1 */
+        int max_len = (int)strlen(v_max);
+        int max_start = bar_max - max_len;
+        if (max_start > mid_start + (int)strlen(v_mid)) {
+            memcpy(label_bar + max_start, v_max, max_len);
         }
-        label_buf[pos] = '\0';
+
+        snprintf(label_buf, sizeof(label_buf), "%-16s │ %6s │ %s", "[Count Scale]", "", label_bar);
         tui_render_row(f, label_buf, width, true);
         rows_drawn++;
 
-        pos = snprintf(line_buf, sizeof(line_buf), "%-16s │ %6s │ ├", "", "");
+        int pos = snprintf(line_buf, sizeof(line_buf), "%-16s │ %6s │ ├", "", "");
         for (int k = 1; k < bar_max - 1 && pos + 4 < (int)sizeof(line_buf); ++k) {
             if (k == bar_max / 2) {
                 pos += snprintf(line_buf + pos, sizeof(line_buf) - pos, "┼");
