@@ -7,8 +7,10 @@
 #include <histo/histo2d.h>
 #include <histo/fit.h>
 #include <histo/sketch.h>
+#include <histo/cli.h>
 #include <histo/types.h>
 #include <histo/version.h>
+
 
 MODULE = Math::Histo    PACKAGE = Math::Histo    PREFIX = histo_xs_
 
@@ -1537,3 +1539,59 @@ serialize_binary(histo_sketch_t *self)
         free(out_buf);
     OUTPUT:
         RETVAL
+
+MODULE = Math::Histo    PACKAGE = Math::Histo::CLI    PREFIX = histo_cli_xs_
+
+int
+run(...)
+    PROTOTYPE: @
+    CODE:
+        int start = 0;
+        if (items > 0 && SvPOK(ST(0)) && strcmp(SvPV_nolen(ST(0)), "Math::Histo::CLI") == 0) {
+            start = 1;
+        }
+        int argc = items - start;
+        if (argc == 0) {
+            char *default_argv[] = { "phisto", NULL };
+            RETVAL = histo_cli_main(1, default_argv, stdout, stderr);
+        } else {
+            char **argv = (char **)malloc(((size_t)argc + 2) * sizeof(char *));
+            if (!argv) {
+                croak("Math::Histo::CLI::run: out of memory allocating argv");
+            }
+            argv[0] = (char *)"phisto";
+            for (int i = 0; i < argc; ++i) {
+                argv[i + 1] = SvPV_nolen(ST(start + i));
+            }
+            argv[argc + 1] = NULL;
+            RETVAL = histo_cli_main(argc + 1, argv, stdout, stderr);
+            free(argv);
+        }
+    OUTPUT:
+        RETVAL
+
+
+int
+histo_cli_xs_run_raw(...)
+    PROTOTYPE: @
+    CODE:
+        /* Run with explicit argv[0] */
+        int argc = items;
+        if (argc == 0) {
+            char *default_argv[] = { "phisto", NULL };
+            RETVAL = histo_cli_main(1, default_argv, stdout, stderr);
+        } else {
+            char **argv = (char **)malloc(((size_t)argc + 1) * sizeof(char *));
+            if (!argv) {
+                croak("Math::Histo::CLI::run_raw: out of memory allocating argv");
+            }
+            for (int i = 0; i < argc; ++i) {
+                argv[i] = SvPV_nolen(ST(i));
+            }
+            argv[argc] = NULL;
+            RETVAL = histo_cli_main(argc, argv, stdout, stderr);
+            free(argv);
+        }
+    OUTPUT:
+        RETVAL
+

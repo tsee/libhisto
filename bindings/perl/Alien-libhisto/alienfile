@@ -18,8 +18,9 @@ share {
             '%{cmake}',
             @{ meta->prop->{plugin_build_cmake}->{args} },
             '-DCMAKE_BUILD_TYPE=Release',
-            '-DLIBHISTO_BUILD_TOOLS=OFF',
+            '-DLIBHISTO_BUILD_TOOLS=ON',
             '-DLIBHISTO_BUILD_TESTS=OFF',
+
             '-DLIBHISTO_BUILD_BENCHMARKS=OFF',
             '-DLIBHISTO_BUILD_EXAMPLES=OFF',
             '-DLIBHISTO_BUILD_DOCS=OFF',

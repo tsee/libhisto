@@ -33,18 +33,19 @@ sub copy_tree {
 if (-f $repo_cmake) {
     print "In-tree build: syncing libhisto source tree to bundled/...\n";
     make_path($bundled_dir) unless -d $bundled_dir;
-    for my $dir (qw(include src cmake)) {
+    for my $dir (qw(include src cmake tools)) {
         my $src_dir = File::Spec->catdir($repo_root, $dir);
         if (-d $src_dir) {
             copy_tree($src_dir, File::Spec->catdir($bundled_dir, $dir));
         }
     }
-    for my $file (qw(CMakeLists.txt libhisto.pc.in Doxyfile.in LICENSE)) {
+    for my $file (qw(CMakeLists.txt libhisto.pc.in libhistocli.pc.in Doxyfile.in LICENSE)) {
         my $src_file = File::Spec->catfile($repo_root, $file);
         if (-f $src_file) {
             copy($src_file, File::Spec->catfile($bundled_dir, $file));
         }
     }
+
 }
 
 
