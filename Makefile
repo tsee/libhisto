@@ -81,6 +81,13 @@ docs:
 	cmake -B $(BUILD_DIR) -S . -DLIBHISTO_BUILD_DOCS=ON
 	cmake --build $(BUILD_DIR) --target docs
 
+check-versions:
+	python3 tools/scripts/bump_version.py --check
+
+bump-version:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-version VERSION=X.Y.Z"; exit 1; fi
+	python3 tools/scripts/bump_version.py --set $(VERSION)
 
 clean:
 	rm -rf $(BUILD_DIR) $(BUILD_DIR)-*
+

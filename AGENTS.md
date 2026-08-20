@@ -69,3 +69,25 @@ This document defines the operational workflow, engineering standards, and commu
 - **Numerical Correctness**:
   - Explicit, deterministic handling of IEEE-754 floating-point edge cases (`NaN`, `+Inf`, `-Inf`, subnormals, negative zero).
   - Numerically stable algorithms for statistical accumulators (e.g., Welford's algorithm for online variance).
+
+---
+
+## 5. Release, Versioning & Tagging Policy
+
+- **Semantic Versioning 2.0.0**:
+  - `MAJOR`: Incompatible C API/ABI modifications, struct layout breaks, or breaking wire format changes.
+  - `MINOR`: New backward-compatible C API routines, feature flags, wire format extensions, or analytical capabilities.
+  - `PATCH`: Backward-compatible bug fixes, SIMD vector optimizations, documentation/test enhancements.
+- **Single Source of Truth**:
+  - Core C version resides in [`include/histo/version.h`](include/histo/version.h) (`HISTO_VERSION_*` macros) and [`CMakeLists.txt`](CMakeLists.txt) (`project(libhisto VERSION X.Y.Z)`).
+  - Language bindings synchronize major/minor with core: `bindings/python/pyproject.toml`, `bindings/perl/Math-Histo/lib/Math/Histo.pm`, `bindings/perl/Alien-libhisto/lib/Alien/libhisto.pm`.
+  - Automated version synchronization and verification is enforced via `python3 tools/scripts/bump_version.py --check`.
+- **Changelog Hygiene**:
+  - Root [`CHANGELOG.md`](CHANGELOG.md) must be maintained under Keep a Changelog standards (`[Unreleased]`, `[X.Y.Z] - YYYY-MM-DD`), categorized across Core C, CLI, Python, and Perl.
+  - CPAN `Changes` files in `bindings/perl/*/Changes` must be updated on Perl binding releases following CPAN standards.
+- **Release Tagging**:
+  - Coordinated monorepo releases: Annotated git tag `vX.Y.Z` (e.g., `v0.1.0`).
+  - Independent out-of-band binding releases: Namespaced tags `perl-math-histo-vX.Y.Z`, `python-histo-vX.Y.Z`.
+- **Pre-Release Verification Gate**:
+  - No release or tag may be made without a 100% clean run of `make test-all` (Release, ASan/UBSan, TSan, Valgrind memcheck, Python sdist hermetic tests, Perl dist hermetic tests, Doxygen documentation).
+
