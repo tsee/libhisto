@@ -14,6 +14,7 @@ This document defines the operational workflow, engineering standards, and commu
   - **Tests**: Unit tests, integration test suites, boundary edge cases, and concurrency tests.
   - **Benchmarks**: Micro-benchmarks and aggregate function benchmarks in [`bench/`](bench/) to ensure performance regressions are prevented.
   - **Serialization Logic**: **Most importantly**, any modification to data structures, histogram fields, metadata, accumulators, statistical moments, or feature flags MUST be evaluated for respective updates to the serialization and deserialization wire format ([`src/serialize.c`](src/serialize.c), [`docs/serialization_format.md`](docs/serialization_format.md), and binary roundtrip tests).
+  - **Language Bindings**: Any modification, addition, or deprecation to the C public API (`include/histo/*.h`), struct fields, feature flags, or serialization formats MUST be evaluated and propagated to all active language bindings (`bindings/perl/`, `bindings/python/`, etc.).
 - **Progress Tracking**: Keep [`docs/tasks.md`](docs/tasks.md) updated as tasks start (`[~]`) and complete (`[x]`).
 
 ---
@@ -22,8 +23,10 @@ This document defines the operational workflow, engineering standards, and commu
 
 - **Frequent Turn Commits**: Do not leave uncommitted changes lying around. Typically create a commit after every turn, provided changes are self-contained, all tests pass, and standards are satisfied.
 - **Atomic Commits**: Make small, self-contained commits focused on a single logical change.
+- **Separate Binding Commits**: When updating language bindings due to core `libhisto` C API changes, **always update and commit the language bindings in separate commits** from the core C library commits (e.g., `feat(core): add XYZ` followed by `feat(bindings/perl): update XS wrapper for XYZ`).
 - **Descriptive Messages**: Write clear, imperative commit messages (e.g., `feat(binning): implement uniform bin lookup with bounds check`).
 - **Zero Broken Commits**: **Every commit containing code changes MUST pass the entire test suite cleanly before committing.** No broken states on any branch.
+
 
 
 ---
