@@ -47,6 +47,7 @@ void tui_term_restore(void);
 bool tui_term_raw_enter(void);
 void tui_term_raw_leave(void);
 void tui_term_get_size(int *out_cols, int *out_rows);
+int  tui_term_get_tty_fd(void);
 
 /* Non-blocking key event reader from tty */
 tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms);

@@ -15,9 +15,13 @@
 
 #if !defined(_WIN32)
 #include <termios.h>
+#include <fcntl.h>
+
 static struct termios orig_termios;
 static bool term_is_raw = false;
 static volatile sig_atomic_t g_resized = 0;
+static int g_tty_fd = -1;
+static bool g_tty_is_dev_tty = false;
 
 static void sigwinch_handler(int sig) {
     (void)sig;
@@ -31,9 +35,29 @@ static void sigint_handler(int sig) {
 }
 #endif
 
+int tui_term_get_tty_fd(void) {
+#if !defined(_WIN32)
+    if (g_tty_fd >= 0) return g_tty_fd;
+    if (isatty(STDIN_FILENO)) {
+        g_tty_fd = STDIN_FILENO;
+    } else {
+        g_tty_fd = open("/dev/tty", O_RDWR | O_NOCTTY);
+        if (g_tty_fd >= 0) {
+            g_tty_is_dev_tty = true;
+        } else if (isatty(STDOUT_FILENO)) {
+            g_tty_fd = STDOUT_FILENO;
+        }
+    }
+    return g_tty_fd;
+#else
+    return 0;
+#endif
+}
+
 bool tui_term_init(void) {
 #if !defined(_WIN32)
-    if (!isatty(STDIN_FILENO) && !isatty(STDOUT_FILENO)) {
+    int fd = tui_term_get_tty_fd();
+    if (fd < 0) {
         return false;
     }
     struct sigaction sa;
@@ -53,15 +77,11 @@ bool tui_term_init(void) {
 bool tui_term_raw_enter(void) {
 #if !defined(_WIN32)
     if (term_is_raw) return true;
-    if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
-        /* If stdin is piped, try opening /dev/tty */
-        FILE *tty = fopen("/dev/tty", "r+");
-        if (tty) {
-            tcgetattr(fileno(tty), &orig_termios);
-            fclose(tty);
-        } else {
-            return false;
-        }
+    int fd = tui_term_get_tty_fd();
+    if (fd < 0) return false;
+
+    if (tcgetattr(fd, &orig_termios) == -1) {
+        return false;
     }
 
     struct termios raw = orig_termios;
@@ -70,9 +90,11 @@ bool tui_term_raw_enter(void) {
     raw.c_cflag |= (CS8);
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
     raw.c_cc[VMIN] = 0;
-    raw.c_cc[VTIME] = 1;
+    raw.c_cc[VTIME] = 0;
 
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    if (tcsetattr(fd, TCSAFLUSH, &raw) == -1) {
+        return false;
+    }
     term_is_raw = true;
 
     /* Enter alternate screen and hide cursor */
@@ -85,16 +107,26 @@ bool tui_term_raw_enter(void) {
 void tui_term_raw_leave(void) {
 #if !defined(_WIN32)
     if (!term_is_raw) return;
+    int fd = tui_term_get_tty_fd();
+    if (fd >= 0) {
+        tcsetattr(fd, TCSAFLUSH, &orig_termios);
+    }
     /* Exit alternate screen and show cursor */
     printf("\033[?25h\033[?1049l");
     fflush(stdout);
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
     term_is_raw = false;
 #endif
 }
 
 void tui_term_restore(void) {
+#if !defined(_WIN32)
     tui_term_raw_leave();
+    if (g_tty_is_dev_tty && g_tty_fd >= 0) {
+        close(g_tty_fd);
+        g_tty_fd = -1;
+        g_tty_is_dev_tty = false;
+    }
+#endif
 }
 
 void tui_term_get_size(int *out_cols, int *out_rows) {

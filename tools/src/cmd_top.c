@@ -346,9 +346,7 @@ int cmd_top_main(int argc, char **argv) {
 
     tui_engine_start(&eng);
 
-    int tty_fd = STDIN_FILENO;
-    FILE *tty_fp = fopen("/dev/tty", "r+");
-    if (tty_fp) tty_fd = fileno(tty_fp);
+    int tty_fd = tui_term_get_tty_fd();
 
     tui_frame_t frame;
     tui_frame_init(&frame, 65536);
@@ -473,7 +471,6 @@ int cmd_top_main(int argc, char **argv) {
     tui_frame_free(&frame);
     tui_term_restore();
     tui_engine_free(&eng);
-    if (tty_fp) fclose(tty_fp);
     if (in_fp != stdin) fclose(in_fp);
     return 0;
 }
