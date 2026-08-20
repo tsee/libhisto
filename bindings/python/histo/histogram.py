@@ -43,6 +43,34 @@ class Histogram:
         else:
             raise ValueError("Must specify either (bins, range) for uniform binning or edges for variable binning")
 
+    @classmethod
+    def auto(
+        cls,
+        samples: Sequence[float],
+        rule: Union[str, int] = "auto",
+        track_sumw2: bool = False,
+        exact_moments: bool = False,
+        flags: int = FLAG_NONE,
+    ) -> "Histogram":
+        """Construct and fill an automatically sized uniform histogram from sample data."""
+        active_flags = flags
+        if track_sumw2:
+            active_flags |= FLAG_TRACK_SUMW2
+        if exact_moments:
+            active_flags |= FLAG_EXACT_MOMENTS
+
+        rule_map = {
+            "auto": _libhisto.BIN_RULE_AUTO,
+            "fd": _libhisto.BIN_RULE_FD,
+            "scott": _libhisto.BIN_RULE_SCOTT,
+            "sturges": _libhisto.BIN_RULE_STURGES,
+            "doane": _libhisto.BIN_RULE_DOANE,
+            "knuth": _libhisto.BIN_RULE_KNUTH,
+        }
+        r_code = rule_map.get(str(rule).lower(), rule) if isinstance(rule, str) else int(rule)
+        raw = _libhisto.create_auto(samples=samples, rule=r_code, flags=active_flags)
+        return cls(_raw=raw)
+
     # -------------------------------------------------------------------------
     # Deserialization & File I/O
     # -------------------------------------------------------------------------

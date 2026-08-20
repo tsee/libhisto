@@ -7,6 +7,7 @@
 #include "histo/histo.h"
 #include "histo/histo2d.h"
 #include "histo/fit.h"
+#include "histo/kde.h"
 #include "histo/sketch.h"
 #include "histo/cli.h"
 #include "histo/version.h"
@@ -29,6 +30,7 @@ static PyTypeObject Histo1DType;
 static PyTypeObject Histo2DType;
 static PyTypeObject SketchType;
 static PyTypeObject FitResultType;
+static PyTypeObject KDEType;
 
 /* ------------------------------------------------------------------------- */
 /* Histo1D Python Object                                                     */
@@ -1767,8 +1769,310 @@ static PyTypeObject SketchType = {
 };
 
 /* ------------------------------------------------------------------------- */
-/* CLI Runner Function                                                       */
+/* KDE Python Object                                                         */
 /* ------------------------------------------------------------------------- */
+typedef struct {
+    PyObject_HEAD
+    histo_kde_t *kde;
+} KDEObject;
+
+static PyObject *KDE_new_from_ptr(histo_kde_t *kde) {
+    if (!kde) Py_RETURN_NONE;
+    KDEObject *self = (KDEObject *)KDEType.tp_alloc(&KDEType, 0);
+    if (!self) { histo_kde_destroy(kde); return NULL; }
+    self->kde = kde;
+    return (PyObject *)self;
+}
+
+static void KDE_dealloc(KDEObject *self) {
+    if (self->kde) {
+        histo_kde_destroy(self->kde);
+        self->kde = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyObject *KDE_create(PyObject *cls, PyObject *args, PyObject *kwargs) {
+    (void)cls;
+    static char *kwlist[] = {"samples", "weights", "kernel", "bw_method", "bandwidth", "bw_adjust", NULL};
+    PyObject *s_obj = NULL, *w_obj = NULL;
+    int kernel = 0, bw_method = 0;
+    double bandwidth = 0.0, bw_adjust = 1.0;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|Oiidd", kwlist,
+                                     &s_obj, &w_obj, &kernel, &bw_method, &bandwidth, &bw_adjust)) {
+        return NULL;
+    }
+
+    PyObject *s_seq = PySequence_Fast(s_obj, "samples must be a sequence or array");
+    if (!s_seq) return NULL;
+    Py_ssize_t n = PySequence_Fast_GET_SIZE(s_seq);
+    if (n == 0) {
+        Py_DECREF(s_seq);
+        PyErr_SetString(PyExc_ValueError, "samples sequence cannot be empty");
+        return NULL;
+    }
+
+    PyObject *w_seq = (w_obj && w_obj != Py_None) ? PySequence_Fast(w_obj, "weights must be a sequence") : NULL;
+    if (w_obj && w_obj != Py_None && !w_seq) {
+        Py_DECREF(s_seq);
+        return NULL;
+    }
+
+    double *s_arr = (double *)malloc((size_t)n * sizeof(double));
+    double *w_arr = w_seq ? (double *)malloc((size_t)n * sizeof(double)) : NULL;
+    if (!s_arr || (w_seq && !w_arr)) {
+        free(s_arr); free(w_arr);
+        Py_DECREF(s_seq); Py_XDECREF(w_seq);
+        return PyErr_NoMemory();
+    }
+
+    for (Py_ssize_t i = 0; i < n; i++) {
+        s_arr[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(s_seq, i));
+        if (w_seq) {
+            w_arr[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(w_seq, i));
+        }
+    }
+    Py_DECREF(s_seq); Py_XDECREF(w_seq);
+
+    histo_kde_options_t opts;
+    opts.kernel = (histo_kde_kernel_t)kernel;
+    opts.bw_method = (histo_kde_bandwidth_method_t)bw_method;
+    opts.bandwidth = bandwidth;
+    opts.bw_adjust = bw_adjust;
+
+    histo_kde_t *kde = histo_kde_create((size_t)n, s_arr, w_arr, &opts);
+    free(s_arr); free(w_arr);
+
+    if (!kde) {
+        PyErr_SetString(HistoError, "Failed to construct KDE model");
+        return NULL;
+    }
+    return KDE_new_from_ptr(kde);
+}
+
+static PyObject *KDE_create_from_histo(PyObject *cls, PyObject *args, PyObject *kwargs) {
+    (void)cls;
+    static char *kwlist[] = {"histo", "kernel", "bw_method", "bandwidth", "bw_adjust", NULL};
+    PyObject *h_obj = NULL;
+    int kernel = 0, bw_method = 0;
+    double bandwidth = 0.0, bw_adjust = 1.0;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|iidd", kwlist,
+                                     &h_obj, &kernel, &bw_method, &bandwidth, &bw_adjust)) {
+        return NULL;
+    }
+
+    if (!PyObject_IsInstance(h_obj, (PyObject *)&Histo1DType)) {
+        PyErr_SetString(PyExc_TypeError, "Expected a Histo1D instance");
+        return NULL;
+    }
+
+    Histo1DObject *ho = (Histo1DObject *)h_obj;
+    histo_kde_options_t opts;
+    opts.kernel = (histo_kde_kernel_t)kernel;
+    opts.bw_method = (histo_kde_bandwidth_method_t)bw_method;
+    opts.bandwidth = bandwidth;
+    opts.bw_adjust = bw_adjust;
+
+    histo_kde_t *kde = histo_kde_create_from_histo(ho->h, &opts);
+    if (!kde) {
+        PyErr_SetString(HistoError, "Failed to construct KDE model from histogram");
+        return NULL;
+    }
+    return KDE_new_from_ptr(kde);
+}
+
+static PyObject *KDE_eval(KDEObject *self, PyObject *args) {
+    PyObject *x_obj = NULL;
+    if (!PyArg_ParseTuple(args, "O", &x_obj)) return NULL;
+
+    if (PyFloat_Check(x_obj) || PyLong_Check(x_obj)) {
+        double x = PyFloat_AsDouble(x_obj);
+        double val = histo_kde_eval(self->kde, x);
+        return PyFloat_FromDouble(val);
+    }
+
+    PyObject *seq = PySequence_Fast(x_obj, "x must be a number or sequence of numbers");
+    if (!seq) return NULL;
+    Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
+
+    PyObject *list = PyList_New(n);
+    if (!list) { Py_DECREF(seq); return NULL; }
+
+    for (Py_ssize_t i = 0; i < n; i++) {
+        double x = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(seq, i));
+        double val = histo_kde_eval(self->kde, x);
+        PyList_SET_ITEM(list, i, PyFloat_FromDouble(val));
+    }
+    Py_DECREF(seq);
+    return list;
+}
+
+static PyObject *KDE_cdf(KDEObject *self, PyObject *args) {
+    double x = 0.0;
+    if (!PyArg_ParseTuple(args, "d", &x)) return NULL;
+    return PyFloat_FromDouble(histo_kde_cdf(self->kde, x));
+}
+
+static PyObject *KDE_quantile(KDEObject *self, PyObject *args) {
+    double q = 0.0;
+    if (!PyArg_ParseTuple(args, "d", &q)) return NULL;
+    double out_val = 0.0;
+    histo_status_t st = histo_kde_quantile(self->kde, q, &out_val);
+    if (st != HISTO_OK) {
+        set_histo_error(st, "KDE quantile calculation failed");
+        return NULL;
+    }
+    return PyFloat_FromDouble(out_val);
+}
+
+static PyObject *KDE_sample(KDEObject *self, PyObject *args, PyObject *kwargs) {
+    static char *kwlist[] = {"n", "seed", NULL};
+    Py_ssize_t n = 1;
+    unsigned long long seed = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "n|K", kwlist, &n, &seed)) return NULL;
+    if (n <= 0) {
+        return PyList_New(0);
+    }
+
+    double *buf = (double *)malloc((size_t)n * sizeof(double));
+    if (!buf) return PyErr_NoMemory();
+
+    histo_status_t st = histo_kde_sample(self->kde, (size_t)n, buf, (uint64_t)seed);
+    if (st != HISTO_OK) {
+        free(buf);
+        set_histo_error(st, "KDE sampling failed");
+        return NULL;
+    }
+
+    PyObject *list = PyList_New(n);
+    if (!list) { free(buf); return NULL; }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyList_SET_ITEM(list, i, PyFloat_FromDouble(buf[i]));
+    }
+    free(buf);
+    return list;
+}
+
+static PyObject *KDE_get_bandwidth(KDEObject *self, void *closure) {
+    (void)closure;
+    return PyFloat_FromDouble(histo_kde_get_bandwidth(self->kde));
+}
+
+static PyObject *KDE_get_kernel(KDEObject *self, void *closure) {
+    (void)closure;
+    return PyLong_FromLong((long)histo_kde_get_kernel(self->kde));
+}
+
+static PyObject *KDE_get_n_points(KDEObject *self, void *closure) {
+    (void)closure;
+    return PyLong_FromSize_t(histo_kde_num_points(self->kde));
+}
+
+static PyGetSetDef KDE_getsetters[] = {
+    {"bandwidth", (getter)KDE_get_bandwidth, NULL, "Bandwidth h", NULL},
+    {"kernel", (getter)KDE_get_kernel, NULL, "Kernel function type", NULL},
+    {"n_points", (getter)KDE_get_n_points, NULL, "Number of sample points", NULL},
+    {NULL, NULL, NULL, NULL, NULL}
+};
+
+static PyMethodDef KDE_methods[] = {
+    {"create", (PyCFunction)(void(*)(void))KDE_create, METH_VARARGS | METH_KEYWORDS | METH_CLASS, "Create KDE model from samples"},
+    {"create_from_histo", (PyCFunction)(void(*)(void))KDE_create_from_histo, METH_VARARGS | METH_KEYWORDS | METH_CLASS, "Create KDE model from histogram"},
+    {"eval", (PyCFunction)(void(*)(void))KDE_eval, METH_VARARGS, "Evaluate estimated PDF"},
+    {"cdf", (PyCFunction)(void(*)(void))KDE_cdf, METH_VARARGS, "Evaluate estimated CDF"},
+    {"quantile", (PyCFunction)(void(*)(void))KDE_quantile, METH_VARARGS, "Evaluate estimated quantile"},
+    {"sample", (PyCFunction)(void(*)(void))KDE_sample, METH_VARARGS | METH_KEYWORDS, "Generate random samples"},
+    {NULL, NULL, 0, NULL}
+};
+
+static PyTypeObject KDEType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_libhisto.KDE",
+    .tp_doc = "Kernel Density Estimation non-parametric continuous density estimator",
+    .tp_basicsize = sizeof(KDEObject),
+    .tp_itemsize = 0,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_dealloc = (destructor)KDE_dealloc,
+    .tp_getset = KDE_getsetters,
+    .tp_methods = KDE_methods,
+};
+
+/* ------------------------------------------------------------------------- */
+/* Auto-binning and CLI runner functions                                     */
+/* ------------------------------------------------------------------------- */
+static PyObject *py_estimate_bins(PyObject *self, PyObject *args, PyObject *kwargs) {
+    (void)self;
+    static char *kwlist[] = {"samples", "rule", NULL};
+    PyObject *s_obj = NULL;
+    int rule = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|i", kwlist, &s_obj, &rule)) return NULL;
+
+    PyObject *s_seq = PySequence_Fast(s_obj, "samples must be a sequence or array");
+    if (!s_seq) return NULL;
+    Py_ssize_t n = PySequence_Fast_GET_SIZE(s_seq);
+    if (n == 0) {
+        Py_DECREF(s_seq);
+        PyErr_SetString(PyExc_ValueError, "samples sequence cannot be empty");
+        return NULL;
+    }
+
+    double *s_arr = (double *)malloc((size_t)n * sizeof(double));
+    if (!s_arr) { Py_DECREF(s_seq); return PyErr_NoMemory(); }
+
+    for (Py_ssize_t i = 0; i < n; i++) {
+        s_arr[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(s_seq, i));
+    }
+    Py_DECREF(s_seq);
+
+    uint32_t nbins = 0;
+    double min_v = 0.0, max_v = 0.0;
+    histo_status_t st = histo_estimate_bins((size_t)n, s_arr, (histo_bin_rule_t)rule, &nbins, &min_v, &max_v);
+    free(s_arr);
+
+    if (st != HISTO_OK) {
+        set_histo_error(st, "Auto bin estimation failed");
+        return NULL;
+    }
+    return Py_BuildValue("(Idd)", nbins, min_v, max_v);
+}
+
+static PyObject *py_create_auto(PyObject *self, PyObject *args, PyObject *kwargs) {
+    (void)self;
+    static char *kwlist[] = {"samples", "rule", "flags", NULL};
+    PyObject *s_obj = NULL;
+    int rule = 0;
+    unsigned int flags = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|iI", kwlist, &s_obj, &rule, &flags)) return NULL;
+
+    PyObject *s_seq = PySequence_Fast(s_obj, "samples must be a sequence or array");
+    if (!s_seq) return NULL;
+    Py_ssize_t n = PySequence_Fast_GET_SIZE(s_seq);
+    if (n == 0) {
+        Py_DECREF(s_seq);
+        PyErr_SetString(PyExc_ValueError, "samples sequence cannot be empty");
+        return NULL;
+    }
+
+    double *s_arr = (double *)malloc((size_t)n * sizeof(double));
+    if (!s_arr) { Py_DECREF(s_seq); return PyErr_NoMemory(); }
+
+    for (Py_ssize_t i = 0; i < n; i++) {
+        s_arr[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(s_seq, i));
+    }
+    Py_DECREF(s_seq);
+
+    histo_t *h = histo_create_auto((size_t)n, s_arr, (histo_bin_rule_t)rule, flags);
+    free(s_arr);
+
+    if (!h) {
+        PyErr_SetString(HistoError, "Failed to create automatic histogram");
+        return NULL;
+    }
+    return Histo1D_new_from_ptr(h);
+}
+
 static PyObject *py_cli_run(PyObject *self, PyObject *args) {
     (void)self;
     PyObject *seq = PySequence_Fast(args, "cli_run arguments");
@@ -1842,6 +2146,8 @@ static PyObject *py_cli_run(PyObject *self, PyObject *args) {
 /* Module initialization                                                     */
 /* ------------------------------------------------------------------------- */
 static PyMethodDef LibhistoModuleMethods[] = {
+    {"estimate_bins", (PyCFunction)(void(*)(void))py_estimate_bins, METH_VARARGS | METH_KEYWORDS, "Estimate optimal uniform bins (nbins, min, max) for samples"},
+    {"create_auto", (PyCFunction)(void(*)(void))py_create_auto, METH_VARARGS | METH_KEYWORDS, "Create automatically sized and filled 1D histogram"},
     {"cli_run", (PyCFunction)(void(*)(void))py_cli_run, METH_VARARGS, "Run libhistocli command in-process returning (exit_code, stdout, stderr)"},
     {NULL, NULL, 0, NULL}
 };
@@ -1849,7 +2155,7 @@ static PyMethodDef LibhistoModuleMethods[] = {
 static struct PyModuleDef libhistomodule = {
     PyModuleDef_HEAD_INIT,
     "_libhisto",
-    "Low-level C extension wrapping libhisto and libhistocli",
+    "Low-level C extension wrapping libhisto, libhistocli, and KDE",
     -1,
     LibhistoModuleMethods,
     NULL, NULL, NULL, NULL
@@ -1860,6 +2166,7 @@ PyMODINIT_FUNC PyInit__libhisto(void) {
     if (PyType_Ready(&Histo2DType) < 0) return NULL;
     if (PyType_Ready(&SketchType) < 0) return NULL;
     if (PyType_Ready(&FitResultType) < 0) return NULL;
+    if (PyType_Ready(&KDEType) < 0) return NULL;
 
     PyObject *m = PyModule_Create(&libhistomodule);
     if (!m) return NULL;
@@ -1879,6 +2186,9 @@ PyMODINIT_FUNC PyInit__libhisto(void) {
 
     Py_INCREF(&FitResultType);
     PyModule_AddObject(m, "FitResult", (PyObject *)&FitResultType);
+
+    Py_INCREF(&KDEType);
+    PyModule_AddObject(m, "KDE", (PyObject *)&KDEType);
 
     /* Version constants */
     PyModule_AddStringConstant(m, "VERSION_STRING", HISTO_VERSION_STRING);
@@ -1902,6 +2212,28 @@ PyMODINIT_FUNC PyInit__libhisto(void) {
     PyModule_AddIntConstant(m, "FIT_BREIT_WIGNER", HISTO_FIT_MODEL_BREIT_WIGNER);
     PyModule_AddIntConstant(m, "FIT_POWER_LAW", HISTO_FIT_MODEL_POWER_LAW);
 
+    /* Auto Binning Rules */
+    PyModule_AddIntConstant(m, "BIN_RULE_AUTO", HISTO_BIN_RULE_AUTO);
+    PyModule_AddIntConstant(m, "BIN_RULE_FD", HISTO_BIN_RULE_FD);
+    PyModule_AddIntConstant(m, "BIN_RULE_SCOTT", HISTO_BIN_RULE_SCOTT);
+    PyModule_AddIntConstant(m, "BIN_RULE_STURGES", HISTO_BIN_RULE_STURGES);
+    PyModule_AddIntConstant(m, "BIN_RULE_DOANE", HISTO_BIN_RULE_DOANE);
+    PyModule_AddIntConstant(m, "BIN_RULE_KNUTH", HISTO_BIN_RULE_KNUTH);
+
+    /* KDE Kernels */
+    PyModule_AddIntConstant(m, "KDE_KERNEL_GAUSSIAN", HISTO_KDE_KERNEL_GAUSSIAN);
+    PyModule_AddIntConstant(m, "KDE_KERNEL_EPANECHNIKOV", HISTO_KDE_KERNEL_EPANECHNIKOV);
+    PyModule_AddIntConstant(m, "KDE_KERNEL_UNIFORM", HISTO_KDE_KERNEL_UNIFORM);
+    PyModule_AddIntConstant(m, "KDE_KERNEL_TRIANGULAR", HISTO_KDE_KERNEL_TRIANGULAR);
+    PyModule_AddIntConstant(m, "KDE_KERNEL_BIWEIGHT", HISTO_KDE_KERNEL_BIWEIGHT);
+    PyModule_AddIntConstant(m, "KDE_KERNEL_COSINE", HISTO_KDE_KERNEL_COSINE);
+
+    /* KDE Bandwidth Methods */
+    PyModule_AddIntConstant(m, "KDE_BW_SILVERMAN", HISTO_KDE_BANDWIDTH_SILVERMAN);
+    PyModule_AddIntConstant(m, "KDE_BW_SCOTT", HISTO_KDE_BANDWIDTH_SCOTT);
+    PyModule_AddIntConstant(m, "KDE_BW_MANUAL", HISTO_KDE_BANDWIDTH_MANUAL);
+
     return m;
 }
+
 
