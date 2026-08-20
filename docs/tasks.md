@@ -136,9 +136,11 @@
 
 
 ### Sub-Phase P.2: Perl XS Wrapper Module (`Math::Histo`)
-- [ ] **P2.1** Design & API Specification for `Math::Histo` (1D, 2D, Curve Fitting, DDSketch, PDL/vector interop).
-- [ ] **P2.2** Implementation of `Math::Histo` XS bindings (`Histo.xs`, typemaps, object lifecycle, and Perl OOP wrappers).
-- [ ] **P2.3** Comprehensive Perl test suite (`t/` testing 1D/2D binning, weights, moments, fitting, sketches, serialization).
+- [x] **P2.1** Design & API Specification for `Math::Histo` (1D, 2D, Curve Fitting, DDSketch, packed buffer ingestion).
+- [x] **P2.2** Implementation of `Math::Histo` XS bindings (`Histo.xs`, `typemap`, `Math::Histo`, `Math::Histo::2D`, `Math::Histo::Fit`, `Math::Histo::Sketch`, `Math::Histo::Constants`).
+- [x] **P2.3** Comprehensive Perl test suite (`t/01_basic.t` through `t/08_edge_cases.t` testing 1D/2D binning, weights, moments, fitting, sketches, serialization, and edge cases).
+- [x] **P2.4** Distribution packaging & make target automation (`make test-perl`, `make perl-dist`).
+
 
 
 

@@ -1,4 +1,4 @@
-.PHONY: all build test test-all test-doc-examples test-perl-alien perl-alien-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl perl-alien-dist perl-histo-dist perl-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -11,9 +11,9 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-doc-examples test-perl-alien test-fuzz test-tsan memcheck docs
+test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
-	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL ALIEN, MEMCHECK & DOCS PASSED"
+	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL BINDINGS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
 
 test-doc-examples: build
@@ -24,6 +24,16 @@ test-perl-alien:
 
 perl-alien-dist:
 	cd bindings/perl/Alien-libhisto && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
+
+test-perl-histo: test-perl-alien
+	cd bindings/perl/Math-Histo && perl Makefile.PL && $(MAKE) test
+
+perl-histo-dist:
+	cd bindings/perl/Math-Histo && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
+
+test-perl: test-perl-alien test-perl-histo
+
+perl-dist: perl-alien-dist perl-histo-dist
 
 
 test-asan:
