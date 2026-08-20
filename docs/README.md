@@ -4,6 +4,7 @@ This directory contains technical guides, reference specifications, and manuals 
 
 ## Core Guides & Manuals
 - [User Manual & Architecture Reference (Levels 0–5)](manual.md): Comprehensive guide to 1D histograms, moments, CLI, bindings, and benchmarks.
+- [Kernel Density Estimation & Automated Binning Guide](kde_guide.md): 1D continuous KDE engine, standard kernels, bandwidth selectors, and optimal binning heuristics.
 - [Curve Fitting & Non-Linear Regression Guide](curve_fitting_guide.md): Levenberg-Marquardt optimizer, built-in parametric models, custom callbacks, and covariance interpretation.
 - [2D Histograms, Projections & Heatmaps Guide](histo2d_guide.md): 2D histograms, axes, 9-region guards, projections, slices, profile histograms, and heatmaps.
 - [Release, Versioning & Tagging Guide](release_guide.md): Release checklist, version synchronization, tag naming, and distribution packaging.

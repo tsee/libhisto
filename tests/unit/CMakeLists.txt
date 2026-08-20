@@ -88,3 +88,17 @@ add_executable(test_histo2d_stats
 )
 target_link_libraries(test_histo2d_stats PRIVATE histo unity)
 add_test(NAME test_histo2d_stats COMMAND test_histo2d_stats)
+
+# Unit Test: Automated Optimal Bin Width Heuristics
+add_executable(test_auto_bin
+    test_auto_bin.c
+)
+target_link_libraries(test_auto_bin PRIVATE histo unity)
+add_test(NAME test_auto_bin COMMAND test_auto_bin)
+
+# Unit Test: Kernel Density Estimation (KDE) Engine
+add_executable(test_kde
+    test_kde.c
+)
+target_link_libraries(test_kde PRIVATE histo unity)
+add_test(NAME test_kde COMMAND test_kde)

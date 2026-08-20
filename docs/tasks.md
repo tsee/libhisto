@@ -18,8 +18,8 @@ This document tracks active work items, planned enhancements, and development ro
 
 ### 2. Analytical & Statistical Enhancements
 - [ ] **STAT-1**: Binned multi-dimensional statistical metrics (2D Kolmogorov-Smirnov / Peacock 2D test).
-- [ ] **STAT-2**: Non-parametric kernel density estimation (KDE) smoothing overlay for 1D histograms.
-- [ ] **STAT-3**: Automated bin width optimization algorithms (Freedman-Diaconis, Scott's normal reference rule, Knuth's rule).
+- [x] **STAT-2**: Non-parametric kernel density estimation (KDE) engine (`histo_kde`, Gaussian, Epanechnikov, Silverman/Scott bandwidth).
+- [x] **STAT-3**: Automated optimal bin width heuristics (Freedman-Diaconis, Scott, Sturges, Doane, Knuth's Bayesian rule).
 
 ### 3. Bindings & Ecosystem
 - [ ] **BIND-1**: Explore R and Julia foreign function interface (FFI) bindings for `libhisto`.

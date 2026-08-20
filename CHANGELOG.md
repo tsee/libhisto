@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Automated Optimal Bin Width Heuristics** (`include/histo/histo.h`, `src/histo.c`):
+  - Freedman-Diaconis rule (`histo_estimate_bins_fd`).
+  - Scott's normal reference rule (`histo_estimate_bins_scott`).
+  - Sturges' rule (`histo_estimate_bins_sturges`).
+  - Doane's skewness-adjusted rule (`histo_estimate_bins_doane`).
+  - Knuth's Bayesian optimal binning rule (`histo_estimate_bins_knuth`).
+  - Unified estimator (`histo_estimate_bins`) and automated histogram constructor (`histo_create_auto`).
+  - Python binding `Histogram.auto(data, rule="auto")`.
+  - Perl binding `Math::Histo->create_auto($data, rule => 'auto')`.
+  - CLI `histo-fill --auto-bins[=RULE]` (or `-a`) and auto-binning fallback in `histo plot`.
+- **Kernel Density Estimation (KDE) Engine** (`include/histo/kde.h`, `src/kde.c`):
+  - Non-parametric 1D continuous density estimation over raw samples or discrete histograms.
+  - Standard weighting kernels: Gaussian, Epanechnikov, Boxcar / Uniform, Triangular, Biweight / Quartic, Cosine.
+  - Automated bandwidth selectors: Silverman's rule of thumb, Scott's rule, manual explicit bandwidth.
+  - Sheppard's variance correction for binned histogram discretization.
+  - Analytical and numerical evaluation: `histo_kde_eval` (PDF), `histo_kde_eval_n`, `histo_kde_cdf`, `histo_kde_quantile` (CDF root inversion), and `histo_kde_sample` (synthetic PRNG generator).
+  - Python `histo.KDE` class and Perl `Math::Histo::KDE` class.
+  - Comprehensive documentation guide in `docs/kde_guide.md`.
+
+
 ---
 
 ## [0.1.0] - 2026-08-20

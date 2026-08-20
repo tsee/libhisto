@@ -601,20 +601,8 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
             }
 
             if (count > 0) {
-                double rmin = samples[0], rmax = samples[0];
-                for (size_t i = 1; i < count; ++i) {
-                    if (samples[i] < rmin) rmin = samples[i];
-                    if (samples[i] > rmax) rmax = samples[i];
-                }
-                if (fabs(rmax - rmin) < 1e-12) {
-                    rmin -= 1.0;
-                    rmax += 1.0;
-                } else {
-                    rmax += (rmax - rmin) * 1e-6;
-                }
-                histo_t *h = histo_create_uniform(20, rmin, rmax, HISTO_FLAG_TRACK_SUMW2);
+                histo_t *h = histo_create_auto(count, samples, HISTO_BIN_RULE_AUTO, HISTO_FLAG_TRACK_SUMW2);
                 if (h) {
-                    histo_fill_n(h, count, samples, NULL);
                     render_histogram_dispatch(h, term_width, style, use_color, log_scale, show_errors, show_stats, title, sparkline, out);
                     histo_destroy(h);
                 }
