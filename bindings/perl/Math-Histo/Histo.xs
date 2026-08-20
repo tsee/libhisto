@@ -6,6 +6,7 @@
 #include <histo/histo.h>
 #include <histo/histo2d.h>
 #include <histo/fit.h>
+#include <histo/kde.h>
 #include <histo/sketch.h>
 #include <histo/cli.h>
 #include <histo/types.h>
@@ -63,6 +64,68 @@ _create_variable(CLASS, SV *edges_ref, uint32_t flags=0)
         }
     OUTPUT:
         RETVAL
+
+histo_t *
+_create_auto(CLASS, SV *samples_ref, int rule=0, uint32_t flags=0)
+    char *CLASS
+    CODE:
+        (void)CLASS;
+        if (!SvROK(samples_ref) || SvTYPE(SvRV(samples_ref)) != SVt_PVAV) {
+            croak("Math::Histo: samples must be an array reference of numbers");
+        }
+        AV *av = (AV*)SvRV(samples_ref);
+        SSize_t n = av_top_index(av) + 1;
+        if (n < 1) {
+            croak("Math::Histo: auto binning requires at least 1 sample");
+        }
+        double *vals = (double*)malloc((size_t)n * sizeof(double));
+        if (!vals) {
+            croak("Math::Histo: memory allocation failure");
+        }
+        for (SSize_t i = 0; i < n; i++) {
+            SV **item = av_fetch(av, i, 0);
+            vals[i] = (item && SvOK(*item)) ? SvNV(*item) : 0.0;
+        }
+        RETVAL = histo_create_auto((size_t)n, vals, (histo_bin_rule_t)rule, flags);
+        free(vals);
+        if (!RETVAL) {
+            croak("Math::Histo: failed to create auto histogram");
+        }
+    OUTPUT:
+        RETVAL
+
+void
+_estimate_bins(CLASS, SV *samples_ref, int rule=0)
+    char *CLASS
+    PPCODE:
+        (void)CLASS;
+        if (!SvROK(samples_ref) || SvTYPE(SvRV(samples_ref)) != SVt_PVAV) {
+            croak("Math::Histo: samples must be an array reference of numbers");
+        }
+        AV *av = (AV*)SvRV(samples_ref);
+        SSize_t n = av_top_index(av) + 1;
+        if (n < 1) {
+            croak("Math::Histo: auto binning requires at least 1 sample");
+        }
+        double *vals = (double*)malloc((size_t)n * sizeof(double));
+        if (!vals) {
+            croak("Math::Histo: memory allocation failure");
+        }
+        for (SSize_t i = 0; i < n; i++) {
+            SV **item = av_fetch(av, i, 0);
+            vals[i] = (item && SvOK(*item)) ? SvNV(*item) : 0.0;
+        }
+        uint32_t nbins = 0;
+        double min_v = 0.0, max_v = 0.0;
+        histo_status_t st = histo_estimate_bins((size_t)n, vals, (histo_bin_rule_t)rule, &nbins, &min_v, &max_v);
+        free(vals);
+        if (st != HISTO_OK) {
+            croak("Math::Histo: estimate_bins failed");
+        }
+        EXTEND(SP, 3);
+        PUSHs(sv_2mortal(newSVuv(nbins)));
+        PUSHs(sv_2mortal(newSVnv(min_v)));
+        PUSHs(sv_2mortal(newSVnv(max_v)));
 
 histo_t *
 _clone(histo_t *self)
@@ -1595,6 +1658,147 @@ serialize_binary(histo_sketch_t *self)
         }
         RETVAL = newSVpvn((const char*)out_buf, out_size);
         free(out_buf);
+    OUTPUT:
+        RETVAL
+
+MODULE = Math::Histo    PACKAGE = Math::Histo::KDE    PREFIX = histo_kde_xs_
+
+histo_kde_t *
+_create(CLASS, SV *samples_ref, SV *weights_ref=NULL, int kernel=0, int bw_method=0, double bandwidth=0.0, double bw_adjust=1.0)
+    char *CLASS
+    CODE:
+        (void)CLASS;
+        if (!SvROK(samples_ref) || SvTYPE(SvRV(samples_ref)) != SVt_PVAV) {
+            croak("Math::Histo::KDE: samples must be an array reference of numbers");
+        }
+        AV *av_s = (AV*)SvRV(samples_ref);
+        SSize_t n = av_top_index(av_s) + 1;
+        if (n < 1) {
+            croak("Math::Histo::KDE: samples array cannot be empty");
+        }
+        double *samples = (double*)malloc((size_t)n * sizeof(double));
+        double *weights = NULL;
+        if (weights_ref && SvOK(weights_ref) && SvROK(weights_ref) && SvTYPE(SvRV(weights_ref)) == SVt_PVAV) {
+            AV *av_w = (AV*)SvRV(weights_ref);
+            weights = (double*)malloc((size_t)n * sizeof(double));
+            for (SSize_t i = 0; i < n; i++) {
+                SV **item_w = av_fetch(av_w, i, 0);
+                weights[i] = (item_w && SvOK(*item_w)) ? SvNV(*item_w) : 1.0;
+            }
+        }
+        for (SSize_t i = 0; i < n; i++) {
+            SV **item_s = av_fetch(av_s, i, 0);
+            samples[i] = (item_s && SvOK(*item_s)) ? SvNV(*item_s) : 0.0;
+        }
+
+        histo_kde_options_t opts;
+        opts.kernel = (histo_kde_kernel_t)kernel;
+        opts.bw_method = (histo_kde_bandwidth_method_t)bw_method;
+        opts.bandwidth = bandwidth;
+        opts.bw_adjust = bw_adjust;
+
+        RETVAL = histo_kde_create((size_t)n, samples, weights, &opts);
+        free(samples);
+        if (weights) free(weights);
+        if (!RETVAL) {
+            croak("Math::Histo::KDE: failed to create KDE model");
+        }
+    OUTPUT:
+        RETVAL
+
+histo_kde_t *
+_create_from_histo(CLASS, histo_t *h, int kernel=0, int bw_method=0, double bandwidth=0.0, double bw_adjust=1.0)
+    char *CLASS
+    CODE:
+        (void)CLASS;
+        if (!h) croak("Math::Histo::KDE: NULL histogram handle");
+        histo_kde_options_t opts;
+        opts.kernel = (histo_kde_kernel_t)kernel;
+        opts.bw_method = (histo_kde_bandwidth_method_t)bw_method;
+        opts.bandwidth = bandwidth;
+        opts.bw_adjust = bw_adjust;
+        RETVAL = histo_kde_create_from_histo(h, &opts);
+        if (!RETVAL) {
+            croak("Math::Histo::KDE: failed to create KDE from histogram");
+        }
+    OUTPUT:
+        RETVAL
+
+void
+DESTROY(histo_kde_t *self)
+    CODE:
+        if (self) {
+            histo_kde_destroy(self);
+        }
+
+double
+eval(histo_kde_t *self, double x)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        RETVAL = histo_kde_eval(self, x);
+    OUTPUT:
+        RETVAL
+
+double
+cdf(histo_kde_t *self, double x)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        RETVAL = histo_kde_cdf(self, x);
+    OUTPUT:
+        RETVAL
+
+double
+quantile(histo_kde_t *self, double q)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        double out_val = 0.0;
+        histo_status_t st = histo_kde_quantile(self, q, &out_val);
+        if (st != HISTO_OK) {
+            croak("Math::Histo::KDE: quantile calculation failed");
+        }
+        RETVAL = out_val;
+    OUTPUT:
+        RETVAL
+
+void
+sample(histo_kde_t *self, size_t n=1, uint64_t seed=0)
+    PPCODE:
+        if (!self) XSRETURN_EMPTY;
+        if (n == 0) XSRETURN_EMPTY;
+        double *buf = (double*)malloc(n * sizeof(double));
+        if (!buf) croak("Math::Histo::KDE::sample: out of memory");
+        histo_status_t st = histo_kde_sample(self, n, buf, seed);
+        if (st != HISTO_OK) {
+            free(buf);
+            croak("Math::Histo::KDE::sample failed");
+        }
+        EXTEND(SP, (SSize_t)n);
+        for (size_t i = 0; i < n; i++) {
+            PUSHs(sv_2mortal(newSVnv(buf[i])));
+        }
+        free(buf);
+
+double
+bandwidth(histo_kde_t *self)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        RETVAL = histo_kde_get_bandwidth(self);
+    OUTPUT:
+        RETVAL
+
+int
+kernel(histo_kde_t *self)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        RETVAL = (int)histo_kde_get_kernel(self);
+    OUTPUT:
+        RETVAL
+
+size_t
+n_points(histo_kde_t *self)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        RETVAL = histo_kde_num_points(self);
     OUTPUT:
         RETVAL
 

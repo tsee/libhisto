@@ -42,6 +42,32 @@ sub new {
     }
 }
 
+my %RULE_MAP = (
+    auto    => 0,
+    fd      => 1,
+    scott   => 2,
+    sturges => 3,
+    doane   => 4,
+    knuth   => 5,
+);
+
+sub create_auto {
+    my ($class, $samples, %args) = @_;
+    my $rule_str = lc($args{rule} // 'auto');
+    my $rule = exists $RULE_MAP{$rule_str} ? $RULE_MAP{$rule_str} : int($rule_str);
+    my $flags = $args{flags} // 0;
+    $flags |= 1 if $args{sumw2} || $args{track_sumw2};
+    $flags |= 2 if $args{exact_moments};
+    return $class->_create_auto($samples, $rule, $flags);
+}
+
+sub estimate_bins {
+    my ($class, $samples, $rule_arg) = @_;
+    my $rule_str = lc($rule_arg // 'auto');
+    my $rule = exists $RULE_MAP{$rule_str} ? $RULE_MAP{$rule_str} : int($rule_str);
+    return $class->_estimate_bins($samples, $rule);
+}
+
 sub clone {
     my ($self) = @_;
     return $self->_clone;

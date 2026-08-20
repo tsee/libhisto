@@ -6,6 +6,7 @@ bundled/include/histo/cli.h
 bundled/include/histo/fit.h
 bundled/include/histo/histo.h
 bundled/include/histo/histo2d.h
+bundled/include/histo/kde.h
 bundled/include/histo/sketch.h
 bundled/include/histo/types.h
 bundled/include/histo/version.h
@@ -19,6 +20,7 @@ bundled/src/histo2d.c
 bundled/src/internal.h
 bundled/src/internal_2d.h
 bundled/src/internal_common.h
+bundled/src/kde.c
 bundled/src/serialize.c
 bundled/src/serialize_2d.c
 bundled/src/simd.c

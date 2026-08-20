@@ -36,6 +36,25 @@ our %EXPORT_TAGS = (
         HISTO_FIT_LOSS_CHI2
         HISTO_FIT_LOSS_POISSON_MLE
     )],
+    bin_rules => [qw(
+        HISTO_BIN_RULE_AUTO
+        HISTO_BIN_RULE_FD
+        HISTO_BIN_RULE_SCOTT
+        HISTO_BIN_RULE_STURGES
+        HISTO_BIN_RULE_DOANE
+        HISTO_BIN_RULE_KNUTH
+    )],
+    kde => [qw(
+        HISTO_KDE_KERNEL_GAUSSIAN
+        HISTO_KDE_KERNEL_EPANECHNIKOV
+        HISTO_KDE_KERNEL_UNIFORM
+        HISTO_KDE_KERNEL_TRIANGULAR
+        HISTO_KDE_KERNEL_BIWEIGHT
+        HISTO_KDE_KERNEL_COSINE
+        HISTO_KDE_BW_SILVERMAN
+        HISTO_KDE_BW_SCOTT
+        HISTO_KDE_BW_MANUAL
+    )],
 );
 
 $EXPORT_TAGS{all} = [ map { @$_ } values %EXPORT_TAGS ];
@@ -67,6 +86,24 @@ use constant {
 
     HISTO_FIT_LOSS_CHI2         => 0,
     HISTO_FIT_LOSS_POISSON_MLE  => 1,
+
+    HISTO_BIN_RULE_AUTO         => 0,
+    HISTO_BIN_RULE_FD           => 1,
+    HISTO_BIN_RULE_SCOTT        => 2,
+    HISTO_BIN_RULE_STURGES      => 3,
+    HISTO_BIN_RULE_DOANE        => 4,
+    HISTO_BIN_RULE_KNUTH        => 5,
+
+    HISTO_KDE_KERNEL_GAUSSIAN     => 0,
+    HISTO_KDE_KERNEL_EPANECHNIKOV => 1,
+    HISTO_KDE_KERNEL_UNIFORM      => 2,
+    HISTO_KDE_KERNEL_TRIANGULAR   => 3,
+    HISTO_KDE_KERNEL_BIWEIGHT     => 4,
+    HISTO_KDE_KERNEL_COSINE       => 5,
+
+    HISTO_KDE_BW_SILVERMAN        => 0,
+    HISTO_KDE_BW_SCOTT            => 1,
+    HISTO_KDE_BW_MANUAL           => 2,
 };
 
 1;
