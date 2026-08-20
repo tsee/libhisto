@@ -141,6 +141,25 @@
 - [x] **P2.3** Comprehensive Perl test suite (`t/01_basic.t` through `t/08_edge_cases.t` testing 1D/2D binning, weights, moments, fitting, sketches, serialization, and edge cases).
 - [x] **P2.4** Distribution packaging & make target automation (`make test-perl`, `make perl-dist`).
 
+### Sub-Phase P.3: In-Process Perl CLI Integration (`Math::Histo::CLI` & `phisto`)
+- [ ] **P3.1** Update `Alien::libhisto` to build and export `libhistocli` library and headers (`include/histo/cli.h`).
+- [ ] **P3.2** Bind `histo_cli_main` in `Histo.xs` as `Math::Histo::CLI->run(@ARGV)` with stdout/stderr capture and return code propagation.
+- [ ] **P3.3** Create standalone Perl launcher script `script/phisto` and configure `EXE_FILES` in `Math-Histo/Makefile.PL`.
+- [ ] **P3.4** Add Perl CLI integration tests (`t/09_cli.t`) verifying `phisto fill`, `plot`, `stats`, `fit`, and `cmp` in-process.
+
+---
+
+## Phase R: Modular CLI Library (`libhistocli`)
+- [ ] **R1** Design & API Specification for `libhistocli` (`include/histo/cli.h`):
+  - Stream-aware functions accepting `FILE *out, FILE *err`: `histo_cli_main`, `histo_cli_fill`, `histo_cli_plot`, `histo_cli_stats`, `histo_cli_fit`, `histo_cli_cmp`.
+  - Re-entrant option parsing reset (`optind = 1`) and zero `exit()` calls, returning integer status codes.
+- [ ] **R2** Refactor `tools/` into formal public `libhistocli` target (`tools/CMakeLists.txt`):
+  - Build `libhistocli.a` / `libhistocli.so` and generate `libhistocli.pc`.
+  - Refactor `tools/src/main.c` to a thin 15-line driver calling `histo_cli_main(argc, argv, stdout, stderr)`.
+  - Install public header `include/histo/cli.h`.
+- [ ] **R3** Verify C integration test suite (`tests/integration/test_cli.c`), ASan/UBSan, and Valgrind memcheck.
+
+
 
 
 
