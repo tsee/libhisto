@@ -47,6 +47,7 @@ typedef struct {
     bool monochrome;
     bool paused;
     bool cmd_active;
+    bool log_z;  /* 2D: logarithmic intensity scaling */
 
     char cmd_buf[256];
     size_t cmd_len;
@@ -55,6 +56,7 @@ typedef struct {
     double status_msg_time;
 
     histo_t *frozen_snapshot;
+    histo2d_t *frozen_snapshot_2d;
 } tui_state_t;
 
 static const char *const BLOCKS_UTF8[9] = { " ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█" };
@@ -147,7 +149,8 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
             if (c > max_content) max_content = c;
         }
     }
-    if (max_content <= 0.0) max_content = 1.0;
+    double max_scaled = (st->log_z && max_content > 0.0) ? log10(max_content + 1.0) : max_content;
+    if (max_scaled <= 0.0) max_scaled = 1.0;
 
     /* Y-axis label width: "  yval │ " = ~10 chars */
     int label_cols = 10;
@@ -178,7 +181,8 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
         for (uint32_t ix = 0; ix < nx && pos + 32 < (int)sizeof(row_buf); ix += x_step) {
             double c = 0.0;
             histo2d_bin_content(h, ix, (uint32_t)iy, &c);
-            double frac = (c > 0.0) ? (c / max_content) : 0.0;
+            double val_scaled = (st->log_z && c > 0.0) ? log10(c + 1.0) : c;
+            double frac = (val_scaled > 0.0) ? (val_scaled / max_scaled) : 0.0;
 
             if (st->monochrome) {
                 static const char density[] = " .:-=+*#%@";
@@ -391,7 +395,39 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
     }
 }
 
-static void render_help_viewport(tui_frame_t *f, int width, int max_rows) {
+static void render_help_viewport(tui_frame_t *f, const tui_state_t *st, int width, int max_rows) {
+    if (st && st->view_mode == VIEW_2D_HEATMAP) {
+        const char *help_lines_2d[] = {
+            "── Interactive Help Cheatsheet (2D Heatmap Mode) ───────────────────────────",
+            "",
+            "DISPLAY & INTENSITY SCALING",
+            "  l           Toggle Log-Z intensity color scale (LIN <-> LOG-Z)",
+            "  C           Toggle TrueColor Viridis gradient / Monochrome ASCII density",
+            "  [Space]     Freeze / Unfreeze live streaming display",
+            "  c           Clear all accumulators and reset live count",
+            "",
+            "COMMANDS & PROMPT (:)",
+            "  :clear      Clear accumulators",
+            "  :quit / :q  Quit application cleanly",
+            "  :help       Open this help modal",
+            "",
+            "Press [?], [Esc], or [Space] to dismiss this help window."
+        };
+
+        size_t n_lines = sizeof(help_lines_2d) / sizeof(help_lines_2d[0]);
+        int rows_drawn = 0;
+
+        for (size_t i = 0; i < n_lines && rows_drawn < max_rows; ++i) {
+            tui_render_row(f, help_lines_2d[i], width, true);
+            rows_drawn++;
+        }
+        while (rows_drawn < max_rows) {
+            tui_render_row(f, "", width, true);
+            rows_drawn++;
+        }
+        return;
+    }
+
     const char *help_lines[] = {
         "── Interactive Help Cheatsheet ───────────────────────────────────────────",
         "",
@@ -596,12 +632,21 @@ int cmd_top_main(int argc, char **argv) {
                         case ' ':
                             st.paused = !st.paused;
                             if (st.paused) {
-                                if (st.frozen_snapshot) histo_destroy(st.frozen_snapshot);
-                                st.frozen_snapshot = tui_engine_get_snapshot_1d(&eng);
+                                if (eng.is_2d) {
+                                    if (st.frozen_snapshot_2d) histo2d_destroy(st.frozen_snapshot_2d);
+                                    st.frozen_snapshot_2d = tui_engine_get_snapshot_2d(&eng);
+                                } else {
+                                    if (st.frozen_snapshot) histo_destroy(st.frozen_snapshot);
+                                    st.frozen_snapshot = tui_engine_get_snapshot_1d(&eng);
+                                }
                             } else {
                                 if (st.frozen_snapshot) {
                                     histo_destroy(st.frozen_snapshot);
                                     st.frozen_snapshot = NULL;
+                                }
+                                if (st.frozen_snapshot_2d) {
+                                    histo2d_destroy(st.frozen_snapshot_2d);
+                                    st.frozen_snapshot_2d = NULL;
                                 }
                             }
                             break;
@@ -614,35 +659,39 @@ int cmd_top_main(int argc, char **argv) {
                             st.modal = MODAL_HELP;
                             break;
                         case 'l':
-                            st.scale_mode = (st.scale_mode == SCALE_LINEAR) ? SCALE_LOG_Y :
-                                            (st.scale_mode == SCALE_LOG_Y) ? SCALE_LOG_X :
-                                            (st.scale_mode == SCALE_LOG_X) ? SCALE_LOG_LOG : SCALE_LINEAR;
-                            if (st.scale_mode == SCALE_LOG_X || st.scale_mode == SCALE_LOG_LOG) {
-                                tui_engine_rebuild_1d_log(&eng, 50, NULL);
+                            if (eng.is_2d) {
+                                st.log_z = !st.log_z;
                             } else {
-                                tui_engine_rebuild_1d(&eng, 50, 0, 0, NULL);
-                            }
-                            if (st.paused && st.frozen_snapshot) {
-                                histo_destroy(st.frozen_snapshot);
+                                st.scale_mode = (st.scale_mode == SCALE_LINEAR) ? SCALE_LOG_Y :
+                                                (st.scale_mode == SCALE_LOG_Y) ? SCALE_LOG_X :
+                                                (st.scale_mode == SCALE_LOG_X) ? SCALE_LOG_LOG : SCALE_LINEAR;
                                 if (st.scale_mode == SCALE_LOG_X || st.scale_mode == SCALE_LOG_LOG) {
-                                    tui_engine_rebuild_1d_log(&eng, 50, &st.frozen_snapshot);
+                                    tui_engine_rebuild_1d_log(&eng, 50, NULL);
                                 } else {
-                                    tui_engine_rebuild_1d(&eng, 50, 0, 0, &st.frozen_snapshot);
+                                    tui_engine_rebuild_1d(&eng, 50, 0, 0, NULL);
+                                }
+                                if (st.paused && st.frozen_snapshot) {
+                                    histo_destroy(st.frozen_snapshot);
+                                    if (st.scale_mode == SCALE_LOG_X || st.scale_mode == SCALE_LOG_LOG) {
+                                        tui_engine_rebuild_1d_log(&eng, 50, &st.frozen_snapshot);
+                                    } else {
+                                        tui_engine_rebuild_1d(&eng, 50, 0, 0, &st.frozen_snapshot);
+                                    }
                                 }
                             }
                             break;
                         case 'k':
-                            st.show_kde = !st.show_kde;
+                            if (!eng.is_2d) st.show_kde = !st.show_kde;
                             break;
                         case 'f':
-                            st.show_fit = !st.show_fit;
+                            if (!eng.is_2d) st.show_fit = !st.show_fit;
                             break;
                         case 'a':
                         case 'A':
-                            tui_engine_set_autorange(&eng, !eng.auto_range, eng.auto_range_threshold);
+                            if (!eng.is_2d) tui_engine_set_autorange(&eng, !eng.auto_range, eng.auto_range_threshold);
                             break;
                         case 'e':
-                            st.show_errors = !st.show_errors;
+                            if (!eng.is_2d) st.show_errors = !st.show_errors;
                             break;
                         case 'C':
                             st.monochrome = !st.monochrome;
@@ -653,12 +702,16 @@ int cmd_top_main(int argc, char **argv) {
                                 histo_destroy(st.frozen_snapshot);
                                 st.frozen_snapshot = NULL;
                             }
+                            if (st.frozen_snapshot_2d) {
+                                histo2d_destroy(st.frozen_snapshot_2d);
+                                st.frozen_snapshot_2d = NULL;
+                            }
                             break;
                         case 'r':
-                            tui_engine_rebuild_1d(&eng, (nbins > 10) ? nbins / 2 : 5, 0, 0, NULL);
+                            if (!eng.is_2d) tui_engine_rebuild_1d(&eng, (nbins > 10) ? nbins / 2 : 5, 0, 0, NULL);
                             break;
                         case 'R':
-                            tui_engine_rebuild_1d(&eng, nbins * 2, 0, 0, NULL);
+                            if (!eng.is_2d) tui_engine_rebuild_1d(&eng, nbins * 2, 0, 0, NULL);
                             break;
                         default:
                             break;
@@ -815,7 +868,7 @@ int cmd_top_main(int argc, char **argv) {
         if (viewport_rows < 3) viewport_rows = 3;
 
         if (st.modal == MODAL_HELP) {
-            render_help_viewport(&frame, cols, viewport_rows);
+            render_help_viewport(&frame, &st, cols, viewport_rows);
         } else if (eng.is_2d) {
             render_2d_heatmap_viewport(&frame, &st, snap_2d, cols, viewport_rows);
         } else {
@@ -831,7 +884,9 @@ int cmd_top_main(int argc, char **argv) {
             snprintf(cmd_line, sizeof(cmd_line), ":%s\033[7m \033[0m", st.cmd_buf);
             tui_render_row(&frame, cmd_line, cols, true);
         } else {
-            const char *hints = "[Space] Freeze  [a] Auto  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q]";
+            const char *hints = eng.is_2d ?
+                "[Space] Freeze  [l] Log-Z Intensity  [C] Mono  [:] Cmd  [?] Help  [q] Quit" :
+                "[Space] Freeze  [a] Auto  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q] Quit";
             tui_render_row(&frame, hints, cols, true);
         }
 
@@ -844,13 +899,16 @@ int cmd_top_main(int argc, char **argv) {
         if (!st.paused && snap) {
             histo_destroy(snap);
         }
-        if (snap_2d) {
+        if (!st.paused && snap_2d) {
             histo2d_destroy(snap_2d);
         }
     }
 
     if (st.frozen_snapshot) {
         histo_destroy(st.frozen_snapshot);
+    }
+    if (st.frozen_snapshot_2d) {
+        histo2d_destroy(st.frozen_snapshot_2d);
     }
 
     tui_frame_free(&frame);
