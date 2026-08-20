@@ -55,6 +55,7 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 | `--max=<X>` | | Initial upper range boundary | `100.0` |
 | `--2d` | | Enable bivariate 2D heatmap mode (expects `x y` input) | Disabled |
 | `--weights` | `-w` | Input stream contains `value weight` (or `x y weight`) | Disabled |
+| `--palette=<P>` | `-p <P>` | Color palette: `viridis`, `plasma`, `inferno`, `magma`, `turbo`, `cividis`, `grayscale`, `rainbow` (alias: `--colormap`) | `viridis` |
 | `--mono` | `-M` | Monochrome mode (disable ANSI colors, use ASCII ramps) | Auto (color) |
 | `--help` | `-h` | Display command-line options | |
 
@@ -63,7 +64,7 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 #### 1D Gaussian Stream with Live Fit & KDE Overlays
 ```bash
 python3 -u -c "import random, time; [print(f'{random.gauss(50, 12):.2f}', flush=True) or time.sleep(0.001) for _ in range(100000)]" | \
-  histo top --bins=60
+  histo top --bins=60 --palette=plasma
 ```
 
 #### 1D Weighted Stream (`-w`)
@@ -75,7 +76,7 @@ python3 -u -c "import random, time; [print(f'{random.gauss(50, 10):.2f} {random.
 #### 2D Correlated Bivariate Stream (`--2d`)
 ```bash
 python3 -u -c "import random, time; [print(f'{random.gauss(50, 15):.2f} {random.gauss(50, 10) + 0.3 * (random.gauss(50, 15) - 50):.2f}', flush=True) or time.sleep(0.002) for _ in range(50000)]" | \
-  histo top --2d --bins=35
+  histo top --2d --bins=35 --palette=inferno
 ```
 
 ---
@@ -89,6 +90,7 @@ When `histo top` is running, control the display using single-key shortcuts:
 | Key | Mode | Description |
 | :--- | :--- | :--- |
 | `Space` | 1D / 2D | **Freeze / Resume**: Freezes live UI snapshot for close inspection while background thread continues draining the stream. |
+| `p` / `P` | 1D / 2D | **Cycle Colormaps**: Cycles live between `viridis` → `plasma` → `inferno` → `magma` → `turbo` → `cividis` → `grayscale` → `rainbow`. |
 | `?` | 1D / 2D | **Help Modal**: Opens the interactive cheat sheet modal. Press `Esc`, `?`, or `Space` to dismiss. |
 | `:` | 1D / 2D | **Command Prompt**: Activates the command bar for direct numerical input (e.g. `:bins 80`). |
 | `C` | 1D / 2D | **Monochrome Toggle**: Toggles between 24-bit TrueColor gradients and monochrome ASCII density glyphs. |
@@ -114,7 +116,7 @@ When `histo top` is running, control the display using single-key shortcuts:
 | Key | Mode | Description |
 | :--- | :--- | :--- |
 | `l` | 2D | **Log-Z Intensity**: Toggles logarithmic color intensity mapping (\f$\log_{10}(c + 1)\f$) to bring out low-count background details. |
-| `g` / `G` | 2D | **Color Legend**: Toggles the TrueColor Viridis spectrum reference bar showing exact numeric bounds. |
+| `g` / `G` | 2D | **Color Legend**: Toggles the TrueColor spectrum reference bar showing exact numeric bounds and active palette name. |
 
 ---
 
@@ -123,11 +125,12 @@ When `histo top` is running, control the display using single-key shortcuts:
 Pressing **`:`** opens the command bar at the bottom of the screen.
 
 ```text
-:range 0 100█
+:palette plasma█
 ```
 
 | Command | Shorthand | Arguments | Example | Description |
 | :--- | :--- | :--- | :--- | :--- |
+| `:palette <P>` | `:p <P>` | Palette name (`viridis`, `plasma`, `inferno`, `magma`, `turbo`, `cividis`, `grayscale`, `rainbow`) | `:palette plasma` | Changes the active colormap. Omit argument to cycle. |
 | `:bins <N>` | `:b <N>` | Number of bins (\f$1 \le N \le 100000\f$) | `:bins 100` | Rebuilds 1D histogram with $N$ bins from reservoir. |
 | `:range <A> <B>` | `:r <A> <B>` | Min and max bounds (\f$A < B\f$) | `:range 20 80` | Zooms viewport into $[A, B]$ and re-aggregates reservoir. |
 | `:scale <MODE>` | `:sc <MODE>` | `linear`, `logy`, `logx`, `loglog` | `:scale logy` | Sets 1D axis scaling mode. |

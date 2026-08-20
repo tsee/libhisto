@@ -29,6 +29,7 @@ This document tracks active work items, planned enhancements, and development ro
 ### 4. CLI Toolkit & Ergonomics
 - [ ] **CLI-1**: Add `--csv-header` and column name selection for CSV batch streams in `histo-fill`.
 - [x] **CLI-2**: Interactive terminal monitoring & TUI exploration mode (`histo top` / `histo-top`).
+- [x] **CLI-3**: Multi-preset colormap & palette engine across CLI tools (`histo plot`, `histo top`) with 8 standard perceptually uniform and scientific presets (`viridis`, `plasma`, `inferno`, `magma`, `turbo`, `cividis`, `grayscale`, `rainbow`).
 - [x] **DOC-1**: Dedicated user manual for `histo top` ([`docs/top_manual.md`](top_manual.md)) and interactive CLI showcase in `README.md` and `docs/manual.md`.
 
 ---

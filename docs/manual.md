@@ -163,6 +163,10 @@ python3 -c "import random; print('\n'.join(f'{random.gauss(100, 10):.2f}\t{rando
 # Compact single-line sparkline for logs, scripts, and monitoring dashboards
 python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(10000)))" | \
     histo fill --bins=20 --auto-range | histo plot -S
+
+# Render full terminal plots using scientific colormaps (plasma, inferno, magma, turbo, cividis, grayscale, rainbow)
+python3 -c "import random; print('\n'.join(str(random.gauss(50, 10)) for _ in range(1000)))" | \
+    histo plot --palette=plasma
 ```
 
 **Sparkline Output:**

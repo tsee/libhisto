@@ -3,6 +3,7 @@
 #define _XOPEN_SOURCE 700
 
 #include "cli_common.h"
+#include "cli_palette.h"
 #include "tui_term.h"
 #include "tui_engine.h"
 #include "histo/fit.h"
@@ -41,6 +42,7 @@ typedef struct {
     tui_view_mode_t view_mode;
     tui_scale_mode_t scale_mode;
     tui_modal_type_t modal;
+    histo_palette_t palette;
     bool show_kde;
     bool show_fit;
     bool show_errors;
@@ -88,42 +90,6 @@ static void render_bottom_border(tui_frame_t *f, int width, bool newline) {
     for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
     tui_frame_puts(f, "┘");
     if (newline) tui_frame_puts(f, "\r\n");
-}
-
-static void get_viridis_bg(double fraction, bool monochrome, char *out_ansi, size_t max_len) {
-    if (monochrome) {
-        static const char density[] = " .:-=+*#%@";
-        int idx = (int)(fraction * 9.0);
-        if (idx < 0) idx = 0;
-        if (idx > 9) idx = 9;
-        snprintf(out_ansi, max_len, "%c", density[idx]);
-        return;
-    }
-    if (fraction < 0.0) fraction = 0.0;
-    if (fraction > 1.0) fraction = 1.0;
-    int r = 0, g = 0, b = 0;
-    if (fraction < 0.25) {
-        double t = fraction / 0.25;
-        r = (int)((1.0 - t) * 68 + t * 59);
-        g = (int)((1.0 - t) * 1 + t * 82);
-        b = (int)((1.0 - t) * 84 + t * 139);
-    } else if (fraction < 0.5) {
-        double t = (fraction - 0.25) / 0.25;
-        r = (int)((1.0 - t) * 59 + t * 33);
-        g = (int)((1.0 - t) * 82 + t * 145);
-        b = (int)((1.0 - t) * 139 + t * 140);
-    } else if (fraction < 0.75) {
-        double t = (fraction - 0.5) / 0.25;
-        r = (int)((1.0 - t) * 33 + t * 94);
-        g = (int)((1.0 - t) * 145 + t * 201);
-        b = (int)((1.0 - t) * 140 + t * 98);
-    } else {
-        double t = (fraction - 0.75) / 0.25;
-        r = (int)((1.0 - t) * 94 + t * 253);
-        g = (int)((1.0 - t) * 201 + t * 231);
-        b = (int)((1.0 - t) * 98 + t * 37);
-    }
-    snprintf(out_ansi, max_len, "\033[48;2;%d;%d;%dm", r, g, b);
 }
 
 static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, const histo2d_t *h, int width, int max_rows) {
@@ -195,7 +161,7 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%c ", density[idx]);
             } else {
                 char bg[32];
-                get_viridis_bg(frac, false, bg, sizeof(bg));
+                histo_palette_sample_ansi_bg(st->palette, frac, bg, sizeof(bg));
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s  \033[0m", bg);
             }
         }
@@ -250,10 +216,10 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
             for (int step = 0; step <= 16 && pos + 32 < (int)sizeof(leg_buf); ++step) {
                 double frac = (double)step / 16.0;
                 char bg[32];
-                get_viridis_bg(frac, false, bg, sizeof(bg));
+                histo_palette_sample_ansi_bg(st->palette, frac, bg, sizeof(bg));
                 pos += snprintf(leg_buf + pos, sizeof(leg_buf) - pos, "%s \033[0m", bg);
             }
-            pos += snprintf(leg_buf + pos, sizeof(leg_buf) - pos, " %.2e [%s]", max_content, st->log_z ? "LOG-Z" : "LIN");
+            pos += snprintf(leg_buf + pos, sizeof(leg_buf) - pos, " %.2e [%s, %s]", max_content, histo_palette_name(st->palette), st->log_z ? "LOG-Z" : "LIN");
         }
         tui_render_row(f, leg_buf, width, true);
         rows_drawn++;
@@ -380,8 +346,6 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
             snprintf(count_str, sizeof(count_str), "%7.2g", content);
         }
 
-        // Available width for bar: width - prefix - borders
-        // prefix: bounds (16) + " │ " (3) + count (7) + " │ " (3) = 29 columns
         int prefix_cols = 29;
         int bar_max = width - 4 - prefix_cols;
         if (bar_max < 2) bar_max = 2;
@@ -431,7 +395,11 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         }
 
         char color_ansi[32] = "";
-        tui_term_get_color(frac, st->monochrome, color_ansi, sizeof(color_ansi));
+        if (st->monochrome) {
+            tui_term_get_color(frac, true, color_ansi, sizeof(color_ansi));
+        } else {
+            histo_palette_sample_ansi_fg(st->palette, frac, color_ansi, sizeof(color_ansi));
+        }
 
         int pos = snprintf(row_buf, sizeof(row_buf), "%-16s │ %6s │ ", bounds_str, count_str);
 
@@ -452,16 +420,10 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
                 if (in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m"); in_bar_color = false; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;35m✖\033[0m");
             } else if (k < full_chars) {
-                if (!in_bar_color) {
-                    if (color_ansi[0]) pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", color_ansi);
-                    in_bar_color = true;
-                }
+                if (!in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", color_ansi); in_bar_color = true; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "█");
             } else if (k == full_chars && rem_eighths > 0) {
-                if (!in_bar_color) {
-                    if (color_ansi[0]) pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", color_ansi);
-                    in_bar_color = true;
-                }
+                if (!in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", color_ansi); in_bar_color = true; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", BLOCKS_UTF8[rem_eighths]);
             } else {
                 if (in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m"); in_bar_color = false; }
@@ -472,15 +434,12 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
             pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m");
         }
 
-        if (st->show_errors) {
+        /* Error whiskers if enabled */
+        if (st->show_errors && total_w > 0.0) {
             double err = 0.0;
             histo_bin_error(h, i, &err);
-            if (err > 0.0) {
-                if (st->monochrome) {
-                    pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, " +-%.2g", err);
-                } else {
-                    pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, " \033[90m╎±%.2g╎\033[0m", err);
-                }
+            if (err > 0.0 && pos + 32 < (int)sizeof(row_buf)) {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[90m ╎±%.2g╎\033[0m", err);
             }
         }
 
@@ -491,7 +450,6 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
     if (kde) histo_kde_destroy(kde);
     if (fit_res) histo_fit_result_destroy(fit_res);
 
-    // Fill remaining budget rows so height is strictly invariant
     while (rows_drawn < max_rows) {
         tui_render_row(f, "", width, true);
         rows_drawn++;
@@ -505,11 +463,14 @@ static void render_help_viewport(tui_frame_t *f, const tui_state_t *st, int widt
             "",
             "DISPLAY & INTENSITY SCALING",
             "  l           Toggle Log-Z intensity color scale (LIN <-> LOG-Z)",
-            "  C           Toggle TrueColor Viridis gradient / Monochrome ASCII density",
+            "  p / P       Cycle color palettes (viridis, plasma, inferno, magma, turbo, cividis, gray, rainbow)",
+            "  C           Toggle TrueColor / Monochrome ASCII density",
+            "  g           Toggle Color Range Legend reference bar",
             "  [Space]     Freeze / Unfreeze live streaming display",
             "  c           Clear all accumulators and reset live count",
             "",
             "COMMANDS & PROMPT (:)",
+            "  :palette <NAME> Set color palette (or shorthand :p <NAME>)",
             "  :clear      Clear accumulators",
             "  :quit / :q  Quit application cleanly",
             "  :help       Open this help modal",
@@ -536,15 +497,15 @@ static void render_help_viewport(tui_frame_t *f, const tui_state_t *st, int widt
         "",
         "NAVIGATION & VIEWPORT              DISPLAY & SCALING",
         "  + / -       Zoom in / out          l   Cycle Log scales (Y, X, Log-Log)",
-        "  h / l, ←/→  Pan viewport left/right  L   Scale Selector Modal",
+        "  h / l, ←/→  Pan viewport left/right  p   Cycle color palettes",
         "  0           Reset to full range    a   Toggle Dynamic Auto-Range",
         "  r / R       Rebin coarser / finer  C   Toggle TrueColor / Monochrome",
         "  k           Toggle KDE curve       f   Toggle Curve Fit overlay",
         "COMMANDS & PROMPT (:)",
-        "  :bins <N>       Set bin count (e.g. :b 80)     [Space] Freeze / Unfreeze display",
-        "  :range A B      Set range (e.g. :r 0 100)      c       Clear all accumulators",
-        "  :autorange [on|off] Toggle dynamic autorange   q       Quit cleanly",
-        "  :help           Open full help modal",
+        "  :bins <N>       Set bin count (e.g. :b 80)     :palette <NAME> Set color palette",
+        "  :range A B      Set range (e.g. :r 0 100)      [Space] Freeze / Unfreeze display",
+        "  :autorange [on|off] Toggle dynamic autorange   c       Clear all accumulators",
+        "  :help           Open full help modal           q       Quit cleanly",
         "",
         "Press [?], [Esc], or [Space] to dismiss this help window."
     };
@@ -579,6 +540,16 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
         if (sscanf(cmd + (*cmd == 'r' ? 2 : 6), "%lf %lf", &rmin, &rmax) == 2 && rmin < rmax) {
             tui_engine_rebuild_1d(eng, 50, rmin, rmax, NULL);
         }
+    } else if (strncasecmp(cmd, "palette", 7) == 0 || (strncasecmp(cmd, "p", 1) == 0 && (cmd[1] == ' ' || cmd[1] == '\0'))) {
+        const char *arg = strchr(cmd, ' ');
+        if (arg) {
+            while (*arg == ' ') arg++;
+            st->palette = histo_palette_from_name(arg);
+        } else {
+            st->palette = (histo_palette_t)((st->palette + 1) % HISTO_PALETTE_COUNT);
+        }
+        snprintf(st->status_msg, sizeof(st->status_msg), "Colormap: %s", histo_palette_name(st->palette));
+        st->status_msg_time = cli_get_time_sec();
     } else if (strncasecmp(cmd, "scale ", 6) == 0 || strncasecmp(cmd, "sc ", 3) == 0) {
         const char *arg = strchr(cmd, ' ');
         if (arg) {
@@ -629,6 +600,7 @@ int cmd_top_main(int argc, char **argv) {
     double rmin = 0.0, rmax = 100.0;
     bool monochrome = false;
     bool has_weights = false;
+    histo_palette_t palette = HISTO_PALETTE_VIRIDIS;
     uint32_t flags = HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS;
     const char *file_arg = NULL;
 
@@ -643,15 +615,27 @@ int cmd_top_main(int argc, char **argv) {
                    "      --max=<X>      Initial upper boundary\n"
                    "      --2d           Enable 2D bivariate mode\n"
                    "  -w, --weights      Input stream contains 'value weight' pairs\n"
+                   "  -p, --palette=<P>  Color palette: viridis (default), plasma, inferno, magma,\n"
+                   "                     turbo, cividis, grayscale, rainbow (alias: --colormap)\n"
                    "  -M, --mono         Monochrome mode (disable ANSI colors)\n"
                    "  -h, --help         Show this help message\n");
             return 0;
         } else if (strncmp(arg, "--bins=", 7) == 0) {
             nbins = (uint32_t)atoi(arg + 7);
+        } else if (strncmp(arg, "-n=", 3) == 0) {
+            nbins = (uint32_t)atoi(arg + 3);
         } else if (strcmp(arg, "--2d") == 0) {
             is_2d = true;
         } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--weights") == 0) {
             has_weights = true;
+        } else if (strncmp(arg, "-p=", 3) == 0) {
+            palette = histo_palette_from_name(arg + 3);
+        } else if (strcmp(arg, "-p") == 0 && i + 1 < argc) {
+            palette = histo_palette_from_name(argv[++i]);
+        } else if (strncmp(arg, "--palette=", 10) == 0) {
+            palette = histo_palette_from_name(arg + 10);
+        } else if (strncmp(arg, "--colormap=", 11) == 0) {
+            palette = histo_palette_from_name(arg + 11);
         } else if (strcmp(arg, "-M") == 0 || strcmp(arg, "--mono") == 0) {
             monochrome = true;
         } else if (arg[0] != '-') {
@@ -685,6 +669,7 @@ int cmd_top_main(int argc, char **argv) {
     tui_state_t st;
     memset(&st, 0, sizeof(st));
     st.monochrome = monochrome;
+    st.palette = palette;
     st.view_mode = is_2d ? VIEW_2D_HEATMAP : VIEW_1D_BARS;
 
     tui_engine_start(&eng);
@@ -760,6 +745,12 @@ int cmd_top_main(int argc, char **argv) {
                             break;
                         case '?':
                             st.modal = MODAL_HELP;
+                            break;
+                        case 'p':
+                        case 'P':
+                            st.palette = (histo_palette_t)((st.palette + 1) % HISTO_PALETTE_COUNT);
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Colormap: %s", histo_palette_name(st.palette));
+                            st.status_msg_time = cli_get_time_sec();
                             break;
                         case 'l':
                             if (eng.is_2d) {
@@ -928,9 +919,10 @@ int cmd_top_main(int argc, char **argv) {
                 histo2d_axis_t ax, ay;
                 histo2d_axis_x(snap_2d, &ax);
                 histo2d_axis_y(snap_2d, &ay);
-                snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Intensity: %s %s",
+                snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Pal: %s │ %s %s",
                          histo2d_nbins_x(snap_2d), ax.min, ax.max,
                          histo2d_nbins_y(snap_2d), ay.min, ay.max,
+                         histo_palette_name(st.palette),
                          st.log_z ? "LOG-Z" : "LIN",
                          st.show_legend ? "│ Legend: ON" : "");
             } else {
@@ -970,8 +962,9 @@ int cmd_top_main(int argc, char **argv) {
             if (st.show_errors) snprintf(err_tag, sizeof(err_tag), "│ Err: ON ");
             char yaxis_tag[32] = "";
             if (st.show_y_axis) snprintf(yaxis_tag, sizeof(yaxis_tag), "│ Axis: ON ");
-            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s%s%s",
+            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Pal: %s │ Auto: %s %s%s%s%s",
                      r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
+                     histo_palette_name(st.palette),
                      eng.auto_range ? "ON" : "OFF",
                      kde_tag, fit_tag, err_tag, yaxis_tag);
         } else {
@@ -999,10 +992,14 @@ int cmd_top_main(int argc, char **argv) {
             char cmd_line[300];
             snprintf(cmd_line, sizeof(cmd_line), ":%s\033[7m \033[0m", st.cmd_buf);
             tui_render_row(&frame, cmd_line, cols, true);
+        } else if (st.status_msg[0] != '\0' && (cli_get_time_sec() - st.status_msg_time < 3.0)) {
+            char status_row[256];
+            snprintf(status_row, sizeof(status_row), ">> %s", st.status_msg);
+            tui_render_row(&frame, status_row, cols, true);
         } else {
             const char *hints = eng.is_2d ?
-                "[Space] Freeze  [l] Log-Z  [g] Legend  [C] Mono  [:] Cmd  [?] Help  [q] Quit" :
-                "[Space] Freeze  [a] Auto  [l] Log  [y] Y-Axis  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q] Quit";
+                "[Space] Freeze  [l] Log-Z  [p] Palette  [g] Legend  [C] Mono  [:] Cmd  [?] Help  [q] Quit" :
+                "[Space] Freeze  [a] Auto  [l] Log  [p] Pal  [y] Axis  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q] Quit";
             tui_render_row(&frame, hints, cols, true);
         }
 

@@ -1,5 +1,6 @@
 #include "unity.h"
 #include "histo/histo.h"
+#include "histo/histo2d.h"
 #include "histo/version.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -301,6 +302,59 @@ void test_cli_error_handling(void) {
     optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_stats_main(2, stats_err_argv));
 }
 
+void test_cli_plot_palettes(void) {
+    const char *tmp_1d = "/tmp/test_cli_palette_1d.json";
+    const char *tmp_2d = "/tmp/test_cli_palette_2d.json";
+
+    /* Generate sample 1D and 2D histograms */
+    histo_t *h1d = histo_create_uniform(20, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    for (int i = 0; i < 100; ++i) histo_fill(h1d, (double)i);
+    char *json_1d = NULL;
+    histo_serialize_json(h1d, &json_1d);
+    FILE *f1 = fopen(tmp_1d, "w");
+    fputs(json_1d, f1);
+    fclose(f1);
+    histo_free_buffer(json_1d);
+    histo_destroy(h1d);
+
+    histo2d_t *h2d = histo2d_create_uniform(10, 0.0, 10.0, 10, 0.0, 10.0, HISTO_FLAG_NONE);
+    for (int i = 0; i < 50; ++i) histo2d_fill(h2d, (double)(i % 10), (double)(i / 5));
+    char *json_2d = NULL;
+    size_t sz_2d = 0;
+    histo2d_serialize_json_alloc(h2d, &json_2d, &sz_2d);
+    FILE *f2 = fopen(tmp_2d, "w");
+    fputs(json_2d, f2);
+    fclose(f2);
+    histo_free_buffer(json_2d);
+    histo2d_destroy(h2d);
+
+    /* Test all 8 palettes on 1D */
+    const char *palettes[] = {
+        "viridis", "plasma", "inferno", "magma", "turbo", "cividis", "grayscale", "rainbow"
+    };
+
+    for (size_t i = 0; i < sizeof(palettes) / sizeof(palettes[0]); ++i) {
+        char pal_opt[64];
+        snprintf(pal_opt, sizeof(pal_opt), "--palette=%s", palettes[i]);
+        char *plot_1d_argv[] = {"histo-plot", "-c", "always", pal_opt, (char *)tmp_1d};
+        optind = 1;
+        TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_1d_argv) / sizeof(plot_1d_argv[0])), plot_1d_argv));
+
+        /* Test on 2D */
+        char *plot_2d_argv[] = {"histo-plot", "-c", "always", pal_opt, (char *)tmp_2d};
+        optind = 1;
+        TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_2d_argv) / sizeof(plot_2d_argv[0])), plot_2d_argv));
+    }
+
+    /* Test --colormap alias */
+    char *plot_alias_argv[] = {"histo-plot", "-c", "always", "--colormap=plasma", (char *)tmp_1d};
+    optind = 1;
+    TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_alias_argv) / sizeof(plot_alias_argv[0])), plot_alias_argv));
+
+    remove(tmp_1d);
+    remove(tmp_2d);
+}
+
 void test_cli_top_help(void) {
     char *top_help_argv[] = {"histo-top", "--help"};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main(2, top_help_argv));
@@ -316,6 +370,7 @@ int main(void) {
     RUN_TEST(test_cli_fit_pipeline);
     RUN_TEST(test_cli_2d_fill_and_delimiters);
     RUN_TEST(test_cli_error_handling);
+    RUN_TEST(test_cli_plot_palettes);
     RUN_TEST(test_cli_top_help);
     return UNITY_END();
 }

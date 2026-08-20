@@ -109,3 +109,10 @@ add_executable(test_tui_engine
 )
 target_link_libraries(test_tui_engine PRIVATE histocli histo unity Threads::Threads)
 add_test(NAME test_tui_engine COMMAND test_tui_engine)
+
+# Unit Test: CLI Palette Engine & Colormaps
+add_executable(test_palette
+    test_palette.c
+)
+target_link_libraries(test_palette PRIVATE histocli histo unity)
+add_test(NAME test_palette COMMAND test_palette)

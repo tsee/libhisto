@@ -3,6 +3,7 @@ find_package(Threads REQUIRED)
 add_library(histocli
     src/cli_common.c
     src/cli_main.c
+    src/cli_palette.c
     src/cmd_fill.c
     src/cmd_plot.c
     src/cmd_stats.c
