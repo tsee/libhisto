@@ -74,10 +74,78 @@ void test_sketch_serialization() {
     histo_sketch_destroy(restored);
 }
 
+void test_sketch_fractional_weights() {
+    histo_sketch_t *s = histo_sketch_create(0.01, 1000);
+    assert(s != NULL);
+
+    /* Total weight = 0.1 + 0.2 + 0.1 + 0.1 = 0.5 (< 1.0) */
+    histo_sketch_insert_w(s, 10.0, 0.1);
+    histo_sketch_insert_w(s, 20.0, 0.2);
+    histo_sketch_insert_w(s, 30.0, 0.1);
+    histo_sketch_insert_w(s, 40.0, 0.1);
+
+    assert(fabs(histo_sketch_total_weight(s) - 0.5) < 1e-9);
+
+    double q_min = 0.0, q_25 = 0.0, q_50 = 0.0, q_75 = 0.0, q_max = 0.0;
+    histo_status_t st0 = histo_sketch_quantile(s, 0.0, &q_min);
+    histo_status_t st1 = histo_sketch_quantile(s, 0.25, &q_25);
+    histo_status_t st2 = histo_sketch_quantile(s, 0.50, &q_50);
+    histo_status_t st3 = histo_sketch_quantile(s, 0.75, &q_75);
+    histo_status_t st4 = histo_sketch_quantile(s, 1.0, &q_max);
+
+    assert(st0 == HISTO_OK && st1 == HISTO_OK && st2 == HISTO_OK && st3 == HISTO_OK && st4 == HISTO_OK);
+    (void)st0; (void)st1; (void)st2; (void)st3; (void)st4;
+
+    assert(fabs(q_min - 10.0) < 1e-9);
+    assert(fabs(q_max - 40.0) < 1e-9);
+    /* q_25 should resolve around 20.0, q_50 around 20.0, q_75 around 30.0 */
+    assert(q_25 >= 10.0 * 0.98 && q_25 <= 20.0 * 1.02);
+    assert(q_50 >= 20.0 * 0.98 && q_50 <= 20.0 * 1.02);
+    assert(q_75 >= 30.0 * 0.98 && q_75 <= 40.0 * 1.02);
+    (void)q_min; (void)q_25; (void)q_50; (void)q_75; (void)q_max;
+
+    histo_sketch_destroy(s);
+}
+
+void test_sketch_negative_symmetry() {
+    histo_sketch_t *s = histo_sketch_create(0.005, 1000);
+    assert(s != NULL);
+
+    /* Insert dense symmetric points across [-100, 100] */
+    for (int i = 1; i <= 200; ++i) {
+        double v = (double)i * 0.5;
+        histo_sketch_insert(s, -v);
+        histo_sketch_insert(s, v);
+    }
+
+    double q_low = 0.0, q_high = 0.0, q_med = 0.0;
+    /* 10th percentile vs 90th percentile, and 50th percentile (median) */
+    histo_status_t st_low = histo_sketch_quantile(s, 0.10, &q_low);
+    histo_status_t st_high = histo_sketch_quantile(s, 0.90, &q_high);
+    histo_status_t st_med = histo_sketch_quantile(s, 0.50, &q_med);
+
+    assert(st_low == HISTO_OK && st_high == HISTO_OK && st_med == HISTO_OK);
+    (void)st_low; (void)st_high; (void)st_med;
+
+    /* Check symmetry: q_low ≈ -q_high within relative tolerance */
+    assert(q_low < 0.0 && q_high > 0.0);
+    double rel_diff = fabs(fabs(q_low) - q_high) / q_high;
+    assert(rel_diff < 0.02);
+
+    /* Median should be close to 0 */
+    assert(fabs(q_med) < 1.0);
+
+    (void)rel_diff; (void)q_low; (void)q_high; (void)q_med;
+
+    histo_sketch_destroy(s);
+}
+
 int main() {
     test_sketch_basic();
     test_sketch_merge();
     test_sketch_serialization();
+    test_sketch_fractional_weights();
+    test_sketch_negative_symmetry();
     printf("All sketch tests passed.\n");
     return 0;
 }
