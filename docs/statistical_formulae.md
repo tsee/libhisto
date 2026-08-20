@@ -1,4 +1,4 @@
-# Design Specification: Statistical & Analytical Formulae
+# Design Specification: Statistical & Analytical Formulae {#statistical_formulae}
 
 This document provides a mathematically rigorous specification of the statistical estimators, error-propagation algorithms, and sketch mechanics implemented in `libhisto`.
 

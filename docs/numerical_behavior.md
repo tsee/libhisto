@@ -1,4 +1,4 @@
-# Design Specification: Numerical Behavior, Precision & Error Handling
+# Design Specification: Numerical Behavior, Precision & Error Handling {#numerical_behavior}
 
 This document specifies the exact numerical semantics, IEEE-754 floating-point edge case policies, boundary conventions, and error-handling strategies implemented in `libhisto`.
 

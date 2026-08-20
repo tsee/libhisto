@@ -1,4 +1,4 @@
-# libhisto Release Guide
+# libhisto Release Guide {#release_guide}
 
 This document outlines the release, versioning, and tagging workflow for `libhisto` across the core C library and its language bindings.
 

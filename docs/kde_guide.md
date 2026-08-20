@@ -1,4 +1,4 @@
-# Kernel Density Estimation (KDE) & Automated Binning Guide
+# Kernel Density Estimation (KDE) & Automated Binning Guide {#kde_guide}
 
 `libhisto` provides high-performance, non-parametric 1-dimensional Kernel Density Estimation (KDE) and automated optimal bin width estimation algorithms.
 
@@ -6,15 +6,15 @@
 
 ## 1. Automated Optimal Bin Width Heuristics
 
-When binning continuous data, choosing an inappropriate bin width $h$ or bin count $N_{\text{bins}}$ can obscure multi-modality (over-smoothing) or introduce sampling noise (under-smoothing). `libhisto` provides standard statistical heuristics:
+When binning continuous data, choosing an inappropriate bin width \f$h\f$ or bin count \f$N_{\text{bins}}\f$ can obscure multi-modality (over-smoothing) or introduce sampling noise (under-smoothing). `libhisto` provides standard statistical heuristics:
 
 | Rule | Formula | Key Characteristic |
 | :--- | :--- | :--- |
-| **Freedman-Diaconis (FD)** | $h = 2 \cdot \text{IQR} \cdot n^{-1/3}$ | **Default**: Robust against outliers and heavy tails. |
-| **Scott's Reference** | $h = 3.49 \cdot \sigma \cdot n^{-1/3}$ | Optimal for Gaussian-distributed data. |
-| **Sturges' Rule** | $N = \lceil \log_2(n) + 1 \rceil$ | Classic rule for small sample sizes ($n < 200$). |
-| **Doane's Rule** | $N = \lceil 1 + \log_2(n) + \log_2(1 + \|\gamma_1\|/\sigma_{\gamma_1}) \rceil$ | Extends Sturges for skewed distributions. |
-| **Knuth's Rule** | $\arg\max_M F(M)$ posterior log-likelihood | Non-parametric Bayesian model selection. |
+| **Freedman-Diaconis (FD)** | \f$h = 2 \cdot \text{IQR} \cdot n^{-1/3}\f$ | **Default**: Robust against outliers and heavy tails. |
+| **Scott's Reference** | \f$h = 3.49 \cdot \sigma \cdot n^{-1/3}\f$ | Optimal for Gaussian-distributed data. |
+| **Sturges' Rule** | \f$N = \lceil \log_2(n) + 1 \rceil\f$ | Classic rule for small sample sizes (\f$n < 200\f$). |
+| **Doane's Rule** | \f$N = \lceil 1 + \log_2(n) + \log_2(1 + \|\gamma_1\|/\sigma_{\gamma_1}) \rceil\f$ | Extends Sturges for skewed distributions. |
+| **Knuth's Rule** | \f$\arg\max_M F(M)\f$ posterior log-likelihood | Non-parametric Bayesian model selection. |
 
 ### C99 API Usage
 ```c
@@ -59,33 +59,35 @@ my $h = Math::Histo->create_auto(\@data, rule => 'fd');
 
 ## 2. Kernel Density Estimation (`histo_kde`)
 
-Given $n$ observations $\{x_i\}$ with weights $\{w_i\}$ ($\sum w_i = W$) and smoothing bandwidth $h > 0$:
-$$\hat{f}_h(x) = \frac{1}{W h} \sum_{i=1}^n w_i K\left(\frac{x - x_i}{h}\right)$$
+Given \f$n\f$ observations \f$\{x_i\}\f$ with weights \f$\{w_i\}\f$ (\f$\sum w_i = W\f$) and smoothing bandwidth \f$h > 0\f$:
+\f[
+\hat{f}_h(x) = \frac{1}{W h} \sum_{i=1}^n w_i K\left(\frac{x - x_i}{h}\right)
+\f]
 
-### Supported Kernels $K(u)$
+### Supported Kernels \f$K(u)\f$
 
 1. **Gaussian** (Default):
-   $$K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2/2}$$
+   \f[ K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2/2} \f]
 2. **Epanechnikov**:
-   $$K(u) = \frac{3}{4}(1 - u^2) \quad \text{for } |u| \le 1$$
+   \f[ K(u) = \frac{3}{4}(1 - u^2) \quad \text{for } |u| \le 1 \f]
 3. **Uniform / Boxcar**:
-   $$K(u) = \frac{1}{2} \quad \text{for } |u| \le 1$$
+   \f[ K(u) = \frac{1}{2} \quad \text{for } |u| \le 1 \f]
 4. **Triangular**:
-   $$K(u) = 1 - |u| \quad \text{for } |u| \le 1$$
+   \f[ K(u) = 1 - |u| \quad \text{for } |u| \le 1 \f]
 5. **Biweight / Quartic**:
-   $$K(u) = \frac{15}{16}(1 - u^2)^2 \quad \text{for } |u| \le 1$$
+   \f[ K(u) = \frac{15}{16}(1 - u^2)^2 \quad \text{for } |u| \le 1 \f]
 6. **Cosine**:
-   $$K(u) = \frac{\pi}{4} \cos\left(\frac{\pi}{2} u\right) \quad \text{for } |u| \le 1$$
+   \f[ K(u) = \frac{\pi}{4} \cos\left(\frac{\pi}{2} u\right) \quad \text{for } |u| \le 1 \f]
 
 ---
 
 ## 3. Bandwidth Selection
 
 - **Silverman's Rule of Thumb** (Default):
-  $$h = 0.9 \cdot \min\left(\sigma, \frac{\text{IQR}}{1.34}\right) \cdot n^{-1/5}$$
+  \f[ h = 0.9 \cdot \min\left(\sigma, \frac{\text{IQR}}{1.34}\right) \cdot n^{-1/5} \f]
 - **Scott's Rule**:
-  $$h = 1.059 \cdot \sigma \cdot n^{-1/5}$$
-- **Manual**: Explicit user bandwidth $h > 0$, with optional scaling modifier `bw_adjust`.
+  \f[ h = 1.059 \cdot \sigma \cdot n^{-1/5} \f]
+- **Manual**: Explicit user bandwidth \f$h > 0\f$, with optional scaling modifier `bw_adjust`.
 
 ---
 

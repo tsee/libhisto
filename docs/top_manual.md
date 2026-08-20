@@ -103,9 +103,9 @@ When `histo top` is running, control the display using single-key shortcuts:
 | `l` | 1D | **Cycle Log Scales**: Cycles between `Linear` → `Log-Y` (log counts) → `Log-X` (logarithmic bin spacing) → `Log-Log`. |
 | `k` | 1D | **KDE Overlay**: Toggles continuous Gaussian Kernel Density Estimation curve (cyan `◆` marks). |
 | `f` | 1D | **Gaussian Fit Overlay**: Toggles real-time Levenberg-Marquardt Gaussian fit curve (magenta `✖` marks; `✦` for overlap). |
-| `e` | 1D | **Error Bars**: Toggles statistical uncertainty whiskers $\pm\sqrt{\sum w^2}$ (formatted as `╎±err╎`). |
+| `e` | 1D | **Error Bars**: Toggles statistical uncertainty whiskers \f$\pm\sqrt{\sum w^2}\f$ (formatted as `╎±err╎`). |
 | `y` / `Y` | 1D | **Count Axis Ruler**: Toggles the top count-scale tick ruler (`0 ... MaxCount`). |
-| `a` / `A` | 1D | **Auto-Range**: Toggles dynamic outlier-resistant range detection ($P_1$ to $P_{99}$ with 5% margin). |
+| `a` / `A` | 1D | **Auto-Range**: Toggles dynamic outlier-resistant range detection (\f$P_1\f$ to \f$P_{99}\f$ with 5% margin). |
 | `r` | 1D | **Halve Bins**: Halves bin count and re-aggregates from reservoir cache. |
 | `R` | 1D | **Double Bins**: Doubles bin count and re-aggregates from reservoir cache. |
 
@@ -113,7 +113,7 @@ When `histo top` is running, control the display using single-key shortcuts:
 
 | Key | Mode | Description |
 | :--- | :--- | :--- |
-| `l` | 2D | **Log-Z Intensity**: Toggles logarithmic color intensity mapping ($\log_{10}(c + 1)$) to bring out low-count background details. |
+| `l` | 2D | **Log-Z Intensity**: Toggles logarithmic color intensity mapping (\f$\log_{10}(c + 1)\f$) to bring out low-count background details. |
 | `g` / `G` | 2D | **Color Legend**: Toggles the TrueColor Viridis spectrum reference bar showing exact numeric bounds. |
 
 ---
@@ -128,10 +128,10 @@ Pressing **`:`** opens the command bar at the bottom of the screen.
 
 | Command | Shorthand | Arguments | Example | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `:bins <N>` | `:b <N>` | Number of bins ($1 \le N \le 100000$) | `:bins 100` | Rebuilds 1D histogram with $N$ bins from reservoir. |
-| `:range <A> <B>` | `:r <A> <B>` | Min and max bounds ($A < B$) | `:range 20 80` | Zooms viewport into $[A, B]$ and re-aggregates reservoir. |
+| `:bins <N>` | `:b <N>` | Number of bins (\f$1 \le N \le 100000\f$) | `:bins 100` | Rebuilds 1D histogram with $N$ bins from reservoir. |
+| `:range <A> <B>` | `:r <A> <B>` | Min and max bounds (\f$A < B\f$) | `:range 20 80` | Zooms viewport into $[A, B]$ and re-aggregates reservoir. |
 | `:scale <MODE>` | `:sc <MODE>` | `linear`, `logy`, `logx`, `loglog` | `:scale logy` | Sets 1D axis scaling mode. |
-| `:autorange [ARG]`| `:a [ARG]` | `on`, `off`, or threshold ($0 < T < 1$) | `:autorange 0.05` | Enables/disables auto-ranging with threshold $T$. |
+| `:autorange [ARG]`| `:a [ARG]` | `on`, `off`, or threshold (\f$0 < T < 1\f$) | `:autorange 0.05` | Enables/disables auto-ranging with threshold $T$. |
 | `:clear` | | None | `:clear` | Clears all histogram bins and sample cache. |
 | `:help` | `:h` | None | `:help` | Opens help cheat sheet modal. |
 | `:quit` | `:q` | None | `:quit` | Exits `histo top`. |
@@ -144,8 +144,8 @@ Press **`Enter`** to execute a command or **`Esc`** to cancel.
 
 ### 5.1 Real-Time Kernel Density Estimation (KDE) Overlay (`k`)
 When **`k`** is pressed and at least 5 samples have been ingested:
-- A continuous Gaussian KDE is computed over the active range using Silverman's rule-of-thumb bandwidth $h = 1.06 \cdot \hat{\sigma} \cdot n^{-1/5}$.
-- The continuous density $f(x)$ is converted to expected bin counts $C_i = f(x_i) \cdot W_{\text{tot}} \cdot \Delta x$.
+- A continuous Gaussian KDE is computed over the active range using Silverman's rule-of-thumb bandwidth \f$h = 1.06 \cdot \hat{\sigma} \cdot n^{-1/5}\f$.
+- The continuous density \f$f(x)\f$ is converted to expected bin counts \f$C_i = f(x_i) \cdot W_{\text{tot}} \cdot \Delta x\f$.
 - Overlay markers appear in the terminal:
   - **Cyan `◆`**: KDE expected density point.
   - **Yellow `✦`**: Point where both KDE and Gaussian Fit intersect the same column.
@@ -153,7 +153,7 @@ When **`k`** is pressed and at least 5 samples have been ingested:
 
 ### 5.2 Real-Time Gaussian Fit Overlay (`f`)
 When **`f`** is pressed and at least 5 samples have been ingested:
-- `libhisto` runs a Levenberg-Marquardt non-linear regression fitting $f(x) = A \cdot \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)$.
+- `libhisto` runs a Levenberg-Marquardt non-linear regression fitting \f$f(x) = A \cdot \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)\f$.
 - When converged, the predicted curve is rendered across bin rows:
   - **Magenta `✖`**: Gaussian fit prediction point.
   - **Yellow `✦`**: Overlap with KDE density marker.
@@ -161,7 +161,7 @@ When **`f`** is pressed and at least 5 samples have been ingested:
 
 ### 5.3 Statistical Error Whiskers (`e`)
 When **`e`** is pressed:
-- Statistical error for each bin is calculated via $\sigma_i = \sqrt{\sum w^2}$ (Poisson uncertainty for unweighted data).
+- Statistical error for each bin is calculated via \f$\sigma_i = \sqrt{\sum w^2}\f$ (Poisson uncertainty for unweighted data).
 - The uncertainty is formatted and appended to each row:
   - TrueColor mode: `╎±14.2╎` in muted gray ANSI.
   - Monochrome mode: `+-14.2`.
@@ -174,16 +174,16 @@ When **`y`** is pressed:
   [Count Scale]               0                    750                   1500
                               ├─────────────────────┼──────────────────────┤
   ```
-- Scale numbers are dynamically right-aligned and scaled ($0$, $50\%$, $100\%$) matching linear or logarithmic modes without terminal truncation.
+- Scale numbers are dynamically right-aligned and scaled (0, 50%, 100%) matching linear or logarithmic modes without terminal truncation.
 - Subheader indicates `│ Axis: ON`.
 
 ### 5.5 2D Bivariate Heatmap Mode (`--2d`)
 When started with `--2d`:
 - Expects pairs of coordinates (`x y`) per line.
 - Renders a 2D intensity grid where colors represent sample density:
-  - **Viridis TrueColor Palette**: Smooth perceptual colormap transitioning from dark purple ($0\%$) $\to$ teal $\to$ green $\to$ bright yellow ($100\%$).
+  - **Viridis TrueColor Palette**: Smooth perceptual colormap transitioning from dark purple (0%) → teal → green → bright yellow (100%).
   - **Color Range Legend Bar (`g`)**: Displays complete color scale alongside minimum and maximum intensity values.
-  - **Log-Z Intensity (`l`)**: Normalizes bin colors using $\log_{10}(c + 1)$, making faint structures and background tails visible alongside dense clusters.
+  - **Log-Z Intensity (`l`)**: Normalizes bin colors using \f$\log_{10}(c + 1)\f$, making faint structures and background tails visible alongside dense clusters.
 
 ---
 
@@ -203,7 +203,7 @@ tail -F /var/log/nginx/access.log | \
 ### 6.2 Database Query Execution Times
 ```bash
 # Monitor PostgreSQL slow query durations
-pg_log_stream | grep -oP 'duration: \K[0-9.]+' | histo top -n 40
+pg_log_stream | awk '/duration:/ {print $NF}' | histo top -n 40
 ```
 
 ### 6.3 2D Coordinate Telemetry (Sensor / Simulation)

@@ -1,4 +1,4 @@
-# Design Specification: Serialization & Wire Formats
+# Design Specification: Serialization & Wire Formats {#serialization_format}
 
 This document defines the canonical binary wire format, version migration mechanics, and JSON schema for `libhisto`.
 

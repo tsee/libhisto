@@ -219,7 +219,7 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
 
     /* X-axis labels row */
     if (rows_drawn < max_rows) {
-        char label_buf[256];
+        char label_buf[512];
         char min_str[32], max_str[32];
         snprintf(min_str, sizeof(min_str), "%.1f", ax.min);
         snprintf(max_str, sizeof(max_str), "%.1f", ax.max);
