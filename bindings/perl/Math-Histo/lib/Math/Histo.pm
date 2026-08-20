@@ -287,6 +287,46 @@ Resets all bin contents, moments, and out-of-range counters to zero.
 
 =back
 
+=head1 BIN ACCESS & GEOMETRY
+
+=over 4
+
+=item B<nbins()>: Number of bins.
+
+=item B<min()>: Lower range boundary.
+
+=item B<max()>: Upper range boundary.
+
+=item B<is_uniform()>: Returns 1 if uniform binning, 0 if variable-width binning.
+
+=item B<bin_content($idx)>: Accumulated weight in bin $idx (0-indexed).
+
+=item B<bin_error($idx)>: Standard error in bin $idx (sqrt(sum_w2) or sqrt(content)).
+
+=item B<bin_sum_w2($idx)>: Sum of weights squared in bin $idx.
+
+=item B<bin_low_edge($idx)>: Lower edge coordinate of bin $idx.
+
+=item B<bin_high_edge($idx)>: Upper edge coordinate of bin $idx.
+
+=item B<bin_center($idx)>: Geometric center coordinate of bin $idx.
+
+=item B<bin_width($idx)>: Width of bin $idx.
+
+=item B<bin_contents()>: Returns an arrayref of all bin contents.
+
+=item B<bin_edges()>: Returns an arrayref of all bin edges (length nbins + 1).
+
+=item B<find_bin($x)>: Returns the 0-indexed bin index for coordinate $x (-1 for underflow, nbins for overflow).
+
+=item B<underflow_weight()>: Total weight accumulated below min.
+
+=item B<overflow_weight()>: Total weight accumulated above max.
+
+=item B<nan_count()>: Total count of non-finite (NaN) samples rejected.
+
+=back
+
 =head1 STATISTICAL ANALYSIS
 
 =over 4
