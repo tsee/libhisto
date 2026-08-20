@@ -3,16 +3,33 @@ use warnings;
 use ExtUtils::MakeMaker;
 use File::Spec;
 
-# In-repo development helper: add local Alien-libhisto blib to @INC if present
+use Config;
+use Cwd qw(abs_path getcwd);
+
+# In-repo development helper: if in git repo, ensure local Alien-libhisto is built and in @INC
 BEGIN {
-    my $alien_blib = File::Spec->rel2abs(File::Spec->catdir(File::Spec->curdir, '..', 'Alien-libhisto', 'blib', 'lib'));
-    my $alien_arch = File::Spec->rel2abs(File::Spec->catdir(File::Spec->curdir, '..', 'Alien-libhisto', 'blib', 'arch'));
-    if (-d $alien_blib) {
+    my $alien_dir = File::Spec->rel2abs(File::Spec->catdir(File::Spec->curdir, '..', 'Alien-libhisto'));
+    my $alien_file = File::Spec->catfile($alien_dir, 'alienfile');
+    my $alien_blib = File::Spec->catdir($alien_dir, 'blib', 'lib');
+    my $alien_arch = File::Spec->catdir($alien_dir, 'blib', 'arch');
+
+    if (-f $alien_file) {
+        # Check if local Alien-libhisto blib exists, if not build it automatically
+        if (! -d $alien_blib || ! -f File::Spec->catfile($alien_blib, 'Alien', 'libhisto.pm')) {
+            print "In-tree build: building Alien-libhisto in $alien_dir...\n";
+            my $orig = getcwd();
+            chdir $alien_dir or die "Cannot chdir to $alien_dir: $!";
+            system($^X, 'Makefile.PL') == 0 or die "Failed to execute Makefile.PL in $alien_dir: $?";
+            my $make = $Config{make} || 'make';
+            system($make) == 0 or die "Failed to execute $make in $alien_dir: $?";
+            chdir $orig or die "Cannot chdir back to $orig: $!";
+        }
         unshift @INC, $alien_blib, $alien_arch;
     }
 }
 
 use Alien::Base::Wrapper qw( Alien::libhisto !export );
+
 
 WriteMakefile(
     Alien::Base::Wrapper->mm_args2(

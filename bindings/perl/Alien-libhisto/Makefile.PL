@@ -30,9 +30,9 @@ sub copy_tree {
     closedir $dh;
 }
 
-if (! -d $bundled_dir && -f $repo_cmake) {
-    print "Syncing libhisto source to bundled/ for Alien::libhisto build...\n";
-    make_path($bundled_dir);
+if (-f $repo_cmake) {
+    print "In-tree build: syncing libhisto source tree to bundled/...\n";
+    make_path($bundled_dir) unless -d $bundled_dir;
     for my $dir (qw(include src cmake)) {
         my $src_dir = File::Spec->catdir($repo_root, $dir);
         if (-d $src_dir) {
@@ -45,8 +45,8 @@ if (! -d $bundled_dir && -f $repo_cmake) {
             copy($src_file, File::Spec->catfile($bundled_dir, $file));
         }
     }
-
 }
+
 
 my $abmm = Alien::Build::MM->new;
 
