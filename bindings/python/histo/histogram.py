@@ -7,6 +7,8 @@ from typing import Sequence, Optional, Union, Tuple, Dict, Any, Callable
 import _libhisto
 from histo.constants import FLAG_NONE, FLAG_TRACK_SUMW2, FLAG_EXACT_MOMENTS
 from histo.fit import FitResult, MODEL_MAP, LOSS_MAP
+from histo.compat import HAS_NUMPY, require_numpy, as_float64_buffer
+from histo.axis import Axis
 
 
 class Histogram:
@@ -95,6 +97,104 @@ class Histogram:
             f.write(content)
 
     # -------------------------------------------------------------------------
+    # NumPy & Universal Histogram Interface (UHI) Interoperability
+    # -------------------------------------------------------------------------
+    def to_numpy(self, flow: bool = False) -> Tuple[Any, Any]:
+        """
+        Convert histogram to (counts, bin_edges) matching numpy.histogram format.
+
+        Parameters
+        ----------
+        flow : bool, default=False
+            If True, includes underflow at index 0 and overflow at index -1.
+        """
+        np = require_numpy("Histogram.to_numpy")
+        edges = self.axes[0].edges
+        if not flow:
+            counts = np.array([self.bin_content(i) for i in range(self.nbins)], dtype=np.float64)
+        else:
+            counts = np.array(
+                [self.underflow] + [self.bin_content(i) for i in range(self.nbins)] + [self.overflow],
+                dtype=np.float64
+            )
+        return counts, edges
+
+    @classmethod
+    def from_numpy(cls, counts: Any, bin_edges: Any, track_sumw2: bool = False) -> "Histogram":
+        """
+        Construct a Histogram from existing NumPy counts and bin_edges arrays.
+        """
+        counts_list = [float(x) for x in counts]
+        edges_list = [float(x) for x in bin_edges]
+        if len(edges_list) != len(counts_list) + 1:
+            raise ValueError(
+                f"bin_edges length ({len(edges_list)}) must be len(counts) + 1 ({len(counts_list) + 1})"
+            )
+
+        n = len(counts_list)
+        # Detect uniformity within floating point tolerance
+        dx0 = edges_list[1] - edges_list[0]
+        is_uniform = True
+        for i in range(1, n):
+            if abs((edges_list[i + 1] - edges_list[i]) - dx0) > 1e-10 * max(1.0, abs(dx0)):
+                is_uniform = False
+                break
+
+        if is_uniform:
+            h = cls(bins=n, range=(edges_list[0], edges_list[-1]), track_sumw2=track_sumw2)
+        else:
+            h = cls(edges=edges_list, track_sumw2=track_sumw2)
+
+        for i, val in enumerate(counts_list):
+            if val != 0.0:
+                h.fill_bin(i, val)
+        return h
+
+    def __array__(self, dtype=None, copy=None) -> Any:
+        """NumPy array interface returning bin contents as a 1D ndarray."""
+        np = require_numpy("Histogram.__array__")
+        arr = np.array([self.bin_content(i) for i in range(self.nbins)], dtype=np.float64)
+        if dtype is not None and arr.dtype != dtype:
+            return arr.astype(dtype, copy=copy)
+        if copy:
+            return arr.copy()
+        return arr
+
+    @property
+    def axes(self) -> Tuple[Axis]:
+        """UHI axes tuple."""
+        return (Axis(self.nbins, self.min, self.max, raw_histo=self._raw),)
+
+    def values(self, flow: bool = False) -> Any:
+        """UHI values protocol returning array of bin counts."""
+        np = require_numpy("Histogram.values")
+        if not flow:
+            return np.array([self.bin_content(i) for i in range(self.nbins)], dtype=np.float64)
+        return np.array(
+            [self.underflow] + [self.bin_content(i) for i in range(self.nbins)] + [self.overflow],
+            dtype=np.float64
+        )
+
+    def variances(self, flow: bool = False) -> Optional[Any]:
+        """UHI variances protocol returning array of sum_w2 or bin uncertainties squared."""
+        np = require_numpy("Histogram.variances")
+        if not flow:
+            return np.array([self.bin_sum_w2(i) for i in range(self.nbins)], dtype=np.float64)
+        return np.array(
+            [self.underflow] + [self.bin_sum_w2(i) for i in range(self.nbins)] + [self.overflow],
+            dtype=np.float64
+        )
+
+    def counts(self, flow: bool = False) -> Any:
+        """UHI counts protocol."""
+        return self.values(flow=flow)
+
+    @property
+    def kind(self) -> str:
+        """UHI kind property."""
+        return "COUNT"
+
+    # -------------------------------------------------------------------------
     # Ingestion Methods
     # -------------------------------------------------------------------------
     def fill(self, x: float, weight: float = 1.0) -> bool:
@@ -105,11 +205,16 @@ class Histogram:
         """Batch fill samples from Python sequences."""
         return self._raw.fill_n(x, weights=weights)
 
-    def fill_buffer(self, x_buf, weights_buf=None) -> bool:
-        """Zero-copy SIMD batch fill from float64 buffer (numpy array, memoryview, array.array)."""
-        return self._raw.fill_buffer(x_buf, weights=weights_buf)
+    def fill_buffer(self, x_buf: Any, weights_buf: Any = None) -> bool:
+        """
+        SIMD batch fill from array-like or buffer objects (numpy array, memoryview, array.array, list).
+        Transparently converts and aligns dtypes if needed.
+        """
+        x_buf_c = as_float64_buffer(x_buf)
+        w_buf_c = as_float64_buffer(weights_buf) if weights_buf is not None else None
+        return self._raw.fill_buffer(x_buf_c, weights=w_buf_c)
 
-    def fill_packed(self, x_buf, weights_buf=None) -> bool:
+    def fill_packed(self, x_buf: Any, weights_buf: Any = None) -> bool:
         """Alias for fill_buffer."""
         return self.fill_buffer(x_buf, weights_buf)
 
@@ -169,7 +274,7 @@ class Histogram:
 
     @property
     def nan_count(self) -> int:
-        """Number of non-finite (NaN / Inf) rejected samples."""
+        """Count of non-finite (NaN/Inf) samples skipped."""
         return self._raw.nan_count
 
     # -------------------------------------------------------------------------
@@ -177,62 +282,57 @@ class Histogram:
     # -------------------------------------------------------------------------
     @property
     def mean(self) -> float:
-        """Distribution mean."""
+        """Sample mean."""
         return self._raw.mean
 
     @property
     def variance(self) -> float:
-        """Distribution variance."""
+        """Sample variance."""
         return self._raw.variance
 
     @property
     def std_dev(self) -> float:
-        """Distribution standard deviation."""
+        """Sample standard deviation."""
         return self._raw.std_dev
 
     @property
     def skewness(self) -> float:
-        """Distribution skewness."""
+        """Sample skewness."""
         return self._raw.skewness
 
     @property
     def kurtosis(self) -> float:
-        """Distribution kurtosis."""
+        """Sample kurtosis."""
         return self._raw.kurtosis
 
     @property
     def excess_kurtosis(self) -> float:
-        """Distribution excess kurtosis (kurtosis - 3.0)."""
+        """Sample excess kurtosis (kurtosis - 3.0)."""
         return self._raw.excess_kurtosis
 
     @property
     def median(self) -> float:
-        """Distribution median (50th percentile)."""
+        """Estimated median coordinate (50th percentile)."""
         return self._raw.median
 
     @property
     def iqr(self) -> float:
-        """Interquartile Range (Q75 - Q25)."""
+        """Interquartile range (Q75 - Q25)."""
         return self._raw.iqr
 
     @property
     def mad(self) -> float:
-        """Median Absolute Deviation (MAD)."""
+        """Median Absolute Deviation."""
         return self._raw.mad
 
     @property
-    def mode_bin(self) -> int:
-        """Index of the bin with the highest accumulated weight."""
-        return self._raw.mode_bin
-
-    @property
     def mode(self) -> float:
-        """Continuous mode peak estimate via 3-point parabolic interpolation."""
+        """Sub-bin continuous peak estimate (parabolic interpolation)."""
         return self._raw.mode
 
     @property
     def fwhm(self) -> float:
-        """Full Width at Half Maximum of peak."""
+        """Full Width at Half Maximum."""
         return self._raw.fwhm
 
     @property
@@ -242,40 +342,50 @@ class Histogram:
 
     @property
     def stats(self) -> Dict[str, Any]:
-        """Complete statistical summary dictionary."""
+        """Comprehensive dictionary of statistical moments and properties."""
         return self._raw.get_stats()
 
     # -------------------------------------------------------------------------
-    # Bin Access & Indexing
+    # Bin Accessors
     # -------------------------------------------------------------------------
     def find_bin(self, x: float) -> int:
-        """Locate bin index for coordinate x (-1 for underflow, nbins for overflow)."""
+        """Locate bin index for coordinate x (-1 underflow, nbins overflow)."""
         return self._raw.find_bin(float(x))
 
-    def bin_content(self, idx: int) -> float:
-        """Accumulated weight in bin idx."""
-        return self._raw.bin_content(int(idx))
+    def bin_content(self, bin_index: int) -> float:
+        """Get accumulated weight in bin_index."""
+        return self._raw.bin_content(int(bin_index))
 
-    def bin_error(self, idx: int) -> float:
-        """Statistical uncertainty in bin idx."""
-        return self._raw.bin_error(int(idx))
+    def bin_error(self, bin_index: int) -> float:
+        """Get statistical standard error in bin_index."""
+        return self._raw.bin_error(int(bin_index))
 
-    def bin_sum_w2(self, idx: int) -> float:
-        """Sum of squared weights in bin idx."""
-        return self._raw.bin_sum_w2(int(idx))
+    def bin_sum_w2(self, bin_index: int) -> float:
+        """Get sum of squared weights sum(w^2) in bin_index."""
+        return self._raw.bin_sum_w2(int(bin_index))
 
-    def bin_center(self, idx: int) -> float:
-        """Midpoint coordinate of bin idx."""
-        return self._raw.bin_center(int(idx))
+    def bin_center(self, bin_index: int) -> float:
+        """Get midpoint coordinate of bin_index."""
+        return self._raw.bin_center(int(bin_index))
 
-    def bin_bounds(self, idx: int) -> Tuple[float, float]:
-        """Interval (lower, upper) for bin idx."""
-        return self._raw.bin_bounds(int(idx))
+    def bin_bounds(self, bin_index: int) -> Tuple[float, float]:
+        """Get (lower, upper) boundaries of bin_index."""
+        return self._raw.bin_bounds(int(bin_index))
 
     def __getitem__(self, key: Union[int, slice]) -> Union[float, "Histogram"]:
+        """
+        Indexing: h[i] returns bin content.
+        Slicing: h[start:end] returns sliced sub-histogram.
+        """
         if isinstance(key, slice):
             start = 0 if key.start is None else int(key.start)
-            stop = (self.nbins - 1) if key.stop is None else int(key.stop)
+            stop = self.nbins if key.stop is None else int(key.stop)
+            if start < 0:
+                start += self.nbins
+            if stop < 0:
+                stop += self.nbins
+            start = max(0, min(self.nbins - 1, start))
+            stop = max(start, min(self.nbins - 1, stop))
             return self.slice(start, stop)
         elif isinstance(key, int):
             if key < 0:
@@ -342,13 +452,13 @@ class Histogram:
         return self._raw.kl_divergence(other._raw)
 
     def bhattacharyya_distance(self, other: "Histogram") -> float:
-        """Bhattacharyya distance."""
+        """Bhattacharyya distance between two histograms."""
         if not isinstance(other, Histogram):
             raise TypeError("other must be a Histogram instance")
         return self._raw.bhattacharyya_distance(other._raw)
 
     # -------------------------------------------------------------------------
-    # Arithmetic & Transformations
+    # Transformations & Arithmetic Operators
     # -------------------------------------------------------------------------
     def add(self, other: "Histogram") -> "Histogram":
         """In-place addition: self += other."""
@@ -365,47 +475,44 @@ class Histogram:
         return self
 
     def multiply(self, other: "Histogram") -> "Histogram":
-        """In-place element-wise multiplication: self *= other."""
+        """In-place elementwise multiplication: self *= other."""
         if not isinstance(other, Histogram):
             raise TypeError("other must be a Histogram instance")
         self._raw.multiply(other._raw)
         return self
 
     def divide(self, other: "Histogram") -> "Histogram":
-        """In-place element-wise division: self /= other."""
+        """In-place elementwise division: self /= other."""
         if not isinstance(other, Histogram):
             raise TypeError("other must be a Histogram instance")
         self._raw.divide(other._raw)
         return self
 
     def scale(self, factor: float) -> "Histogram":
-        """Scale all bin contents by scalar factor in-place."""
+        """In-place scaling by scalar factor."""
         self._raw.scale(float(factor))
         return self
 
     def normalize(self, target_area: float = 1.0) -> "Histogram":
-        """Normalize total in-range weight to target_area in-place."""
+        """In-place area normalization."""
         self._raw.normalize(float(target_area))
         return self
 
     def rebin(self, factor: int) -> "Histogram":
-        """Rebin by integer factor, returning newly allocated rebinned Histogram."""
+        """Rebin by integer grouping factor, returning a new Histogram."""
         raw_rebinned = self._raw.rebin(int(factor))
         return Histogram(_raw=raw_rebinned)
 
-    def slice(self, start: int, end: int, empty: bool = False) -> "Histogram":
-        """Slice bin range [start, end], returning newly allocated sub-Histogram."""
-        raw_slice = self._raw.slice(int(start), int(end), empty)
-        return Histogram(_raw=raw_slice)
+    def slice(self, start: int, end: int) -> "Histogram":
+        """Slice subset of bins [start, end], returning a new Histogram."""
+        raw_sliced = self._raw.slice(int(start), int(end))
+        return Histogram(_raw=raw_sliced)
 
-    def cdf(self, prenormalization: float = 1.0) -> "Histogram":
-        """Generate Cumulative Distribution Function (CDF) histogram."""
-        raw_cdf = self._raw.cdf(float(prenormalization))
+    def cdf(self, normalized: bool = True) -> "Histogram":
+        """Compute Cumulative Distribution Function (CDF) histogram."""
+        raw_cdf = self._raw.cdf(bool(normalized))
         return Histogram(_raw=raw_cdf)
 
-    # -------------------------------------------------------------------------
-    # Operator Overloading
-    # -------------------------------------------------------------------------
     def __add__(self, other: "Histogram") -> "Histogram":
         res = self.clone()
         return res.add(other)
@@ -426,7 +533,7 @@ class Histogram:
     def __truediv__(self, other: Union["Histogram", float, int]) -> "Histogram":
         res = self.clone()
         if isinstance(other, (int, float)):
-            if other == 0:
+            if float(other) == 0.0:
                 raise ZeroDivisionError("division by zero")
             return res.scale(1.0 / float(other))
         return res.divide(other)
@@ -499,5 +606,4 @@ class Histogram:
         return FitResult(raw_res)
 
     def __repr__(self) -> str:
-        return (f"<Histogram nbins={self.nbins} range=({self.min:.2f}, {self.max:.2f}) "
-                f"entries={self.num_entries} weight={self.total_weight:.2f}>")
+        return f"Histogram({self.nbins} bins, range=({self.min:.4g}, {self.max:.4g}), entries={self.num_entries})"
