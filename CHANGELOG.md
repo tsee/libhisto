@@ -20,14 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Python binding `Histogram.auto(data, rule="auto")`.
   - Perl binding `Math::Histo->create_auto($data, rule => 'auto')`.
   - CLI `histo-fill --auto-bins[=RULE]` (or `-a`) and auto-binning fallback in `histo plot`.
-- **Kernel Density Estimation (KDE) Engine** (`include/histo/kde.h`, `src/kde.c`):
-  - Non-parametric 1D continuous density estimation over raw samples or discrete histograms.
-  - Standard weighting kernels: Gaussian, Epanechnikov, Boxcar / Uniform, Triangular, Biweight / Quartic, Cosine.
-  - Automated bandwidth selectors: Silverman's rule of thumb, Scott's rule, manual explicit bandwidth.
-  - Sheppard's variance correction for binned histogram discretization.
-  - Analytical and numerical evaluation: `histo_kde_eval` (PDF), `histo_kde_eval_n`, `histo_kde_cdf`, `histo_kde_quantile` (CDF root inversion), and `histo_kde_sample` (synthetic PRNG generator).
-  - Python `histo.KDE` class and Perl `Math::Histo::KDE` class.
-  - Comprehensive documentation guide in `docs/kde_guide.md`.
+- **Real-Time Interactive Terminal Monitor (`histo top` / `histo-top`)** (`tools/src/cmd_top.c`, `tools/src/tui_engine.c`, `tools/src/tui_term.c`):
+  - 2-thread decoupled architecture: unblocked ingestion worker draining `stdin` at wire speed while UI renders off atomic deep-copy snapshots.
+  - View freeze mode (`Space`): freezes display frame for inspection without pipe backpressure or dropped samples.
+  - In-memory rolling reservoir sample cache ($100,000$ samples) for on-the-fly lossless dynamic rebinning (`r`/`R` or `:bins <N>`).
+  - Interactive Command Prompt (`:`): Tab-completion, history navigation (`↑`/`↓`), inline validation for `:bins`, `:range`, `:fit`, `:kde`, `:scale`, `:export`, `:clear`.
+  - Two-panel interactive online help modal (`?`) with complete keyboard shortcuts and `:command` reference.
+  - Multi-axis logarithmic scaling (`l`/`L`): Log Y (counts), Log X (coordinates), Log-Log, and Log Z (2D TrueColor heatmaps).
+  - High-contrast Monochrome mode (`C` / `-M` / `--mono` / `NO_COLOR`) and 24-bit TrueColor support.
+  - Portable threading abstraction (`tools/include/tui_thread.h`) supporting POSIX `pthread`, Windows Win32 API, and single-threaded fallback.
 
 
 ---

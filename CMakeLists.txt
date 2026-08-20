@@ -54,6 +54,9 @@ if(DOXYGEN_FOUND)
     set(LIBHISTO_BUILD_DOCS ON CACHE BOOL "Build Doxygen documentation" FORCE)
 endif()
 
+# Threading support
+find_package(Threads REQUIRED)
+
 # Configure common warning flags
 add_library(histo_compiler_flags INTERFACE)
 if(MSVC)

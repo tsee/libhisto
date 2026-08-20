@@ -1,3 +1,5 @@
+find_package(Threads REQUIRED)
+
 add_library(histocli
     src/cli_common.c
     src/cli_main.c
@@ -6,6 +8,9 @@ add_library(histocli
     src/cmd_stats.c
     src/cmd_fit.c
     src/cmd_cmp.c
+    src/cmd_top.c
+    src/tui_term.c
+    src/tui_engine.c
 )
 
 set_target_properties(histocli PROPERTIES
@@ -19,7 +24,7 @@ target_include_directories(histocli PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(histocli PUBLIC histo)
+target_link_libraries(histocli PUBLIC histo Threads::Threads)
 
 # Alias for backwards compatibility with tests
 add_library(histo_tools_lib ALIAS histocli)
@@ -38,7 +43,7 @@ target_include_directories(histo-cli PRIVATE
 target_link_libraries(histo-cli PRIVATE histocli)
 
 # Create symlink aliases in build directory
-set(TOOL_ALIASES histo-fill histo-plot histo-stats histo-fit histo-cmp)
+set(TOOL_ALIASES histo-fill histo-plot histo-stats histo-fit histo-cmp histo-top)
 
 foreach(alias ${TOOL_ALIASES})
     add_custom_command(TARGET histo-cli POST_BUILD

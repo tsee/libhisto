@@ -28,7 +28,7 @@ This document tracks active work items, planned enhancements, and development ro
 
 ### 4. CLI Toolkit & Ergonomics
 - [ ] **CLI-1**: Add `--csv-header` and column name selection for CSV batch streams in `histo-fill`.
-- [ ] **CLI-2**: Interactive curses/terminal GUI mode for live histogram streaming (`histo-plot --interactive`).
+- [x] **CLI-2**: Interactive terminal monitoring & TUI exploration mode (`histo top` / `histo-top`).
 
 ---
 

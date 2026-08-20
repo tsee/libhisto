@@ -56,6 +56,10 @@ int histo_cli_main(int argc, char **argv, FILE *out, FILE *err) {
         strcmp(prog_name, "phisto-fit") == 0) {
         return histo_cli_fit(argc, argv, out, err);
     }
+    if (strcmp(prog_name, "histo-top") == 0 || strcmp(prog_name, "histo_top") == 0 ||
+        strcmp(prog_name, "phisto-top") == 0) {
+        return histo_cli_top(argc, argv, out, err);
+    }
 
     /* Multi-call dispatcher */
     if (argc < 2) {
@@ -92,9 +96,18 @@ int histo_cli_main(int argc, char **argv, FILE *out, FILE *err) {
     if (strcmp(cmd, "cmp") == 0 || strcmp(cmd, "compare") == 0 || strcmp(cmd, "diff") == 0) {
         return histo_cli_cmp(sub_argc, sub_argv, out, err);
     }
+    if (strcmp(cmd, "top") == 0 || strcmp(cmd, "monitor") == 0 || strcmp(cmd, "tui") == 0) {
+        return histo_cli_top(sub_argc, sub_argv, out, err);
+    }
 
     fprintf(err, "Error: Unknown command '%s'. Run '%s --help' for usage.\n", cmd, prog_name);
     return 1;
+}
+
+int histo_cli_top(int argc, char **argv, FILE *out, FILE *err) {
+    (void)out;
+    (void)err;
+    return cmd_top_main(argc, argv);
 }
 
 /* Backward-compatible wrappers */

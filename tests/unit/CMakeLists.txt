@@ -102,3 +102,10 @@ add_executable(test_kde
 )
 target_link_libraries(test_kde PRIVATE histo unity)
 add_test(NAME test_kde COMMAND test_kde)
+
+# Unit Test: Interactive TUI Engine & Reservoir Cache
+add_executable(test_tui_engine
+    test_tui_engine.c
+)
+target_link_libraries(test_tui_engine PRIVATE histocli histo unity Threads::Threads)
+add_test(NAME test_tui_engine COMMAND test_tui_engine)

@@ -15,6 +15,7 @@ extern int cmd_fill_main(int argc, char **argv);
 extern int cmd_plot_main(int argc, char **argv);
 extern int cmd_stats_main(int argc, char **argv);
 extern int cmd_cmp_main(int argc, char **argv);
+extern int cmd_top_main(int argc, char **argv);
 
 void test_json_serialization_roundtrip_uniform(void) {
     histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
@@ -300,6 +301,11 @@ void test_cli_error_handling(void) {
     optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_stats_main(2, stats_err_argv));
 }
 
+void test_cli_top_help(void) {
+    char *top_help_argv[] = {"histo-top", "--help"};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main(2, top_help_argv));
+}
+
 int main(void) {
 
     UNITY_BEGIN();
@@ -310,6 +316,7 @@ int main(void) {
     RUN_TEST(test_cli_fit_pipeline);
     RUN_TEST(test_cli_2d_fill_and_delimiters);
     RUN_TEST(test_cli_error_handling);
+    RUN_TEST(test_cli_top_help);
     return UNITY_END();
 }
 

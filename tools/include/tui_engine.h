@@ -1,0 +1,78 @@
+#ifndef HISTO_TUI_ENGINE_H
+#define HISTO_TUI_ENGINE_H
+
+#include "tui_thread.h"
+#include "histo/histo.h"
+#include "histo/histo2d.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define TUI_RESERVOIR_DEFAULT_CAP 100000
+
+typedef struct {
+    double *samples;
+    double *weights;
+    size_t count;
+    size_t cap;
+    size_t head;
+    bool has_weights;
+} tui_reservoir_t;
+
+typedef struct {
+    FILE *in_stream;
+    bool is_file;
+    bool is_2d;
+    char delim;
+    int val_col;
+    int x_col, y_col;
+    int w_col;
+    bool has_weights;
+    uint32_t flags;
+
+    /* Live accumulators */
+    histo_t *live_1d;
+    histo2d_t *live_2d;
+    histo_mutex_t mutex;
+    histo_thread_t thread;
+
+    /* State flags */
+    volatile bool running;
+    volatile bool finished_reading;
+    bool paused;
+
+    /* Ingestion metrics */
+    uint64_t total_samples;
+    uint64_t last_sample_count;
+    double last_time_sec;
+    double current_rate_ops;
+
+    /* Rolling reservoir cache */
+    tui_reservoir_t reservoir;
+} tui_engine_t;
+
+/* Lifecycle */
+bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nbins, double rmin, double rmax, uint32_t flags);
+bool tui_engine_start(tui_engine_t *eng);
+void tui_engine_stop(tui_engine_t *eng);
+void tui_engine_free(tui_engine_t *eng);
+
+/* Snapshot acquisition */
+histo_t *tui_engine_get_snapshot_1d(tui_engine_t *eng);
+histo2d_t *tui_engine_get_snapshot_2d(tui_engine_t *eng);
+
+/* Reservoir operations */
+bool tui_engine_rebuild_1d(tui_engine_t *eng, uint32_t nbins, double rmin, double rmax, histo_t **out_h);
+void tui_engine_clear(tui_engine_t *eng);
+bool tui_engine_is_finished(tui_engine_t *eng);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* HISTO_TUI_ENGINE_H */
