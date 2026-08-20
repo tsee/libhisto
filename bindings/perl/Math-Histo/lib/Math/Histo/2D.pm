@@ -125,9 +125,12 @@ Variable grid: specify C<xedges =E<gt> [...], yedges =E<gt> [...]>.
 
 =item B<fill($x, $y, [$weight=1.0])>: Ingest single 2D sample.
 
-=item B<fill_n(\@x, \@y, [\@weights])>: Batch ingest 2D samples.
+=item B<fill_n(\@x, \@y, [\@weights])>: Batch ingest 2D samples from Perl array references.
+
+=item B<fill_packed_f64($packed_x, $packed_y, [$packed_weights])> (or B<fill_packed>): High-performance SIMD zero-copy batch ingestion from packed binary float64 strings (e.g. C<pack('d*', ...)>).
 
 =item B<nx()>, B<ny()>: Number of bins along X and Y axes.
+
 
 =item B<xmin()>, B<xmax()>: Bounds along X axis.
 

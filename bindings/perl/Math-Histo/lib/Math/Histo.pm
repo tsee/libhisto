@@ -280,9 +280,10 @@ Fills a single coordinate with optional weight. Returns 1 on success, 0 on non-f
 
 Batch fills an arrayref of coordinates and optional weights.
 
-=item B<fill_packed_f64($packed_x, [$packed_w])>
+=item B<fill_packed_f64($packed_x, [$packed_w])> (or B<fill_packed>)
 
 High-performance zero-copy batch fill from raw packed 64-bit IEEE double scalars (e.g. C<pack("d*", ...)> or C<PDL::get_dataref>).
+
 
 =item B<reset()>
 

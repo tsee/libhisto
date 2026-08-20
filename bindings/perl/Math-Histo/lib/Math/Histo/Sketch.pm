@@ -92,9 +92,12 @@ Options:
 
 =item B<insert_w($value, $weight)>: Stream a weighted sample.
 
-=item B<insert_n(\@values, [\@weights])>: Stream an array of samples.
+=item B<insert_n(\@values, [\@weights])>: Stream an array of samples from a Perl array reference.
+
+=item B<insert_packed_f64($packed_values, [$packed_weights])> (or B<insert_packed>): Ingest binary float64 string directly (e.g. C<pack('d*', ...)>).
 
 =item B<quantile($q)>: Query quantile for $q in [0, 1] with alpha relative error.
+
 
 =item B<merge($other)>: Merge another DDSketch into $sketch in-place.
 
