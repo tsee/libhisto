@@ -5,6 +5,7 @@ lib/Math/Histo/2D.pm
 lib/Math/Histo/Constants.pm
 lib/Math/Histo/Fit.pm
 lib/Math/Histo/Sketch.pm
+LICENSE
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP

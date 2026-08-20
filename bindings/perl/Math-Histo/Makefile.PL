@@ -20,7 +20,7 @@ WriteMakefile(
         DISTNAME      => 'Math-Histo',
         VERSION_FROM  => 'lib/Math/Histo.pm',
         ABSTRACT_FROM => 'lib/Math/Histo.pm',
-        AUTHOR        => 'Steffen Mueller <smueller@cpan.org>',
+        AUTHOR        => 'Steffen Mueller <cpan@steffen-mueller.net>',
         LICENSE       => 'mit',
         MIN_PERL_VERSION => '5.008001',
         CONFIGURE_REQUIRES => {

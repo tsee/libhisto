@@ -55,7 +55,7 @@ WriteMakefile($abmm->mm_args(
     DISTNAME      => 'Alien-libhisto',
     VERSION_FROM  => 'lib/Alien/libhisto.pm',
     ABSTRACT_FROM => 'lib/Alien/libhisto.pm',
-    AUTHOR        => 'Steffen Mueller <smueller@cpan.org>',
+    AUTHOR        => 'Steffen Mueller <cpan@steffen-mueller.net>',
     LICENSE       => 'mit',
     MIN_PERL_VERSION => '5.008001',
     CONFIGURE_REQUIRES => {

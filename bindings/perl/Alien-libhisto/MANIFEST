@@ -31,6 +31,7 @@ bundled/src/vendor/cJSON/cJSON.h
 bundled/src/vendor/cJSON/LICENSE
 Changes
 lib/Alien/libhisto.pm
+LICENSE
 Makefile.PL
 MANIFEST
 MANIFEST.SKIP
