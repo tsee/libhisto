@@ -98,6 +98,19 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         return;
     }
 
+    double total_w = histo_total_weight(h);
+    uint64_t num_entries = histo_num_entries(h);
+
+    histo_kde_t *kde = NULL;
+    if (st->show_kde && num_entries >= 5) {
+        kde = histo_kde_create_from_histo(h, NULL);
+    }
+
+    histo_fit_result_t *fit_res = NULL;
+    if (st->show_fit && num_entries >= 5) {
+        histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN, NULL, NULL, &fit_res);
+    }
+
     double max_content = 0.0;
     for (uint32_t i = 0; i < nbins; ++i) {
         double c = 0.0;
@@ -152,24 +165,70 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         if (rem_eighths > 8) rem_eighths = 8;
         if (rem_eighths < 0) rem_eighths = 0;
 
+        double x_center = 0.5 * (lower + upper);
+        double bin_w = upper - lower;
+
+        int kde_col = -1;
+        if (kde && total_w > 0.0) {
+            double pdf = histo_kde_eval(kde, x_center);
+            double kde_c = pdf * total_w * bin_w;
+            double kde_scaled = (st->scale_mode == SCALE_LOG_Y || st->scale_mode == SCALE_LOG_LOG) ?
+                                log10(kde_c + 1.0) : kde_c;
+            double kde_frac = kde_scaled / max_scaled;
+            if (kde_frac > 1.0) kde_frac = 1.0;
+            if (kde_frac > 0.005) {
+                kde_col = (int)(kde_frac * (double)bar_max + 0.5);
+                if (kde_col >= bar_max) kde_col = bar_max - 1;
+            }
+        }
+
+        int fit_col = -1;
+        if (fit_res && fit_res->converged) {
+            double fit_c = histo_fit_eval(HISTO_FIT_MODEL_GAUSSIAN, fit_res->params, fit_res->num_params, x_center);
+            if (fit_c > 0.0) {
+                double fit_scaled = (st->scale_mode == SCALE_LOG_Y || st->scale_mode == SCALE_LOG_LOG) ?
+                                    log10(fit_c + 1.0) : fit_c;
+                double fit_frac = fit_scaled / max_scaled;
+                if (fit_frac > 1.0) fit_frac = 1.0;
+                if (fit_frac > 0.005) {
+                    fit_col = (int)(fit_frac * (double)bar_max + 0.5);
+                    if (fit_col >= bar_max) fit_col = bar_max - 1;
+                }
+            }
+        }
+
         char color_ansi[32] = "";
         tui_term_get_color(frac, st->monochrome, color_ansi, sizeof(color_ansi));
 
-        int pos = snprintf(row_buf, sizeof(row_buf), "%-16s │ %6s │ %s", bounds_str, count_str, color_ansi);
+        int pos = snprintf(row_buf, sizeof(row_buf), "%-16s │ %6s │ ", bounds_str, count_str);
 
-        for (int k = 0; k < full_chars && pos + 4 < (int)sizeof(row_buf); ++k) {
-            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "█");
-        }
-        if (rem_eighths > 0 && full_chars < bar_max && pos + 4 < (int)sizeof(row_buf)) {
-            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", BLOCKS_UTF8[rem_eighths]);
-        }
-        if (color_ansi[0] && pos + 8 < (int)sizeof(row_buf)) {
-            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m");
+        int max_col = full_chars + (rem_eighths > 0 ? 1 : 0);
+        if (kde_col >= max_col) max_col = kde_col + 1;
+        if (fit_col >= max_col) max_col = fit_col + 1;
+        if (max_col > bar_max) max_col = bar_max;
+
+        for (int k = 0; k < max_col && pos + 32 < (int)sizeof(row_buf); ++k) {
+            if (k == kde_col && k == fit_col) {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;33m✦\033[0m");
+            } else if (k == kde_col) {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;36m◆\033[0m");
+            } else if (k == fit_col) {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;35m✖\033[0m");
+            } else if (k < full_chars) {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s█\033[0m", color_ansi);
+            } else if (k == full_chars && rem_eighths > 0) {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s%s\033[0m", color_ansi, BLOCKS_UTF8[rem_eighths]);
+            } else {
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, " ");
+            }
         }
 
         tui_render_row(f, row_buf, width, true);
         rows_drawn++;
     }
+
+    if (kde) histo_kde_destroy(kde);
+    if (fit_res) histo_fit_result_destroy(fit_res);
 
     // Fill remaining budget rows so height is strictly invariant
     while (rows_drawn < max_rows) {
@@ -507,10 +566,33 @@ int cmd_top_main(int argc, char **argv) {
             const char *sc = (st.scale_mode == SCALE_LOG_Y) ? "LOG-Y" :
                              (st.scale_mode == SCALE_LOG_X) ? "LOG-X" :
                              (st.scale_mode == SCALE_LOG_LOG) ? "LOG-LOG" : "LIN";
+            char kde_tag[64] = "";
+            char fit_tag[64] = "";
+            if (st.show_kde && n_entries >= 5) {
+                histo_kde_t *sub_kde = histo_kde_create_from_histo(snap, NULL);
+                if (sub_kde) {
+                    double bw = histo_kde_get_bandwidth(sub_kde);
+                    snprintf(kde_tag, sizeof(kde_tag), "│ KDE: Gauss(h=%.2g) ", bw);
+                    histo_kde_destroy(sub_kde);
+                } else {
+                    snprintf(kde_tag, sizeof(kde_tag), "│ KDE ");
+                }
+            }
+            if (st.show_fit && n_entries >= 5) {
+                histo_fit_result_t *sub_fit = NULL;
+                histo_fit_model(snap, HISTO_FIT_MODEL_GAUSSIAN, NULL, NULL, &sub_fit);
+                if (sub_fit && sub_fit->converged) {
+                    snprintf(fit_tag, sizeof(fit_tag), "│ Fit: μ=%.2f σ=%.2f ", sub_fit->params[1], sub_fit->params[2]);
+                    histo_fit_result_destroy(sub_fit);
+                } else {
+                    if (sub_fit) histo_fit_result_destroy(sub_fit);
+                    snprintf(fit_tag, sizeof(fit_tag), "│ Fit: Gauss ");
+                }
+            }
             snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s",
                      r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
                      eng.auto_range ? "ON" : "OFF",
-                     st.show_kde ? "│ KDE " : "", st.show_fit ? "│ FIT " : "");
+                     kde_tag, fit_tag);
         } else {
             snprintf(subhdr, sizeof(subhdr), "Initializing...");
         }
