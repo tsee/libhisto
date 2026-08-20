@@ -106,9 +106,10 @@ if(LIBHISTO_BUILD_TESTS)
     add_subdirectory(tests)
     if(VALGRIND_EXECUTABLE)
         add_custom_target(memcheck
-            COMMAND ${CMAKE_CTEST_COMMAND} -T memcheck --output-on-failure
+            COMMAND ${CMAKE_CTEST_COMMAND} -T memcheck -E "test_doc_examples|test_perl_dist" --output-on-failure
             COMMENT "Running tests under Valgrind"
         )
+
     endif()
 elseif(LIBHISTO_ENABLE_FUZZING)
     include(CTest)

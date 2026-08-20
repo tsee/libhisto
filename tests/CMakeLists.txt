@@ -49,3 +49,17 @@ if(Python3_FOUND)
     )
 endif()
 
+find_package(Perl)
+if(PERL_FOUND)
+    add_test(
+        NAME test_perl_dist
+        COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_perl_dist.pl
+    )
+    add_custom_target(test_perl_dist
+        COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_perl_dist.pl
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Testing standalone Perl CPAN distribution tarball building and installation"
+    )
+endif()
+
+

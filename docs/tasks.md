@@ -133,6 +133,7 @@
   - `lib/Alien/libhisto.pm`: Main Alien class inheriting from `Alien::Base`.
   - `t/00_load.t` & `t/01_alien.t`: Smoke tests using `Test2::V0` and `Test::Alien` (validating `HISTO_VERSION_STRING` and basic histogramming via inline XS).
 - [x] **P1.3** Release packaging & bundling automation (`make perl-alien-dist`): Automated packaging script bundling the C library source for offline CPAN installation.
+- [x] **P1.4** Standalone Hermetic CPAN Distribution Tarball Verification (`tests/scripts/test_perl_dist.pl`, `make test-perl-dist`): Verifies that standalone `Alien::libhisto` and `Math::Histo` tarballs build, test, and install 100% cleanly in isolated environments outside the repository tree.
 
 
 ### Sub-Phase P.2: Perl XS Wrapper Module (`Math::Histo`)
