@@ -6,3 +6,5 @@ Makefile
 Makefile.old
 MYMETA.json
 MYMETA.yml
+Alien-libhisto*.tar.gz
+MANIFEST.bak
