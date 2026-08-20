@@ -203,6 +203,7 @@ Pressing **`?`** (or typing `:help`) displays an in-terminal interactive help ch
 | **`h` / `l`** (or `←` / `→`) | **Pan Viewport** across distribution coordinates. |
 | **`0`** | **Reset Viewport** to global bounds $[x_{\min}, x_{\max}]$. |
 | **`c`** | **Clear Accumulators** and restart sample count from zero. |
+| **`C`** | **Toggle Color / Monochrome Mode** (Auto TrueColor vs clean high-contrast black-and-white). |
 | **`Tab`** | **Cycle Views** (1D Bars $\to$ Sparklines $\to$ Cumulative CDF $\to$ 2D Heatmap). |
 | **`s`** | **Quick Export Snapshot** to JSON or binary `.lhisto`. |
 | **`q`** / **`Ctrl+C`** | **Quit** and cleanly restore terminal state. |
