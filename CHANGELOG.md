@@ -9,18 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.1.0] - 2026-08-20
+
 ### Added
 - Automated version check and bump synchronization script (`tools/scripts/bump_version.py`).
 - Comprehensive release guide (`docs/release_guide.md`) and AGENTS policy integration.
+- SIMD vector acceleration for weighted batch fills (`sum_w2` tracking) across AVX2, AVX-512, and ARM NEON.
 
 ### Fixed
 - Fixed DDSketch quantile rank calculation on fractional / continuous sample weights (`src/sketch.c`).
 - Symmetrized DDSketch negative bin representative value reconstruction (`src/sketch.c`).
 - Fixed signed modulo wrapping for negative logarithmic bucket indices in DDSketch store (`src/sketch.c`).
-
----
-
-## [0.1.0] - 2026-08-20
 
 ### Added
 - **Core 1D Histogramming Engine**:
