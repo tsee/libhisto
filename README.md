@@ -8,6 +8,19 @@
 
 `libhisto` ships with a high-performance Unix CLI toolkit (`histo`) designed for stream processing and terminal visualization.
 
+### Real-Time Interactive Streaming Monitor (`histo top`)
+Monitor live streaming data in an interactive 60 FPS terminal dashboard with analytical curve overlays, statistical moments, and 24-bit TrueColor bivariate heatmaps. See the [Real-Time Interactive Monitor Guide (`histo top`)](docs/top_manual.md).
+
+```bash
+# 1D live distribution monitor with real-time Gaussian fit, KDE, and error whiskers
+python3 -u -c "import random, time; [print(f'{random.gauss(50, 12):.2f}', flush=True) or time.sleep(0.001) for _ in range(100000)]" | \
+    histo top --bins=60
+
+# 2D real-time bivariate TrueColor heatmap
+python3 -u -c "import random, time; [print(f'{random.gauss(50, 15):.2f} {random.gauss(50, 10) + 0.3 * (random.gauss(50, 15) - 50):.2f}', flush=True) or time.sleep(0.001) for _ in range(50000)]" | \
+    histo top --2d --bins=35
+```
+
 ### TrueColor Terminal Plots
 Render distributions directly in your terminal using 1/8th sub-character Unicode blocks and TrueColor gradients.
 
@@ -289,6 +302,20 @@ int main(void) {
     return 0;
 }
 ```
+
+---
+
+## Documentation & Guides
+
+Comprehensive technical documentation, algorithmic formulas, and manuals are available in [`docs/`](docs/):
+
+- **[User Manual & Architecture Guide (Levels 0–5)](docs/manual.md)**: Full walkthrough of C99, Python, Perl, SIMD vectorization, and serialization.
+- **[Real-Time Interactive Monitor Guide (`histo top`)](docs/top_manual.md)**: Dedicated user guide for 1D/2D live streaming dashboards, analytical curve overlays, and keybindings.
+- **[Kernel Density Estimation & Automated Binning Guide](docs/kde_guide.md)**: 1D continuous KDE engine, bandwidth selectors, and optimal bin heuristics.
+- **[Curve Fitting & Non-Linear Regression Guide](docs/curve_fitting_guide.md)**: Levenberg-Marquardt optimizer, Gaussian/Lorentzian/Exponential models, and ASCII overlays.
+- **[2D Histograms, Projections & Heatmaps Guide](docs/histo2d_guide.md)**: 2D bivariate distributions, marginal projections, slices, profile histograms, and TrueColor heatmaps.
+- **[Statistical & Analytical Formulae Reference](docs/statistical_formulae.md)**: Mathematical reference for Welford moments, robust dispersion, and distance metrics.
+- **[Serialization Wire Formats (V1, V2, V3, JSON)](docs/serialization_format.md)**: Deterministic binary serialization schemas and portable wire formats.
 
 ---
 

@@ -30,7 +30,41 @@ Welcome to **libhisto**! This manual is organized as a progressive-disclosure gu
 
 `libhisto` is a high-performance, zero-dependency ISO C99 library and Unix CLI toolkit for distribution tracking, statistical estimation, curve fitting, and terminal visualization.
 
-### 0.1 CLI Pipeline
+### 0.1 Terminal Power Showcase (Copy-Pasteable One-Liners)
+
+#### Live 60 FPS Distribution Telemetry (`histo top`)
+Stream live samples into an interactive terminal dashboard with real-time Gaussian curve fitting (`f`), KDE overlays (`k`), and statistical error whiskers (`e`):
+
+```bash
+python3 -u -c "import random, time; [print(f'{random.gauss(50, 12):.2f}', flush=True) or time.sleep(0.001) for _ in range(100000)]" | \
+  histo top --bins=60
+```
+> See the dedicated **[Real-Time Interactive Monitor Guide (`histo top`)](top_manual.md)** for full documentation of keybindings, overlays, and 2D mode.
+
+#### Real-Time 2D Bivariate Heatmap (`histo top --2d`)
+Stream bivariate coordinates into a live 24-bit TrueColor Viridis heatmap with Log-Z intensity contrast (`l`) and color range legend (`g`):
+
+```bash
+python3 -u -c "import random, time; [print(f'{random.gauss(50, 15):.2f} {random.gauss(50, 10) + 0.3 * (random.gauss(50, 15) - 50):.2f}', flush=True) or time.sleep(0.001) for _ in range(50000)]" | \
+  histo top --2d --bins=35
+```
+
+#### Non-Linear Curve Fitting with Terminal Overlay (`histo fit -p`)
+Compute Levenberg-Marquardt parametric fits directly from piped data with ASCII curve overlays:
+
+```bash
+python3 -c "import random; print('\n'.join(str(random.gauss(125.0, 3.5)) for _ in range(25000)))" | \
+  histo fill --bins=40 --min=110 --max=140 | histo fit -m gaussian -p
+```
+
+#### Single-Line Shell Sparklines (`histo plot -S`)
+```bash
+python3 -c "import random; print('\n'.join(str(random.gauss(100, 15)) for _ in range(5000)))" | \
+  histo fill -a --auto-range | histo plot -S
+# Output:   ▂▃▅▇██▇▅▃▂   [N=5000, range=[45.2, 156.1), μ=100.1, σ=14.9]
+```
+
+### 0.2 Static CLI Plot Pipeline
 
 Pipe any numeric stream directly into `histo plot` (or `histo fill` + `histo plot`):
 

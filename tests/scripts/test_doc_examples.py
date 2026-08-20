@@ -300,8 +300,9 @@ def test_cli_block(block, source_dir, build_dir, verbose):
     filepath = block["file"]
     line = block["line"]
 
-    # Skip non-runnable installation, git, or build instruction blocks
-    if any(k in code for k in ["git ", "git clone", "make", "cmake", "sudo ", "doxygen", "python3 setup.py"]):
+    # Skip non-runnable installation, git, or build instruction blocks, or interactive TUI / daemon commands
+    if any(k in code for k in ["git ", "git clone", "make", "cmake", "sudo ", "doxygen", "python3 setup.py",
+                               "histo top", "histo-top", "tail -F", "pg_log_stream", "simulation_engine"]):
         return True
 
     tools_dir = os.path.abspath(os.path.join(build_dir, "tools"))
@@ -361,16 +362,24 @@ def test_cli_block(block, source_dir, build_dir, verbose):
         for cmd in pipelines:
             if "histo" not in cmd:
                 continue
+            if any(k in cmd for k in ["histo top", "histo-top", "tail -F", "pg_log_stream", "simulation_engine"]):
+                continue
             if verbose:
                 print(f"  Testing CLI {filepath}:{line} -> {cmd}")
-            res = subprocess.run(
-                ["bash", "-c", cmd],
-                cwd=tmpdir,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
+            try:
+                res = subprocess.run(
+                    ["bash", "-c", cmd],
+                    cwd=tmpdir,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=10
+                )
+            except subprocess.TimeoutExpired:
+                print(f"\n[FAIL] CLI execution timed out in {filepath}:{line}")
+                print(f"Command: {cmd}")
+                return False
             if res.returncode != 0:
                 print(f"\n[FAIL] CLI execution failed in {filepath}:{line}")
                 print(f"Command: {cmd}")
