@@ -32,6 +32,8 @@ Welcome to **libhisto**! This manual is organized as a progressive-disclosure gu
 
 ### 0.1 Terminal Power Showcase (Copy-Pasteable One-Liners)
 
+![libhisto TrueColor Terminal Plot](assets/demo_terminal_1d.svg)
+
 #### Live 60 FPS Distribution Telemetry (`histo top`)
 Stream live samples into an interactive terminal dashboard with real-time Gaussian curve fitting (`f`), KDE overlays (`k`), and statistical error whiskers (`e`):
 

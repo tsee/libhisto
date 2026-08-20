@@ -24,6 +24,8 @@ python3 -u -c "import random, time; [print(f'{random.gauss(50, 15):.2f} {random.
 ### TrueColor Terminal Plots
 Render distributions directly in your terminal using 1/8th sub-character Unicode blocks and TrueColor gradients.
 
+![libhisto TrueColor Terminal Plot](docs/assets/demo_terminal_1d.svg)
+
 ```bash
 python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(100000)))" | \
     histo fill --bins=25 --min=0 --max=100 -o binary | \

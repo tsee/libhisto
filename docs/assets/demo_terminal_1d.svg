@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 730" width="100%" height="auto">
+<defs>
+  <style>
+    .window { fill: #0d1117; stroke: #30363d; stroke-width: 1px; rx: 10px; }
+    .titlebar { fill: #161b22; }
+    .title-text { fill: #8b949e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; font-size: 12px; font-weight: 600; text-anchor: middle; }
+    .term-text { font-family: "SF Mono", Monaco, "Cascadia Code", "Liberation Mono", Menlo, Consolas, monospace; font-size: 13px; fill: #c9d1d9; }
+    .cmd-prompt { fill: #58a6ff; font-weight: bold; }
+    .cmd-text { fill: #e6edf3; }
+    .stat-box { fill: #161b22; stroke: #30363d; stroke-width: 1px; rx: 4px; }
+    .stat-label { fill: #8b949e; }
+    .stat-val { fill: #58a6ff; font-weight: bold; }
+    .bin-edge { fill: #8b949e; }
+    .bin-count { fill: #79c0ff; text-anchor: end; font-weight: 500; }
+    .summary-text { fill: #8b949e; font-size: 12px; }
+  </style>
+</defs>
+  <rect class="window" x="1" y="1" width="818" height="728" />
+  <path class="titlebar" d="M1,10 Q1,1 10,1 L810,1 Q819,1 819,10 L819,36 L1,36 Z" />
+  <circle cx="20" cy="18" r="6" fill="#ff5f56" />
+  <circle cx="40" cy="18" r="6" fill="#ffbd2e" />
+  <circle cx="60" cy="18" r="6" fill="#27c93f" />
+  <text class="title-text" x="410" y="22">histo plot — Gaussian Monte Carlo (N=100k, μ=50, σ=15)</text>
+  <text class="term-text" x="24" y="62"><tspan class="cmd-prompt">$ </tspan><tspan class="cmd-text">python3 -c &quot;...&quot; | histo fill --bins=25 --min=0 --max=100 | histo plot --color=always</tspan></text>
+  <text class="term-text" x="24" y="86" font-weight="bold" fill="#f0883e">Gaussian Monte Carlo (N=100k, μ=50, σ=15) <tspan fill="#8b949e" font-weight="normal">(Entries: 99919, Weight: 99919.0)</tspan></text>
+  <rect class="stat-box" x="24" y="104" width="772" height="26" />
+  <text class="term-text" x="36" y="122"><tspan class="stat-label">Mean: </tspan><tspan class="stat-val">49.97</tspan>   │   <tspan class="stat-label">StdDev: </tspan><tspan class="stat-val">14.96</tspan>   │   <tspan class="stat-label">Median: </tspan><tspan class="stat-val">49.97</tspan>   │   <tspan class="stat-label">IQR: </tspan><tspan class="stat-val">20.18</tspan>   │   <tspan class="stat-label">Mode: </tspan><tspan class="stat-val">49.91</tspan></text>
+  <text class="term-text bin-edge" x="24" y="140">[  0.00,   4.00) │</text>
+  <text class="term-text bin-count" x="225" y="140">63</text>
+  <text class="term-text bin-edge" x="232" y="140">│</text>
+  <rect x="240" y="128" width="3" height="14" rx="2" fill="#440355" />
+  <text class="term-text" x="251" y="140" fill="#6e7681" font-size="11px">╎±7.9╎</text>
+  <text class="term-text bin-edge" x="24" y="160">[  4.00,   8.00) │</text>
+  <text class="term-text bin-count" x="225" y="160">151</text>
+  <text class="term-text bin-edge" x="232" y="160">│</text>
+  <rect x="240" y="148" width="7" height="14" rx="2" fill="#440558" />
+  <text class="term-text" x="255" y="160" fill="#6e7681" font-size="11px">╎±12.3╎</text>
+  <text class="term-text bin-edge" x="24" y="180">[  8.00,  12.00) │</text>
+  <text class="term-text bin-count" x="225" y="180">314</text>
+  <text class="term-text bin-edge" x="232" y="180">│</text>
+  <rect x="240" y="168" width="16" height="14" rx="2" fill="#450b5d" />
+  <text class="term-text" x="264" y="180" fill="#6e7681" font-size="11px">╎±17.7╎</text>
+  <text class="term-text bin-edge" x="24" y="200">[ 12.00,  16.00) │</text>
+  <text class="term-text bin-count" x="225" y="200">593</text>
+  <text class="term-text bin-edge" x="232" y="200">│</text>
+  <rect x="240" y="188" width="30" height="14" rx="2" fill="#461465" />
+  <text class="term-text" x="278" y="200" fill="#6e7681" font-size="11px">╎±24.4╎</text>
+  <text class="term-text bin-edge" x="24" y="220">[ 16.00,  20.00) │</text>
+  <text class="term-text bin-count" x="225" y="220">1,111</text>
+  <text class="term-text bin-edge" x="232" y="220">│</text>
+  <rect x="240" y="208" width="57" height="14" rx="2" fill="#472475" />
+  <text class="term-text" x="305" y="220" fill="#6e7681" font-size="11px">╎±33.3╎</text>
+  <text class="term-text bin-edge" x="24" y="240">[ 20.00,  24.00) │</text>
+  <text class="term-text bin-count" x="225" y="240">1,901</text>
+  <text class="term-text bin-edge" x="232" y="240">│</text>
+  <rect x="240" y="228" width="99" height="14" rx="2" fill="#413c83" />
+  <text class="term-text" x="347" y="240" fill="#6e7681" font-size="11px">╎±43.6╎</text>
+  <text class="term-text bin-edge" x="24" y="260">[ 24.00,  28.00) │</text>
+  <text class="term-text bin-count" x="225" y="260">2,929</text>
+  <text class="term-text bin-edge" x="232" y="260">│</text>
+  <rect x="240" y="248" width="152" height="14" rx="2" fill="#36578b" />
+  <text class="term-text" x="400" y="260" fill="#6e7681" font-size="11px">╎±54.1╎</text>
+  <text class="term-text bin-edge" x="24" y="280">[ 28.00,  32.00) │</text>
+  <text class="term-text bin-count" x="225" y="280">4,410</text>
+  <text class="term-text bin-edge" x="232" y="280">│</text>
+  <rect x="240" y="268" width="229" height="14" rx="2" fill="#277c8d" />
+  <text class="term-text" x="477" y="280" fill="#6e7681" font-size="11px">╎±66.4╎</text>
+  <text class="term-text bin-edge" x="24" y="300">[ 32.00,  36.00) │</text>
+  <text class="term-text bin-count" x="225" y="300">6,002</text>
+  <text class="term-text bin-edge" x="232" y="300">│</text>
+  <rect x="240" y="288" width="313" height="14" rx="2" fill="#21a086" />
+  <text class="term-text" x="561" y="300" fill="#6e7681" font-size="11px">╎±77.5╎</text>
+  <text class="term-text bin-edge" x="24" y="320">[ 36.00,  40.00) │</text>
+  <text class="term-text bin-count" x="225" y="320">7,787</text>
+  <text class="term-text bin-edge" x="232" y="320">│</text>
+  <rect x="240" y="308" width="406" height="14" rx="2" fill="#58c564" />
+  <text class="term-text" x="654" y="320" fill="#6e7681" font-size="11px">╎±88.2╎</text>
+  <text class="term-text bin-edge" x="24" y="340">[ 40.00,  44.00) │</text>
+  <text class="term-text bin-count" x="225" y="340">9,213</text>
+  <text class="term-text bin-edge" x="232" y="340">│</text>
+  <rect x="240" y="328" width="480" height="14" rx="2" fill="#abdb31" />
+  <text class="term-text" x="728" y="340" fill="#6e7681" font-size="11px">╎±96.0╎</text>
+  <text class="term-text bin-edge" x="24" y="360">[ 44.00,  48.00) │</text>
+  <text class="term-text bin-count" x="225" y="360">10,301</text>
+  <text class="term-text bin-edge" x="232" y="360">│</text>
+  <rect x="240" y="348" width="537" height="14" rx="2" fill="#eee525" />
+  <text class="term-text bin-edge" x="24" y="380">[ 48.00,  52.00) │</text>
+  <text class="term-text bin-count" x="225" y="380">10,546</text>
+  <text class="term-text bin-edge" x="232" y="380">│</text>
+  <rect x="240" y="368" width="550" height="14" rx="2" fill="#fde725" />
+  <text class="term-text bin-edge" x="24" y="400">[ 52.00,  56.00) │</text>
+  <text class="term-text bin-count" x="225" y="400">10,278</text>
+  <text class="term-text bin-edge" x="232" y="400">│</text>
+  <rect x="240" y="388" width="536" height="14" rx="2" fill="#ece425" />
+  <text class="term-text bin-edge" x="24" y="420">[ 56.00,  60.00) │</text>
+  <text class="term-text bin-count" x="225" y="420">9,277</text>
+  <text class="term-text bin-edge" x="232" y="420">│</text>
+  <rect x="240" y="408" width="483" height="14" rx="2" fill="#afdc2e" />
+  <text class="term-text" x="731" y="420" fill="#6e7681" font-size="11px">╎±96.3╎</text>
+  <text class="term-text bin-edge" x="24" y="440">[ 60.00,  64.00) │</text>
+  <text class="term-text bin-count" x="225" y="440">7,656</text>
+  <text class="term-text bin-edge" x="232" y="440">│</text>
+  <rect x="240" y="428" width="399" height="14" rx="2" fill="#51c267" />
+  <text class="term-text" x="647" y="440" fill="#6e7681" font-size="11px">╎±87.5╎</text>
+  <text class="term-text bin-edge" x="24" y="460">[ 64.00,  68.00) │</text>
+  <text class="term-text bin-count" x="225" y="460">6,007</text>
+  <text class="term-text bin-edge" x="232" y="460">│</text>
+  <rect x="240" y="448" width="313" height="14" rx="2" fill="#21a086" />
+  <text class="term-text" x="561" y="460" fill="#6e7681" font-size="11px">╎±77.5╎</text>
+  <text class="term-text bin-edge" x="24" y="480">[ 68.00,  72.00) │</text>
+  <text class="term-text bin-count" x="225" y="480">4,313</text>
+  <text class="term-text bin-edge" x="232" y="480">│</text>
+  <rect x="240" y="468" width="224" height="14" rx="2" fill="#287a8d" />
+  <text class="term-text" x="472" y="480" fill="#6e7681" font-size="11px">╎±65.7╎</text>
+  <text class="term-text bin-edge" x="24" y="500">[ 72.00,  76.00) │</text>
+  <text class="term-text bin-count" x="225" y="500">2,943</text>
+  <text class="term-text bin-edge" x="232" y="500">│</text>
+  <rect x="240" y="488" width="153" height="14" rx="2" fill="#36588b" />
+  <text class="term-text" x="401" y="500" fill="#6e7681" font-size="11px">╎±54.2╎</text>
+  <text class="term-text bin-edge" x="24" y="520">[ 76.00,  80.00) │</text>
+  <text class="term-text bin-count" x="225" y="520">1,892</text>
+  <text class="term-text bin-edge" x="232" y="520">│</text>
+  <rect x="240" y="508" width="98" height="14" rx="2" fill="#413c83" />
+  <text class="term-text" x="346" y="520" fill="#6e7681" font-size="11px">╎±43.5╎</text>
+  <text class="term-text bin-edge" x="24" y="540">[ 80.00,  84.00) │</text>
+  <text class="term-text bin-count" x="225" y="540">1,059</text>
+  <text class="term-text bin-edge" x="232" y="540">│</text>
+  <rect x="240" y="528" width="55" height="14" rx="2" fill="#472374" />
+  <text class="term-text" x="303" y="540" fill="#6e7681" font-size="11px">╎±32.5╎</text>
+  <text class="term-text bin-edge" x="24" y="560">[ 84.00,  88.00) │</text>
+  <text class="term-text bin-count" x="225" y="560">655</text>
+  <text class="term-text bin-edge" x="232" y="560">│</text>
+  <rect x="240" y="548" width="34" height="14" rx="2" fill="#461667" />
+  <text class="term-text" x="282" y="560" fill="#6e7681" font-size="11px">╎±25.6╎</text>
+  <text class="term-text bin-edge" x="24" y="580">[ 88.00,  92.00) │</text>
+  <text class="term-text bin-count" x="225" y="580">300</text>
+  <text class="term-text bin-edge" x="232" y="580">│</text>
+  <rect x="240" y="568" width="15" height="14" rx="2" fill="#450a5d" />
+  <text class="term-text" x="263" y="580" fill="#6e7681" font-size="11px">╎±17.3╎</text>
+  <text class="term-text bin-edge" x="24" y="600">[ 92.00,  96.00) │</text>
+  <text class="term-text bin-count" x="225" y="600">149</text>
+  <text class="term-text bin-edge" x="232" y="600">│</text>
+  <rect x="240" y="588" width="7" height="14" rx="2" fill="#440558" />
+  <text class="term-text" x="255" y="600" fill="#6e7681" font-size="11px">╎±12.2╎</text>
+  <text class="term-text bin-edge" x="24" y="620">[ 96.00, 100.00) │</text>
+  <text class="term-text bin-count" x="225" y="620">69</text>
+  <text class="term-text bin-edge" x="232" y="620">│</text>
+  <rect x="240" y="608" width="3" height="14" rx="2" fill="#440356" />
+  <text class="term-text" x="251" y="620" fill="#6e7681" font-size="11px">╎±8.3╎</text>
+  <text class="term-text summary-text" x="24" y="646">Underflow: 36  │  In-Range: 99,919  │  Overflow: 45  │  Non-Finite/NaN: 0</text>
+</svg>
