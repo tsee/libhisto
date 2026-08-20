@@ -67,23 +67,23 @@ static void render_top_border(tui_frame_t *f, const char *title, const char *bad
     if (dashes < 0) dashes = 0;
     for (int i = 0; i < dashes; ++i) tui_frame_puts(f, "─");
     if (badge && badge[0]) {
-        tui_frame_printf(f, " %s ─┐\033[0m\n", badge);
+        tui_frame_printf(f, " %s ─┐\033[0m\r\n", badge);
     } else {
-        tui_frame_puts(f, "─┐\033[0m\n");
+        tui_frame_puts(f, "─┐\033[0m\r\n");
     }
 }
 
 static void render_divider(tui_frame_t *f, int width) {
     tui_frame_puts(f, "├");
     for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
-    tui_frame_puts(f, "┤\n");
+    tui_frame_puts(f, "┤\r\n");
 }
 
 static void render_bottom_border(tui_frame_t *f, int width, bool newline) {
     tui_frame_puts(f, "└");
     for (int i = 0; i < width - 2; ++i) tui_frame_puts(f, "─");
     tui_frame_puts(f, "┘");
-    if (newline) tui_frame_puts(f, "\n");
+    if (newline) tui_frame_puts(f, "\r\n");
 }
 
 static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const histo_t *h, int width, int max_rows) {

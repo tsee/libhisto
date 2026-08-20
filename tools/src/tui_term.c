@@ -86,7 +86,7 @@ bool tui_term_raw_enter(void) {
 
     struct termios raw = orig_termios;
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-    raw.c_oflag &= ~(OPOST);
+    raw.c_oflag |= (OPOST | ONLCR);
     raw.c_cflag |= (CS8);
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
     raw.c_cc[VMIN] = 0;
@@ -444,5 +444,5 @@ void tui_render_row(tui_frame_t *f, const char *content, int width, bool newline
     }
 
     tui_frame_puts(f, " │");
-    if (newline) tui_frame_puts(f, "\n");
+    if (newline) tui_frame_puts(f, "\r\n");
 }
