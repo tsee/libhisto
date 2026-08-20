@@ -44,6 +44,8 @@ typedef struct {
     bool show_kde;
     bool show_fit;
     bool show_errors;
+    bool show_legend;  /* 2D: color range reference bar */
+    bool show_y_axis;  /* 1D: count axis ruler tick line */
     bool monochrome;
     bool paused;
     bool cmd_active;
@@ -162,8 +164,9 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
     }
 
     /* Y rows: map ny bins to max_rows, stepping if needed */
-    /* Reserve 2 rows for X-axis line and labels */
-    int heatmap_rows = max_rows - 2;
+    /* Reserve 2 rows for X-axis line and labels, plus 1 if legend active */
+    int leg_rows = st->show_legend ? 1 : 0;
+    int heatmap_rows = max_rows - 2 - leg_rows;
     if (heatmap_rows < 1) heatmap_rows = 1;
     uint32_t y_step = (ny > (uint32_t)heatmap_rows) ? (ny + (uint32_t)heatmap_rows - 1) / (uint32_t)heatmap_rows : 1;
 
@@ -222,6 +225,25 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
         rows_drawn++;
     }
 
+    /* Optional Color Range Legend reference bar */
+    if (st->show_legend && rows_drawn < max_rows) {
+        char leg_buf[4096];
+        if (st->monochrome) {
+            snprintf(leg_buf, sizeof(leg_buf), "  Scale: [ .:-=+*#%%@ ] (0.00 -> %.2e) [%s]", max_content, st->log_z ? "LOG-Z" : "LIN");
+        } else {
+            int pos = snprintf(leg_buf, sizeof(leg_buf), "  Color Scale: 0.00 ");
+            for (int step = 0; step <= 16 && pos + 32 < (int)sizeof(leg_buf); ++step) {
+                double frac = (double)step / 16.0;
+                char bg[32];
+                get_viridis_bg(frac, false, bg, sizeof(bg));
+                pos += snprintf(leg_buf + pos, sizeof(leg_buf) - pos, "%s \033[0m", bg);
+            }
+            pos += snprintf(leg_buf + pos, sizeof(leg_buf) - pos, " %.2e [%s]", max_content, st->log_z ? "LOG-Z" : "LIN");
+        }
+        tui_render_row(f, leg_buf, width, true);
+        rows_drawn++;
+    }
+
     while (rows_drawn < max_rows) {
         tui_render_row(f, "", width, true);
         rows_drawn++;
@@ -266,6 +288,51 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
 
     uint32_t step = (nbins > (uint32_t)max_rows) ? (nbins + (uint32_t)max_rows - 1) / (uint32_t)max_rows : 1;
     int rows_drawn = 0;
+
+    /* Optional Count Axis (Y-Axis) ruler at top of viewport */
+    if (st->show_y_axis && max_rows >= 3) {
+        int prefix_cols = 29;
+        int bar_max = width - 4 - prefix_cols;
+        if (bar_max < 2) bar_max = 2;
+
+        char label_buf[4096];
+        char line_buf[4096];
+
+        char v_zero[16] = "0";
+        char v_mid[16], v_max[16];
+        double mid_val = 0.5 * max_content;
+        snprintf(v_mid, sizeof(v_mid), (mid_val < 1e4) ? "%.0f" : "%.2g", mid_val);
+        snprintf(v_max, sizeof(v_max), (max_content < 1e4) ? "%.0f" : "%.2g", max_content);
+
+        int pos = snprintf(label_buf, sizeof(label_buf), "%-16s │ %6s │ ", "[Count Scale]", "");
+        pos += snprintf(label_buf + pos, sizeof(label_buf) - pos, "%s", v_zero);
+        int mid_pos = bar_max / 2;
+        int pad1 = mid_pos - (int)strlen(v_zero);
+        if (pad1 > 0) {
+            for (int k = 0; k < pad1 && pos + 2 < (int)sizeof(label_buf); ++k) label_buf[pos++] = ' ';
+            pos += snprintf(label_buf + pos, sizeof(label_buf) - pos, "%s", v_mid);
+        }
+        int pad2 = bar_max - mid_pos - (int)strlen(v_mid);
+        if (pad2 > 0) {
+            for (int k = 0; k < pad2 && pos + 2 < (int)sizeof(label_buf); ++k) label_buf[pos++] = ' ';
+            pos += snprintf(label_buf + pos, sizeof(label_buf) - pos, "%s", v_max);
+        }
+        label_buf[pos] = '\0';
+        tui_render_row(f, label_buf, width, true);
+        rows_drawn++;
+
+        pos = snprintf(line_buf, sizeof(line_buf), "%-16s │ %6s │ ├", "", "");
+        for (int k = 1; k < bar_max - 1 && pos + 4 < (int)sizeof(line_buf); ++k) {
+            if (k == bar_max / 2) {
+                pos += snprintf(line_buf + pos, sizeof(line_buf) - pos, "┼");
+            } else {
+                pos += snprintf(line_buf + pos, sizeof(line_buf) - pos, "─");
+            }
+        }
+        pos += snprintf(line_buf + pos, sizeof(line_buf) - pos, "┤");
+        tui_render_row(f, line_buf, width, true);
+        rows_drawn++;
+    }
 
     for (uint32_t i = 0; i < nbins && rows_drawn < max_rows; i += step) {
         double lower = 0.0, upper = 0.0, content = 0.0;
@@ -692,6 +759,14 @@ int cmd_top_main(int argc, char **argv) {
                                 }
                             }
                             break;
+                        case 'g':
+                        case 'G':
+                            st.show_legend = !st.show_legend;
+                            break;
+                        case 'y':
+                        case 'Y':
+                            st.show_y_axis = !st.show_y_axis;
+                            break;
                         case 'k':
                             if (!eng.is_2d) st.show_kde = !st.show_kde;
                             break;
@@ -829,10 +904,11 @@ int cmd_top_main(int argc, char **argv) {
                 histo2d_axis_t ax, ay;
                 histo2d_axis_x(snap_2d, &ax);
                 histo2d_axis_y(snap_2d, &ay);
-                snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Max bin: %.0f",
+                snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Intensity: %s %s",
                          histo2d_nbins_x(snap_2d), ax.min, ax.max,
                          histo2d_nbins_y(snap_2d), ay.min, ay.max,
-                         tot_w);
+                         st.log_z ? "LOG-Z" : "LIN",
+                         st.show_legend ? "│ Legend: ON" : "");
             } else {
                 snprintf(subhdr, sizeof(subhdr), "Initializing 2D...");
             }
@@ -868,10 +944,12 @@ int cmd_top_main(int argc, char **argv) {
             }
             char err_tag[32] = "";
             if (st.show_errors) snprintf(err_tag, sizeof(err_tag), "│ Err: ON ");
-            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s%s",
+            char yaxis_tag[32] = "";
+            if (st.show_y_axis) snprintf(yaxis_tag, sizeof(yaxis_tag), "│ Axis: ON ");
+            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s%s%s",
                      r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
                      eng.auto_range ? "ON" : "OFF",
-                     kde_tag, fit_tag, err_tag);
+                     kde_tag, fit_tag, err_tag, yaxis_tag);
         } else {
             snprintf(subhdr, sizeof(subhdr), "Initializing...");
         }
@@ -899,8 +977,8 @@ int cmd_top_main(int argc, char **argv) {
             tui_render_row(&frame, cmd_line, cols, true);
         } else {
             const char *hints = eng.is_2d ?
-                "[Space] Freeze  [l] Log-Z Intensity  [C] Mono  [:] Cmd  [?] Help  [q] Quit" :
-                "[Space] Freeze  [a] Auto  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q] Quit";
+                "[Space] Freeze  [l] Log-Z  [g] Legend  [C] Mono  [:] Cmd  [?] Help  [q] Quit" :
+                "[Space] Freeze  [a] Auto  [l] Log  [y] Y-Axis  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q] Quit";
             tui_render_row(&frame, hints, cols, true);
         }
 
