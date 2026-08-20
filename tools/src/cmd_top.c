@@ -341,6 +341,10 @@ int cmd_top_main(int argc, char **argv) {
     while (eng.running) {
         tui_key_event_t ev = tui_term_read_key(tty_fd, 33);
         if (ev.type != TUI_KEY_NONE) {
+            if (ev.type == TUI_KEY_CTRL_C || (ev.type == TUI_KEY_CHAR && ev.ch == 3)) {
+                eng.running = false;
+                break;
+            }
             if (st.cmd_active) {
                 if (ev.type == TUI_KEY_ESC) {
                     st.cmd_active = false;

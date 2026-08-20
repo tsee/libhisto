@@ -26,6 +26,7 @@ typedef enum {
     TUI_KEY_PAGE_DOWN,
     TUI_KEY_HOME,
     TUI_KEY_END,
+    TUI_KEY_CTRL_C,
     TUI_KEY_RESIZE
 } tui_key_type_t;
 

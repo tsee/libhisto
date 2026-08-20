@@ -229,6 +229,11 @@ tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
         return ev;
     }
 
+    if (c == 3) {
+        ev.type = TUI_KEY_CTRL_C;
+        ev.ch = 3;
+        return ev;
+    }
     if (c == 13 || c == 10) {
         ev.type = TUI_KEY_ENTER;
         ev.ch = '\n';
