@@ -300,8 +300,8 @@ def test_cli_block(block, source_dir, build_dir, verbose):
     filepath = block["file"]
     line = block["line"]
 
-    # Skip non-runnable installation or build instruction blocks
-    if any(k in code for k in ["git clone", "make", "cmake", "sudo ", "doxygen"]):
+    # Skip non-runnable installation, git, or build instruction blocks
+    if any(k in code for k in ["git ", "git clone", "make", "cmake", "sudo ", "doxygen", "python3 setup.py"]):
         return True
 
     tools_dir = os.path.abspath(os.path.join(build_dir, "tools"))
