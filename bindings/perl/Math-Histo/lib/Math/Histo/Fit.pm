@@ -5,14 +5,15 @@ use warnings;
 use Math::Histo ();
 use Math::Histo::Constants qw(:fit);
 
-our $VERSION = '0.1.0';
+our $VERSION = '0.1.1';
 
 package Math::Histo::Fit::Result;
 
 use strict;
 use warnings;
 
-our $VERSION = '0.1.0';
+our $VERSION = '0.1.1';
+
 
 sub status_str {
     my ($self) = @_;

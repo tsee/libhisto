@@ -1,7 +1,11 @@
 Revision history for Math-Histo
 
+0.1.1
+        - Under development.
+
 0.1.0   2026-08-20
         - Initial CPAN release of Math::Histo XS wrapper for libhisto.
+
         - Support for 1D and 2D uniform and variable histograms.
         - High-performance scalar, batch (fill_n), and packed binary ingestion.
         - Complete statistical moments, robust statistics (IQR, MAD, trimmed/winsorized mean).
