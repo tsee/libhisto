@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "histo"
+version = "0.1.0"
+description = "Fast, portable C99 histogramming and statistical computing library for Python"
+readme = "README.md"
+authors = [{ name = "Steffen Mueller", email = "cpan@steffen-mueller.net" }]
+license = "MIT"
+requires-python = ">=3.8"
+keywords = ["histogram", "statistics", "quantiles", "ddsketch", "curve-fitting", "data-science", "simd"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: C",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+
+[project.scripts]
+pyhisto = "histo.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/tsee/libhisto"
+Repository = "https://github.com/tsee/libhisto.git"
+Documentation = "https://github.com/tsee/libhisto/blob/main/docs/manual.md"

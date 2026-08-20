@@ -31,3 +31,8 @@ vgcore.*
 # Documentation build output
 docs/html/
 __pycache__/
+*.pyc
+*.egg-info/
+dist/
+bindings/python/bundled/
+

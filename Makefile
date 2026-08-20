@@ -1,4 +1,4 @@
-.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-dist test-python python-dist test-python-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -11,9 +11,9 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-dist test-fuzz test-tsan memcheck docs
+test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-dist test-python test-python-dist test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
-	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
+	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL & PYTHON BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
 
 test-doc-examples: build
@@ -37,6 +37,16 @@ test-perl-dist:
 	perl tests/scripts/test_perl_dist.pl
 
 perl-dist: perl-alien-dist perl-histo-dist
+
+test-python:
+	cd bindings/python && python3 setup.py build_ext --inplace && PYTHONPATH=. python3 -m unittest discover -s tests -v
+
+python-dist:
+	cd bindings/python && python3 setup.py sdist
+
+test-python-dist:
+	python3 tests/scripts/test_python_dist.py
+
 
 
 
@@ -63,7 +73,8 @@ test-msan:
 memcheck test-valgrind:
 	cmake -B $(BUILD_DIR)-valgrind -S . -DCMAKE_BUILD_TYPE=Debug
 	cmake --build $(BUILD_DIR)-valgrind --parallel $(JOBS)
-	cd $(BUILD_DIR)-valgrind && ctest -T memcheck -E "test_doc_examples|test_perl_dist" --output-on-failure
+	cd $(BUILD_DIR)-valgrind && ctest -T memcheck -E "test_doc_examples|test_perl_dist|test_python|test_python_dist" --output-on-failure
+
 
 
 docs:

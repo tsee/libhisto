@@ -160,6 +160,26 @@
   - Install public header `include/histo/cli.h`.
 - [x] **R3** Verify C integration test suite (`tests/integration/test_cli.c`), ASan/UBSan, and Valgrind memcheck.
 
+---
+
+## Phase Py: Language Bindings — Python (`histo` / `pyhisto`)
+- [x] **Py1** Architectural Design & Pythonic C Extension Specification (`_libhistomodule.c`, `pyproject.toml`, `setup.py`, Buffer Protocol).
+- [x] **Py2** Native CPython C Extension Implementation (`_libhistomodule.c`):
+  - Wraps `histo_t`, `histo2d_t`, `histo_sketch_t`, `histo_fit_model`, `histo_fit_custom`, `histo_cli_main`.
+  - Implements Python Buffer Protocol for zero-copy float64 array ingestion.
+- [x] **Py3** High-Level Python Wrapper Layer (`histo/`):
+  - `histo.Histogram`, `histo.Histogram2D`, `histo.Sketch`, `histo.FitResult`, `histo.cli`.
+  - Operator overloading, slicing, statistical properties, typing markers (`py.typed`).
+- [x] **Py4** Comprehensive Test Suite (`bindings/python/tests/`):
+  - 1D/2D binning, statistical moments, quantiles, fitting, sketches, serialization, comparison, Buffer Protocol.
+- [x] **Py5** Benchmarking & Documentation:
+  - Benchmark suite `bindings/python/bench/bench_fill.py`.
+  - README, API docs, and performance tables.
+- [x] **Py6** Distribution Packaging & Make Target Automation:
+  - `make test-python`, `make python-dist`, `make test-python-dist`, integrated into `make test-all`.
+
+
+
 
 
 
