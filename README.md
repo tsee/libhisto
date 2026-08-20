@@ -98,7 +98,7 @@ int main(void) {
 
 ## Level 1: EDA & Summary Statistics
 
-Enable Welford's exact online moments and statistical error tracking (`sum_w2`) to extract rich summary statistics without discretisation error.
+Enable Welford's exact online moments and statistical error tracking (`sum_w2`) to extract summary statistics without discretisation error.
 
 ### CLI Example
 ```bash

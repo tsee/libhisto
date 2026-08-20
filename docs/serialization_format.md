@@ -6,7 +6,7 @@ This document defines the canonical binary wire format, version migration mechan
 
 ## 1. Canonical Binary Wire Format (`libhisto` Binary v1 & v2)
 
-All multi-byte numeric fields in `libhisto` binary blobs are encoded in **Canonical Little-Endian** byte order. Platforms operating in Big-Endian mode perform byte-swapping during both serialization and deserialization to ensure seamless cross-architecture data exchange.
+All multi-byte numeric fields in `libhisto` binary blobs are encoded in **Canonical Little-Endian** byte order. Platforms operating in Big-Endian mode perform byte-swapping during both serialization and deserialization to ensure cross-architecture data exchange.
 
 The current library serialization formats are **Version 2** (for 1D histograms) and **Version 3** (for 2D histograms).
 

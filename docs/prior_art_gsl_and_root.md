@@ -68,4 +68,4 @@ This document analyzes three prominent histogramming implementations in scientif
 | **Uncertainty ($\sum w^2$)** | None | Optional (`Sumw2`) | None | **First-class $\sum w^2$ support** |
 | **Moments Calculation** | Bin-center approx | Exact online stats | Bin-center approx | **Both exact online stats + bin-center estimators** |
 | **Error Reporting** | Return code | Logging / Crash | Perl `croak()` | **Explicit `histo_status_t` return codes** |
-| **Dependencies** | GSL ecosystem | Massive C++ | Perl C headers | **Zero dependencies (Pure ISO C99)** |
+| **Dependencies** | GSL library | Massive C++ | Perl C headers | **Zero dependencies (Pure ISO C99)** |
