@@ -381,6 +381,18 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
             pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m");
         }
 
+        if (st->show_errors) {
+            double err = 0.0;
+            histo_bin_error(h, i, &err);
+            if (err > 0.0) {
+                if (st->monochrome) {
+                    pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, " +-%.2g", err);
+                } else {
+                    pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, " \033[90m╎±%.2g╎\033[0m", err);
+                }
+            }
+        }
+
         tui_render_row(f, row_buf, width, true);
         rows_drawn++;
     }
@@ -854,10 +866,12 @@ int cmd_top_main(int argc, char **argv) {
                     snprintf(fit_tag, sizeof(fit_tag), "│ Fit: Gauss ");
                 }
             }
-            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s",
+            char err_tag[32] = "";
+            if (st.show_errors) snprintf(err_tag, sizeof(err_tag), "│ Err: ON ");
+            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s%s",
                      r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
                      eng.auto_range ? "ON" : "OFF",
-                     kde_tag, fit_tag);
+                     kde_tag, fit_tag, err_tag);
         } else {
             snprintf(subhdr, sizeof(subhdr), "Initializing...");
         }
