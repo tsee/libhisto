@@ -26,6 +26,13 @@ subtest 'Uniform 2D histogram' => sub {
     ok $h2->fill_n([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 1.0, 1.0]), 'fill_n';
     is $h2->num_entries, 5, '5 entries';
 
+    # Packed binary ingestion
+    my $px_bin = pack('d*', 4.0, 5.0);
+    my $py_bin = pack('d*', 2.0, 3.0);
+    ok $h2->fill_packed_f64($px_bin, $py_bin), 'fill_packed_f64';
+    is $h2->num_entries, 7, '7 entries';
+
+
     # 2D Covariance and correlation
     my $cov = $h2->covariance;
     my $corr = $h2->correlation;
@@ -54,8 +61,9 @@ subtest 'Uniform 2D histogram' => sub {
     isa_ok $restored, 'Math::Histo::2D';
     is $restored->nx, 10, 'restored nx';
     is $restored->ny, 5, 'restored ny';
-    is $restored->num_entries, 5, 'restored num_entries';
+    is $restored->num_entries, 7, 'restored num_entries';
 };
+
 
 subtest 'Variable 2D histogram' => sub {
     my $h2_var = Math::Histo::2D->new(

@@ -18,7 +18,10 @@ sub from_binary {
     return $class->_deserialize_binary($blob);
 }
 
+*insert_packed = \&insert_packed_f64;
+
 1;
+
 
 __END__
 

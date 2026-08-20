@@ -13,8 +13,14 @@ subtest 'DDSketch online dynamic quantile sketch' => sub {
     is $sketch->num_entries, 1000, '1000 entries';
     is $sketch->total_weight, 1000.0, 'total weight 1000';
 
+    # Packed binary insertion
+    my $packed_extra = pack('d*', 1001.0, 1002.0);
+    ok $sketch->insert_packed_f64($packed_extra), 'insert_packed_f64';
+    is $sketch->num_entries, 1002, '1002 entries';
+
     is $sketch->min, 1.0, 'min is 1.0';
-    is $sketch->max, 1000.0, 'max is 1000.0';
+    is $sketch->max, 1002.0, 'max is 1002.0';
+
 
     # Quantiles with <= 1% relative error
     my $p50 = $sketch->quantile(0.50);
@@ -32,7 +38,7 @@ subtest 'DDSketch online dynamic quantile sketch' => sub {
     $sketch2->insert_n(\@vals2);
 
     ok $sketch->merge($sketch2), 'merge sketch2 into sketch';
-    is $sketch->num_entries, 2000, '2000 entries after merge';
+    is $sketch->num_entries, 2002, '2002 entries after merge';
     is $sketch->max, 2000.0, 'max is 2000.0';
 
     # Binary serialization
@@ -41,7 +47,8 @@ subtest 'DDSketch online dynamic quantile sketch' => sub {
 
     my $restored = Math::Histo::Sketch->from_binary($blob);
     isa_ok $restored, 'Math::Histo::Sketch';
-    is $restored->num_entries, 2000, 'restored 2000 entries';
+    is $restored->num_entries, 2002, 'restored 2002 entries';
+
 };
 
 done_testing;

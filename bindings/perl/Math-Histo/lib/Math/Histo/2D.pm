@@ -42,7 +42,10 @@ sub from_json {
     return $class->_deserialize_json($json_str);
 }
 
+*fill_packed = \&fill_packed_f64;
+
 1;
+
 
 __END__
 

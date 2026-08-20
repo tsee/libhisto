@@ -1,3 +1,4 @@
+bench/bench_fill.pl
 Changes
 Histo.xs
 lib/Math/Histo.pm

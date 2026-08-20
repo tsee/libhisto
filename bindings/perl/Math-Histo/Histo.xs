@@ -908,8 +908,38 @@ fill_n(histo2d_t *self, SV *x_ref, SV *y_ref, SV *w_ref=NULL)
     OUTPUT:
         RETVAL
 
+int
+fill_packed_f64(histo2d_t *self, SV *packed_x, SV *packed_y, SV *packed_w=NULL)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        STRLEN x_len = 0, y_len = 0;
+        const char *x_raw = SvPVbyte(packed_x, x_len);
+        const char *y_raw = SvPVbyte(packed_y, y_len);
+        if ((x_len % sizeof(double)) != 0 || (y_len % sizeof(double)) != 0 || x_len != y_len) {
+            croak("Math::Histo::2D::fill_packed_f64: packed x and y byte lengths must match and be multiple of 8 (double)");
+        }
+        size_t n = x_len / sizeof(double);
+        if (n == 0) XSRETURN_IV(0);
+
+        const double *x_arr = (const double *)(const void *)x_raw;
+        const double *y_arr = (const double *)(const void *)y_raw;
+        const double *w_arr = NULL;
+        if (packed_w && SvOK(packed_w)) {
+            STRLEN w_len = 0;
+            const char *w_raw = SvPVbyte(packed_w, w_len);
+            if (w_len != x_len) {
+                croak("Math::Histo::2D::fill_packed_f64: weights length must match x length");
+            }
+            w_arr = (const double *)(const void *)w_raw;
+        }
+        histo_status_t st = histo2d_fill_n(self, n, x_arr, y_arr, w_arr);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
 uint64_t
 num_entries(histo2d_t *self)
+
     CODE:
         RETVAL = histo2d_num_entries(self);
     OUTPUT:
@@ -1469,8 +1499,36 @@ insert_n(histo_sketch_t *self, SV *values_ref, SV *weights_ref=NULL)
     OUTPUT:
         RETVAL
 
+int
+insert_packed_f64(histo_sketch_t *self, SV *packed_v, SV *packed_w=NULL)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        STRLEN v_len = 0;
+        const char *v_raw = SvPVbyte(packed_v, v_len);
+        if ((v_len % sizeof(double)) != 0) {
+            croak("Math::Histo::Sketch::insert_packed_f64: packed values byte length must be multiple of 8 (double)");
+        }
+        size_t n = v_len / sizeof(double);
+        if (n == 0) XSRETURN_IV(0);
+
+        const double *v_arr = (const double *)(const void *)v_raw;
+        const double *w_arr = NULL;
+        if (packed_w && SvOK(packed_w)) {
+            STRLEN w_len = 0;
+            const char *w_raw = SvPVbyte(packed_w, w_len);
+            if (w_len != v_len) {
+                croak("Math::Histo::Sketch::insert_packed_f64: weights length must match values length");
+            }
+            w_arr = (const double *)(const void *)w_raw;
+        }
+        histo_status_t st = histo_sketch_insert_n(self, n, v_arr, w_arr);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
 double
 quantile(histo_sketch_t *self, double q)
+
     CODE:
         if (!self) XSRETURN_UNDEF;
         double out = 0.0;
