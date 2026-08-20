@@ -99,12 +99,15 @@ Enable exact online Welford statistics (`HISTO_FLAG_EXACT_MOMENTS`) and per-bin 
 ### 1.1 CLI Inspection (`histo stats` & Sparklines)
 
 ```bash
-# Ingest CSV data and output comprehensive statistical report
-cat sensor_data.csv | histo fill --auto-range | histo stats
+# Ingest CSV/TSV data and output comprehensive statistical report
+python3 -c "import random; print('\n'.join(f'{random.gauss(100, 10):.2f}\t{random.uniform(0.5, 2.0):.2f}' for _ in range(1000)))" | \
+    histo fill -w --auto-range | histo stats
 
 # Compact single-line sparkline for dashboards or log summaries
-cat stream.txt | histo fill --bins 20 --auto-range | histo plot -S
+python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(10000)))" | \
+    histo fill --bins=20 --auto-range | histo plot -S
 ```
+
 
 **Sparkline Output:**
 ```text

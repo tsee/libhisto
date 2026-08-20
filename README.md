@@ -54,8 +54,10 @@ Gaussian Monte Carlo (N=100k, μ=50, σ=15) (Entries: 99919, Total Weight: 99919
 For compact in-terminal dashboards, shell prompts, or streaming logs, render distributions as 1-line sparklines:
 
 ```bash
-cat data.txt | histo fill --bins=20 --auto-range | histo plot -S
+python3 -c "import random, sys; sys.stdout.write(''.join(f'{random.gauss(50, 15):.4f}\n' for _ in range(10000)))" | \
+    histo fill --bins=20 --auto-range | histo plot -S
 ```
+
 ```text
     ▂▃▄▆▇██▇▆▄▂▂      [N=9987, range=[0, 1e+02), μ=50, σ=15]
 ```
@@ -102,8 +104,10 @@ Enable Welford's exact online moments and statistical error tracking (`sum_w2`) 
 
 ### CLI Example
 ```bash
-cat sensor_data.csv | histo fill -w 2 --auto-range | histo stats -f json
+python3 -c "import random; print('\n'.join(f'{random.gauss(100, 10):.2f}\t{random.uniform(0.5, 2.0):.2f}' for _ in range(1000)))" | \
+    histo fill -w --auto-range | histo stats -f json
 ```
+
 
 ### C99 Example
 ```c

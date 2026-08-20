@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """
 test_doc_examples.py - Extract, compile, and execute inline C and CLI examples from libhisto documentation.
+
+Automatically scans all documentation files (*.md), extracts C and CLI code blocks,
+intelligently wraps snippets into valid C99 test harnesses, compiles against local build artifacts,
+and executes all examples in parallel to verify correctness and prevent documentation drift.
 """
 
 import argparse
+import concurrent.futures
+import glob
 import os
 import re
 import subprocess
@@ -41,22 +47,15 @@ def extract_code_blocks(filepath):
 
     return blocks
 
-def test_c_block(block, source_dir, build_dir, compiler, cflags, verbose):
-    """Compile and run a C code block."""
-    code = block["code"]
-    filepath = block["file"]
-    line = block["line"]
+def wrap_c_snippet(code):
+    """Intelligently wrap incomplete C snippets into fully valid, runnable C99 test programs."""
+    has_main = bool(re.search(r"\bint\s+main\s*\(", code))
+    if has_main:
+        return code
 
-    include_dir = os.path.join(source_dir, "include")
-    lib_path = os.path.join(build_dir, "src", "libhisto.a")
-    if not os.path.exists(lib_path):
-        lib_path = os.path.join(build_dir, "libhisto.a")
-
-    has_main = "int main(" in code or "int main (void)" in code or "int main(void)" in code
-
-    if not has_main:
-        if "my_sine_model" in code:
-            wrapped = f"""#include <stdio.h>
+    # Check for custom model callback definitions in fitting guide
+    if "my_sine_model" in code or "my_sine_gradient" in code:
+        return f"""#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
@@ -79,8 +78,9 @@ int main(void) {{
     return 0;
 }}
 """
-        elif "lower_bounds" in code and "histo_fit_model" in code:
-            wrapped = f"""#include <stdio.h>
+
+    if "lower_bounds" in code and "histo_fit_model" in code:
+        return f"""#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
@@ -91,13 +91,14 @@ int main(void) {{
     histo_t *h = histo_create_uniform(50, 20.0, 80.0, HISTO_FLAG_TRACK_SUMW2);
     for (int i = 0; i < 500; i++) histo_fill(h, 50.0);
     {code}
-    histo_fit_result_destroy(res);
+    if (res) histo_fit_result_destroy(res);
     histo_destroy(h);
     return 0;
 }}
 """
-        elif "histo2d_project_x" in code:
-            wrapped = f"""#include <stdio.h>
+
+    if "histo2d_project_x" in code:
+        return f"""#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
@@ -112,8 +113,9 @@ int main(void) {{
     return 0;
 }}
 """
-        elif "histo2d_serialize_binary_alloc" in code:
-            wrapped = f"""#include <stdio.h>
+
+    if "histo2d_serialize_binary_alloc" in code:
+        return f"""#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
@@ -128,8 +130,68 @@ int main(void) {{
     return 0;
 }}
 """
-        elif "N_SAMPLES" in code:
-            wrapped = f"""#include <stdio.h>
+
+    if "inv_binsize" in code and "Boundary Guard" in code:
+        return f"""#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <histo/types.h>
+
+typedef struct {{
+    double min, max, binsize, inv_binsize;
+    uint32_t nbins;
+    double *bins;
+    double *sum_w2;
+    double total_weight, total_sum_w2;
+    uint64_t n_fills, n_nan, n_underflow, n_overflow;
+    double underflow_weight, underflow_sum_w2, overflow_weight, overflow_sum_w2;
+}} mock_h_t;
+
+static histo_status_t mock_fill_test(mock_h_t *h, double x, double weight) {{
+{code}
+    return HISTO_OK;
+}}
+
+int main(void) {{
+    double b[10] = {{0}}, w2[10] = {{0}};
+    mock_h_t h = {{ .min = 0.0, .max = 10.0, .binsize = 1.0, .inv_binsize = 1.0, .nbins = 10, .bins = b, .sum_w2 = w2 }};
+    mock_fill_test(&h, 5.5, 1.0);
+    mock_fill_test(&h, -1.0, 1.0);
+    mock_fill_test(&h, 15.0, 1.0);
+    return 0;
+}}
+"""
+
+    if "bin_edges" in code and "while (low < high)" in code:
+        return f"""#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct {{
+    uint32_t nbins;
+    const double *bin_edges;
+}} mock_var_h_t;
+
+static uint32_t mock_search_test(const mock_var_h_t *h, double x) {{
+{code}
+}}
+
+int main(void) {{
+    double edges[] = {{0.0, 2.0, 5.0, 10.0}};
+    mock_var_h_t h = {{ .nbins = 3, .bin_edges = edges }};
+    uint32_t b1 = mock_search_test(&h, 1.0);
+    uint32_t b2 = mock_search_test(&h, 3.5);
+    (void)b1; (void)b2;
+    return 0;
+}}
+"""
+
+    if "N_SAMPLES" in code:
+        return f"""#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
@@ -142,8 +204,9 @@ int main(void) {{
     return 0;
 }}
 """
-        else:
-            wrapped = f"""#include <stdio.h>
+
+
+    return f"""#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
@@ -151,13 +214,37 @@ int main(void) {{
 #include <histo/histo2d.h>
 #include <histo/fit.h>
 #include <histo/sketch.h>
+#include <histo/cli.h>
+#include <histo/types.h>
 
 int main(void) {{
     {code}
     return 0;
 }}
 """
-        code = wrapped
+
+def test_c_block(block, source_dir, build_dir, compiler, cflags, verbose):
+    """Compile and run a C code block against local build artifacts."""
+    raw_code = block["code"]
+    filepath = block["file"]
+    line = block["line"]
+
+    code = wrap_c_snippet(raw_code)
+
+    include_dir = os.path.join(source_dir, "include")
+    lib_histo = os.path.join(build_dir, "src", "libhisto.a")
+    if not os.path.exists(lib_histo):
+        lib_histo = os.path.join(build_dir, "libhisto.a")
+
+    lib_cli = os.path.join(build_dir, "tools", "libhistocli.a")
+    if not os.path.exists(lib_cli):
+        lib_cli = os.path.join(build_dir, "libhistocli.a")
+
+    libs_to_link = []
+    if os.path.exists(lib_histo):
+        libs_to_link.append(lib_histo)
+    if os.path.exists(lib_cli):
+        libs_to_link.append(lib_cli)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         src_file = os.path.join(tmpdir, "example.c")
@@ -168,7 +255,7 @@ int main(void) {{
         cmd = [compiler] + cflags + [
             f"-I{include_dir}",
             src_file,
-            lib_path,
+        ] + libs_to_link + [
             "-lm",
             "-o", bin_file
         ]
@@ -180,13 +267,13 @@ int main(void) {{
         if res.returncode != 0:
             err_lower = res.stderr.lower()
             if "tsan" in err_lower or "__tsan" in err_lower:
-                cmd_san = [compiler] + cflags + ["-fsanitize=thread", f"-I{include_dir}", src_file, lib_path, "-lm", "-pthread", "-o", bin_file]
+                cmd_san = [compiler] + cflags + ["-fsanitize=thread", f"-I{include_dir}", src_file] + libs_to_link + ["-lm", "-pthread", "-o", bin_file]
                 res = subprocess.run(cmd_san, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             elif "asan" in err_lower or "ubsan" in err_lower or "__asan" in err_lower:
-                cmd_san = [compiler] + cflags + ["-fsanitize=address,undefined", f"-I{include_dir}", src_file, lib_path, "-lm", "-o", bin_file]
+                cmd_san = [compiler] + cflags + ["-fsanitize=address,undefined", f"-I{include_dir}", src_file] + libs_to_link + ["-lm", "-o", bin_file]
                 res = subprocess.run(cmd_san, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             elif "msan" in err_lower or "__msan" in err_lower:
-                cmd_san = [compiler] + cflags + ["-fsanitize=memory", f"-I{include_dir}", src_file, lib_path, "-lm", "-o", bin_file]
+                cmd_san = [compiler] + cflags + ["-fsanitize=memory", f"-I{include_dir}", src_file] + libs_to_link + ["-lm", "-o", bin_file]
                 res = subprocess.run(cmd_san, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
             if res.returncode != 0:
@@ -196,7 +283,6 @@ int main(void) {{
                 for i, l in enumerate(code.splitlines(), 1):
                     print(f"{i:4d}: {l}")
                 return False
-
 
         run_res = subprocess.run([bin_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if run_res.returncode != 0:
@@ -209,11 +295,12 @@ int main(void) {{
         return True
 
 def test_cli_block(block, source_dir, build_dir, verbose):
-    """Execute runnable CLI bash commands."""
+    """Execute runnable CLI bash commands using local build artifacts."""
     code = block["code"].strip()
     filepath = block["file"]
     line = block["line"]
 
+    # Skip non-runnable installation or build instruction blocks
     if any(k in code for k in ["git clone", "make", "cmake", "sudo ", "doxygen"]):
         return True
 
@@ -226,6 +313,7 @@ def test_cli_block(block, source_dir, build_dir, verbose):
     env = os.environ.copy()
     env["PATH"] = f"{tools_dir}:{env.get('PATH', '')}"
 
+    # Parse pipelines (combining multi-line backslash continuations)
     pipelines = []
     current_cmd = []
     for l in code.splitlines():
@@ -240,13 +328,15 @@ def test_cli_block(block, source_dir, build_dir, verbose):
             current_cmd = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create dummy sample files
+        # Pre-generate standard fixture files commonly referenced in documentation
         with open(os.path.join(tmpdir, "data.txt"), "w") as f:
             f.write("\n".join(str(i) for i in range(100)) + "\n")
+        with open(os.path.join(tmpdir, "stream.txt"), "w") as f:
+            f.write("\n".join(str(i * 0.5) for i in range(500)) + "\n")
         with open(os.path.join(tmpdir, "sensor_data.csv"), "w") as f:
-            f.write("\n".join(f"{i},{i*1.5}" for i in range(100)) + "\n")
+            f.write("\n".join(f"{i}\t{i*1.5}" for i in range(100)) + "\n")
 
-        # Create sample background.json / data.json / data.bin / sparse_counts.bin
+        # Pre-generate serialized fixture histograms
         subprocess.run(
             [histo_bin, "fill", "--min", "0", "--max", "100", "-n", "50", "-o", "json", "-f", os.path.join(tmpdir, "background.json")],
             input="\n".join(str(i) for i in range(100)),
@@ -301,7 +391,7 @@ def run_task(task, source_dir, build_dir, compiler, cflags, verbose):
         return ("cli", block, ok)
 
 def main():
-    parser = argparse.ArgumentParser(description="Test inline C and CLI examples from libhisto documentation.")
+    parser = argparse.ArgumentParser(description="Extract, compile, and test all documentation code and CLI examples.")
     parser.add_argument("--source-dir", default=os.path.abspath("."), help="Path to libhisto repository root")
     parser.add_argument("--build-dir", default=os.path.abspath("build"), help="Path to CMake build directory")
     parser.add_argument("--compiler", default=os.environ.get("CC", "gcc"), help="C compiler to use")
@@ -311,17 +401,20 @@ def main():
 
     cflags = ["-std=c99", "-Wall", "-Wextra", "-Werror", "-O2"]
 
-    doc_files = [
-        "README.md",
-        "docs/manual.md",
-        "docs/curve_fitting_guide.md",
-        "docs/histo2d_guide.md"
+    # Discover all documentation markdown files
+    doc_patterns = [
+        os.path.join(args.source_dir, "README.md"),
+        os.path.join(args.source_dir, "docs", "*.md"),
     ]
+    doc_files = []
+    for pattern in doc_patterns:
+        doc_files.extend(glob.glob(pattern))
 
     tasks = []
-    for rel_path in doc_files:
-        filepath = os.path.join(args.source_dir, rel_path)
-        if not os.path.exists(filepath):
+    for filepath in sorted(doc_files):
+        # Exclude task lists and internal guidelines from example execution
+        rel = os.path.relpath(filepath, args.source_dir)
+        if rel in ["docs/tasks.md", "docs/coding_standards.md", "docs/goals.md"]:
             continue
 
         blocks = extract_code_blocks(filepath)
@@ -342,9 +435,9 @@ def main():
 
     print("======================================================================")
     print(f" TESTING INLINE DOCUMENTATION CODE EXAMPLES & CLI PIPELINES (-j {args.jobs})")
+    print(f" Scanned {len(doc_files)} markdown documents | Found {total_c} C examples, {total_cli} CLI pipelines")
     print("======================================================================")
 
-    import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
         futures = [executor.submit(run_task, t, args.source_dir, args.build_dir, args.compiler, cflags, args.verbose) for t in tasks]
         for f in concurrent.futures.as_completed(futures):
@@ -370,7 +463,6 @@ def main():
         print(" RESULT: ALL INLINE DOCUMENTATION EXAMPLES PASSED SUCCESSFULLY")
         print("======================================================================")
         return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
