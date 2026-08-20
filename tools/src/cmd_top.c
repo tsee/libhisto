@@ -130,7 +130,7 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         histo_bin_bounds(h, i, &lower, &upper);
         histo_bin_content(h, i, &content);
 
-        char row_buf[1024];
+        char row_buf[4096];
         char bounds_str[32];
         if (upper >= 10000.0 || (lower > 0.0 && lower < 0.01)) {
             snprintf(bounds_str, sizeof(bounds_str), "[%6.2g, %6.2g)", lower, upper);
@@ -207,20 +207,36 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         if (fit_col >= max_col) max_col = fit_col + 1;
         if (max_col > bar_max) max_col = bar_max;
 
+        bool in_bar_color = false;
         for (int k = 0; k < max_col && pos + 32 < (int)sizeof(row_buf); ++k) {
             if (k == kde_col && k == fit_col) {
+                if (in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m"); in_bar_color = false; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;33m✦\033[0m");
             } else if (k == kde_col) {
+                if (in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m"); in_bar_color = false; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;36m◆\033[0m");
             } else if (k == fit_col) {
+                if (in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m"); in_bar_color = false; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[1;35m✖\033[0m");
             } else if (k < full_chars) {
-                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s█\033[0m", color_ansi);
+                if (!in_bar_color) {
+                    if (color_ansi[0]) pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", color_ansi);
+                    in_bar_color = true;
+                }
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "█");
             } else if (k == full_chars && rem_eighths > 0) {
-                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s%s\033[0m", color_ansi, BLOCKS_UTF8[rem_eighths]);
+                if (!in_bar_color) {
+                    if (color_ansi[0]) pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", color_ansi);
+                    in_bar_color = true;
+                }
+                pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "%s", BLOCKS_UTF8[rem_eighths]);
             } else {
+                if (in_bar_color) { pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m"); in_bar_color = false; }
                 pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, " ");
             }
+        }
+        if (in_bar_color) {
+            pos += snprintf(row_buf + pos, sizeof(row_buf) - pos, "\033[0m");
         }
 
         tui_render_row(f, row_buf, width, true);
