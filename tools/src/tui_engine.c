@@ -312,6 +312,68 @@ bool tui_engine_rebuild_1d(tui_engine_t *eng, uint32_t nbins, double rmin, doubl
     return true;
 }
 
+bool tui_engine_rebuild_1d_log(tui_engine_t *eng, uint32_t nbins, histo_t **out_h) {
+    if (!eng) return false;
+    if (nbins < 2) nbins = 2;
+
+    histo_mutex_lock(&eng->mutex);
+    if (eng->reservoir.count == 0) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+
+    double pos_min = 1e300;
+    double pos_max = -1e300;
+    for (size_t i = 0; i < eng->reservoir.count; ++i) {
+        double val = eng->reservoir.samples[i];
+        if (val > 0.0) {
+            if (val < pos_min) pos_min = val;
+            if (val > pos_max) pos_max = val;
+        }
+    }
+
+    if (pos_min >= pos_max || pos_min <= 0.0 || pos_min > 1e200) {
+        pos_min = 1.0;
+        pos_max = 100.0;
+    }
+
+    double *edges = (double *)malloc((nbins + 1) * sizeof(double));
+    if (!edges) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+
+    double log_min = log10(pos_min);
+    double log_max = log10(pos_max * 1.000001);
+    double step = (log_max - log_min) / (double)nbins;
+    for (uint32_t i = 0; i <= nbins; ++i) {
+        edges[i] = pow(10.0, log_min + (double)i * step);
+    }
+
+    histo_t *new_h = histo_create_variable(nbins, edges, eng->flags);
+    free(edges);
+    if (!new_h) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+
+    if (eng->reservoir.has_weights && eng->reservoir.weights) {
+        histo_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, eng->reservoir.weights);
+    } else {
+        histo_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, NULL);
+    }
+
+    if (out_h) {
+        *out_h = new_h;
+    } else {
+        if (eng->live_1d) histo_destroy(eng->live_1d);
+        eng->live_1d = new_h;
+    }
+
+    histo_mutex_unlock(&eng->mutex);
+    return true;
+}
+
 void tui_engine_clear(tui_engine_t *eng) {
     if (!eng) return;
     histo_mutex_lock(&eng->mutex);

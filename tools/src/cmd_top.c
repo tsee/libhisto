@@ -119,7 +119,11 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
 
         char row_buf[1024];
         char bounds_str[32];
-        snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
+        if (upper >= 10000.0 || (lower > 0.0 && lower < 0.01)) {
+            snprintf(bounds_str, sizeof(bounds_str), "[%6.2g, %6.2g)", lower, upper);
+        } else {
+            snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
+        }
 
         char count_str[32];
         if (content == floor(content) && content >= 0.0 && content < 1e9) {
@@ -221,6 +225,24 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
         double rmin = 0, rmax = 0;
         if (sscanf(cmd + (*cmd == 'r' ? 2 : 6), "%lf %lf", &rmin, &rmax) == 2 && rmin < rmax) {
             tui_engine_rebuild_1d(eng, 50, rmin, rmax, NULL);
+        }
+    } else if (strncasecmp(cmd, "scale ", 6) == 0 || strncasecmp(cmd, "sc ", 3) == 0) {
+        const char *arg = strchr(cmd, ' ');
+        if (arg) {
+            while (*arg == ' ') arg++;
+            if (strcasecmp(arg, "logy") == 0 || strcasecmp(arg, "y") == 0) {
+                st->scale_mode = SCALE_LOG_Y;
+                tui_engine_rebuild_1d(eng, 50, 0, 0, NULL);
+            } else if (strcasecmp(arg, "logx") == 0 || strcasecmp(arg, "x") == 0) {
+                st->scale_mode = SCALE_LOG_X;
+                tui_engine_rebuild_1d_log(eng, 50, NULL);
+            } else if (strcasecmp(arg, "loglog") == 0 || strcasecmp(arg, "xy") == 0) {
+                st->scale_mode = SCALE_LOG_LOG;
+                tui_engine_rebuild_1d_log(eng, 50, NULL);
+            } else {
+                st->scale_mode = SCALE_LINEAR;
+                tui_engine_rebuild_1d(eng, 50, 0, 0, NULL);
+            }
         }
     } else if (strcasecmp(cmd, "clear") == 0 || strcasecmp(cmd, "reset") == 0) {
         tui_engine_clear(eng);
@@ -356,6 +378,19 @@ int cmd_top_main(int argc, char **argv) {
                             st.scale_mode = (st.scale_mode == SCALE_LINEAR) ? SCALE_LOG_Y :
                                             (st.scale_mode == SCALE_LOG_Y) ? SCALE_LOG_X :
                                             (st.scale_mode == SCALE_LOG_X) ? SCALE_LOG_LOG : SCALE_LINEAR;
+                            if (st.scale_mode == SCALE_LOG_X || st.scale_mode == SCALE_LOG_LOG) {
+                                tui_engine_rebuild_1d_log(&eng, 50, NULL);
+                            } else {
+                                tui_engine_rebuild_1d(&eng, 50, 0, 0, NULL);
+                            }
+                            if (st.paused && st.frozen_snapshot) {
+                                histo_destroy(st.frozen_snapshot);
+                                if (st.scale_mode == SCALE_LOG_X || st.scale_mode == SCALE_LOG_LOG) {
+                                    tui_engine_rebuild_1d_log(&eng, 50, &st.frozen_snapshot);
+                                } else {
+                                    tui_engine_rebuild_1d(&eng, 50, 0, 0, &st.frozen_snapshot);
+                                }
+                            }
                             break;
                         case 'k':
                             st.show_kde = !st.show_kde;

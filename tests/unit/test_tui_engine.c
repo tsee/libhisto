@@ -89,6 +89,15 @@ void test_tui_engine_streaming_and_snapshot(void) {
     TEST_ASSERT_EQUAL_UINT64(50, histo_num_entries(rebuilt));
     histo_destroy(rebuilt);
 
+    /* Test reservoir rebuild with logarithmic X bins */
+    histo_t *rebuilt_log = NULL;
+    TEST_ASSERT_TRUE(tui_engine_rebuild_1d_log(&eng, 40, &rebuilt_log));
+    TEST_ASSERT_NOT_NULL(rebuilt_log);
+    TEST_ASSERT_EQUAL_UINT32(40, histo_nbins(rebuilt_log));
+    TEST_ASSERT_EQUAL_UINT64(50, histo_num_entries(rebuilt_log));
+    TEST_ASSERT_EQUAL(HISTO_BIN_VARIABLE, histo_bin_type(rebuilt_log));
+    histo_destroy(rebuilt_log);
+
     /* Test clear */
     tui_engine_clear(&eng);
     histo_t *cleared_snap = tui_engine_get_snapshot_1d(&eng);
