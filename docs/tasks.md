@@ -122,6 +122,24 @@
 - [x] **N2** Documentation Pruning & Index Consolidation: Removed outdated Phase A/B design drafts (`docs/api_specification.md`, `docs/proposed_histo2d_header.h`, `docs/design_*.md`) in favor of live Doxygen headers and comprehensive guides.
 - [x] **N3** Multi-Core Parallel Test & Build Execution (`make -j`, `ctest -j`, `test_doc_examples.py -j`): Full multi-core concurrency across CMake, CTest, and documentation tests.
 
+---
+
+## Phase P: Language Bindings — Perl (Alien::libhisto & Math::Histo)
+### Sub-Phase P.1: Core Library Packaging (`Alien::libhisto`)
+- [ ] **P1.1** Architectural Design & Specification for `Alien::libhisto` (`docs/design_alien_libhisto.md`): `alienfile` DSL, `Alien::Build` dual-mode probing (`pkg-config` system probe vs CMake share build), PIC (`-fPIC`) enforcement, offline/monorepo source bundling, `Alien::cmake3` fallback, and `Test::Alien` XS smoke test specification.
+- [ ] **P1.2** Create `bindings/perl/Alien-libhisto/` distribution skeleton:
+  - `alienfile`: Declare system probe and CMake share build (`-DCMAKE_POSITION_INDEPENDENT_CODE=ON`).
+  - `Makefile.PL`: Configure with `Alien::Build::MM` and dependencies (`Alien::Build`, `Alien::cmake3`).
+  - `lib/Alien/libhisto.pm`: Main Alien class inheriting from `Alien::Base`.
+  - `t/00_load.t` & `t/01_alien.t`: Smoke tests using `Test2::V0` and `Test::Alien` (validating `histo_version()` via inline XS).
+- [ ] **P1.3** Release packaging & bundling automation (`make perl-alien-dist`): Automated packaging script bundling the C library source for offline CPAN installation.
+
+### Sub-Phase P.2: Perl XS Wrapper Module (`Math::Histo`)
+- [ ] **P2.1** Design & API Specification for `Math::Histo` (1D, 2D, Curve Fitting, DDSketch, PDL/vector interop).
+- [ ] **P2.2** Implementation of `Math::Histo` XS bindings (`Histo.xs`, typemaps, object lifecycle, and Perl OOP wrappers).
+- [ ] **P2.3** Comprehensive Perl test suite (`t/` testing 1D/2D binning, weights, moments, fitting, sketches, serialization).
+
+
 
 
 
