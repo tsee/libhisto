@@ -67,12 +67,13 @@ static void *ingest_worker_thread(void *arg) {
     if (!eng || !eng->in_stream) return NULL;
 
     char line[4096];
-    const size_t batch_max = 512;
-    double batch_x[512];
-    double batch_w[512];
+    const size_t batch_max = 64;
+    double batch_x[64];
+    double batch_w[64];
     size_t batch_len = 0;
 
     double last_calc_time = get_time_now_sec();
+    double last_flush_time = last_calc_time;
     uint64_t last_calc_samples = 0;
 
     while (is_engine_running(eng)) {
@@ -121,7 +122,8 @@ static void *ingest_worker_thread(void *arg) {
         batch_w[batch_len] = weight;
         batch_len++;
 
-        if (batch_len >= batch_max) {
+        double now = get_time_now_sec();
+        if (batch_len >= batch_max || (batch_len > 0 && now - last_flush_time >= 0.05)) {
             histo_mutex_lock(&eng->mutex);
             if (eng->live_1d) {
                 if (eng->has_weights) {
@@ -136,10 +138,10 @@ static void *ingest_worker_thread(void *arg) {
             eng->total_samples += batch_len;
             histo_mutex_unlock(&eng->mutex);
             batch_len = 0;
+            last_flush_time = now;
         }
 
         /* Update rate calculation every 250ms */
-        double now = get_time_now_sec();
         if (now - last_calc_time >= 0.25) {
             histo_mutex_lock(&eng->mutex);
             uint64_t diff = eng->total_samples - last_calc_samples;
