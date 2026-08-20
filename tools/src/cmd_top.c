@@ -61,8 +61,8 @@ static const char *const BLOCKS_UTF8[9] = { " ", "▏", "▎", "▍", "▌", "�
 
 static void render_top_border(tui_frame_t *f, const char *title, const char *badge, int width) {
     tui_frame_printf(f, "\033[1m┌─ %s ", title);
-    int title_cols = 1 + 2 + (int)strlen(title) + 1; // "┌─ " + title + " "
-    int badge_cols = (badge && badge[0]) ? (tui_visual_width(badge) + 3) : 2;
+    int title_cols = 3 + (int)strlen(title) + 1; // "┌─ " (3) + title + " " (1)
+    int badge_cols = (badge && badge[0]) ? (tui_visual_width(badge) + 4) : 2; // " " + badge + " ─┐"
     int dashes = width - title_cols - badge_cols;
     if (dashes < 0) dashes = 0;
     for (int i = 0; i < dashes; ++i) tui_frame_puts(f, "─");
@@ -122,17 +122,19 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
 
         char count_str[32];
-        if (content == floor(content) && content >= 0.0 && content < 1e12) {
-            snprintf(count_str, sizeof(count_str), "%6.0f", content);
+        if (content == floor(content) && content >= 0.0 && content < 1e9) {
+            snprintf(count_str, sizeof(count_str), "%7.0f", content);
+        } else if (fabs(content) < 1e6) {
+            snprintf(count_str, sizeof(count_str), "%7.2f", content);
         } else {
-            snprintf(count_str, sizeof(count_str), "%6.2g", content);
+            snprintf(count_str, sizeof(count_str), "%7.2g", content);
         }
 
         // Available width for bar: width - prefix - borders
-        // prefix: bounds (16) + " │ " (3) + count (6) + " │ " (3) = 28 columns
-        int prefix_cols = 28;
+        // prefix: bounds (16) + " │ " (3) + count (7) + " │ " (3) = 29 columns
+        int prefix_cols = 29;
         int bar_max = width - 4 - prefix_cols;
-        if (bar_max < 5) bar_max = 5;
+        if (bar_max < 2) bar_max = 2;
 
         double val_scaled = (st->scale_mode == SCALE_LOG_Y || st->scale_mode == SCALE_LOG_LOG) ?
                             log10(content + 1.0) : content;
@@ -387,10 +389,13 @@ int cmd_top_main(int argc, char **argv) {
             }
         }
 
-        int cols = 80, rows = 24;
-        tui_term_get_size(&cols, &rows);
-        if (cols < 40) cols = 40;
-        if (rows < 10) rows = 10;
+        int term_cols = 80, term_rows = 24;
+        tui_term_get_size(&term_cols, &term_rows);
+        if (term_cols < 40) term_cols = 40;
+        if (term_rows < 10) term_rows = 10;
+
+        int cols = term_cols - 1;
+        int rows = term_rows;
 
         histo_t *snap = st.paused ? st.frozen_snapshot : tui_engine_get_snapshot_1d(&eng);
 

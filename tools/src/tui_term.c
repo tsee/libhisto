@@ -133,7 +133,11 @@ void tui_term_get_size(int *out_cols, int *out_rows) {
     int cols = 80, rows = 24;
 #if !defined(_WIN32)
     struct winsize ws;
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
+    int fd = tui_term_get_tty_fd();
+    if (fd >= 0 && ioctl(fd, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
+        cols = ws.ws_col;
+        rows = ws.ws_row;
+    } else if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
         cols = ws.ws_col;
         rows = ws.ws_row;
     } else {
