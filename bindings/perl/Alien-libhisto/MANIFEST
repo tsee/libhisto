@@ -2,6 +2,7 @@ alienfile
 bundled/cmake/libhistoConfig.cmake.in
 bundled/CMakeLists.txt
 bundled/Doxyfile.in
+bundled/include/histo/cli.h
 bundled/include/histo/fit.h
 bundled/include/histo/histo.h
 bundled/include/histo/histo2d.h
@@ -9,6 +10,7 @@ bundled/include/histo/sketch.h
 bundled/include/histo/types.h
 bundled/include/histo/version.h
 bundled/libhisto.pc.in
+bundled/libhistocli.pc.in
 bundled/LICENSE
 bundled/src/CMakeLists.txt
 bundled/src/fit.c
@@ -29,6 +31,16 @@ bundled/src/sketch.c
 bundled/src/vendor/cJSON/cJSON.c
 bundled/src/vendor/cJSON/cJSON.h
 bundled/src/vendor/cJSON/LICENSE
+bundled/tools/CMakeLists.txt
+bundled/tools/include/cli_common.h
+bundled/tools/src/cli_common.c
+bundled/tools/src/cli_main.c
+bundled/tools/src/cmd_cmp.c
+bundled/tools/src/cmd_fill.c
+bundled/tools/src/cmd_fit.c
+bundled/tools/src/cmd_plot.c
+bundled/tools/src/cmd_stats.c
+bundled/tools/src/main.c
 Changes
 lib/Alien/libhisto.pm
 LICENSE

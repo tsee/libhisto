@@ -45,7 +45,8 @@ if (-f $repo_cmake) {
             copy($src_file, File::Spec->catfile($bundled_dir, $file));
         }
     }
-
+    require ExtUtils::Manifest;
+    ExtUtils::Manifest::mkmanifest();
 }
 
 
@@ -58,6 +59,7 @@ WriteMakefile($abmm->mm_args(
     ABSTRACT_FROM => 'lib/Alien/libhisto.pm',
     AUTHOR        => 'Steffen Mueller <cpan@steffen-mueller.net>',
     LICENSE       => 'mit',
+
     MIN_PERL_VERSION => '5.008001',
     CONFIGURE_REQUIRES => {
         'ExtUtils::MakeMaker'                => '6.52',
@@ -79,7 +81,12 @@ WriteMakefile($abmm->mm_args(
         'Test2::V0'                          => '0.000060',
         'Test::Alien'                        => '2.00',
     },
+    dist => {
+        COMPRESS => 'gzip -9f',
+        SUFFIX   => 'gz',
+    },
     META_MERGE => {
+
         'meta-spec' => { version => 2 },
         resources => {
             repository => {
@@ -95,5 +102,8 @@ WriteMakefile($abmm->mm_args(
 ));
 
 sub MY::postamble {
-    $abmm->mm_postamble(@_);
+    my $out = $abmm->mm_postamble(@_);
+    $out .= "\ndistdir : manifest\n\n";
+    return $out;
 }
+

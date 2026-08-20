@@ -25,8 +25,11 @@ BEGIN {
             chdir $orig or die "Cannot chdir back to $orig: $!";
         }
         unshift @INC, $alien_blib, $alien_arch;
+        require ExtUtils::Manifest;
+        ExtUtils::Manifest::mkmanifest();
     }
 }
+
 
 use Alien::Base::Wrapper qw( Alien::libhisto !export );
 
@@ -53,7 +56,12 @@ my %args = Alien::Base::Wrapper->mm_args2(
     TEST_REQUIRES => {
         'Test2::V0'            => '0.000060',
     },
+    dist => {
+        COMPRESS => 'gzip -9f',
+        SUFFIX   => 'gz',
+    },
     OBJECT        => '$(O_FILES)',
+
     META_MERGE    => {
         'meta-spec' => { version => 2 },
         resources => {
@@ -74,5 +82,10 @@ $alien_libs =~ s/-lhisto/-lhistocli -lhisto/;
 $args{LIBS} = [ $alien_libs ];
 
 WriteMakefile(%args);
+
+sub MY::postamble {
+    return "\ndistdir : manifest\n\n";
+}
+
 
 
