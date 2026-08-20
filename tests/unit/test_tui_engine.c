@@ -143,6 +143,69 @@ void test_tui_render_row_geometry(void) {
     }
 }
 
+void test_tui_engine_autorange_p1_p99(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    /* Initial range [0, 10], but stream samples will be [100, 200] with extreme outliers */
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 10.0, HISTO_FLAG_TRACK_SUMW2));
+    eng.last_autorange_time_sec = 0.0; /* Reset timer so autorange can trigger immediately */
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Write 200 normal samples in [100, 200] */
+    for (int i = 0; i < 200; i++) {
+        char buf[32];
+        int val = 100 + (i % 100);
+        int len = snprintf(buf, sizeof(buf), "%d\n", val);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    /* Write 2 extreme outlier samples (-10000 and +99999) */
+    const char *outliers = "-10000\n99999\n";
+    TEST_ASSERT_EQUAL((int)strlen(outliers), write(fds[1], outliers, strlen(outliers)));
+
+    close(fds[1]); // Signal EOF
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* Get snapshot - this will invoke check_and_autorange_locked */
+    histo_t *snap = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(snap);
+
+    double rmin = 0, rmax = 0;
+    histo_range(snap, &rmin, &rmax);
+
+    /* p1 should be around 100, p99 around 199. With 5% margin, range should be approx [95, 205], rejecting -10000 and 99999 */
+    TEST_ASSERT_TRUE(rmin >= 90.0 && rmin <= 105.0);
+    TEST_ASSERT_TRUE(rmax >= 195.0 && rmax <= 210.0);
+
+    /* Check that the vast majority of samples are within the active histogram range */
+    double in_range_w = 0.0;
+    for (uint32_t b = 0; b < histo_nbins(snap); ++b) {
+        double c = 0.0;
+        histo_bin_content(snap, b, &c);
+        in_range_w += c;
+    }
+    TEST_ASSERT_TRUE(in_range_w >= 195.0);
+
+    histo_destroy(snap);
+
+    /* Test set_autorange disabled */
+    tui_engine_set_autorange(&eng, false, 0.05);
+    TEST_ASSERT_FALSE(eng.auto_range);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
@@ -150,5 +213,6 @@ int main(void) {
     RUN_TEST(test_tui_visual_width);
     RUN_TEST(test_tui_render_row_geometry);
     RUN_TEST(test_tui_engine_streaming_and_snapshot);
+    RUN_TEST(test_tui_engine_autorange_p1_p99);
     return UNITY_END();
 }

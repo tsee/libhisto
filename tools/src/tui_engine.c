@@ -200,6 +200,9 @@ bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nb
     }
 
     reservoir_init(&eng->reservoir, TUI_RESERVOIR_DEFAULT_CAP, eng->has_weights);
+    eng->auto_range = true;
+    eng->auto_range_threshold = 0.05;
+    eng->last_autorange_time_sec = get_time_now_sec();
     return true;
 }
 
@@ -243,9 +246,117 @@ void tui_engine_free(tui_engine_t *eng) {
     histo_mutex_destroy(&eng->mutex);
 }
 
+static int double_cmp(const void *a, const void *b) {
+    double da = *(const double *)a;
+    double db = *(const double *)b;
+    if (isnan(da)) return isnan(db) ? 0 : 1;
+    if (isnan(db)) return -1;
+    if (da < db) return -1;
+    if (da > db) return 1;
+    return 0;
+}
+
+static bool tui_engine_check_and_autorange_locked(tui_engine_t *eng) {
+    if (!eng || !eng->auto_range || !eng->live_1d || eng->reservoir.count < 50) {
+        return false;
+    }
+
+    double now = get_time_now_sec();
+    if (now - eng->last_autorange_time_sec < 1.0) {
+        return false;
+    }
+
+    double in_range_w = histo_total_weight(eng->live_1d);
+    double underflow_w = histo_underflow(eng->live_1d);
+    double overflow_w = histo_overflow(eng->live_1d);
+    double total_w = in_range_w + underflow_w + overflow_w;
+    if (total_w <= 0.0) return false;
+
+    double bad_ratio = (underflow_w + overflow_w) / total_w;
+    if (bad_ratio <= eng->auto_range_threshold) {
+        return false;
+    }
+
+    /* Out of bounds ratio exceeded threshold: compute robust p1-p99 range from reservoir */
+    eng->last_autorange_time_sec = now;
+
+    size_t count = eng->reservoir.count;
+    double *sorted = (double *)malloc(count * sizeof(double));
+    if (!sorted) return false;
+
+    memcpy(sorted, eng->reservoir.samples, count * sizeof(double));
+    qsort(sorted, count, sizeof(double), double_cmp);
+
+    /* Filter out non-finite entries at the end if any */
+    size_t valid_n = count;
+    while (valid_n > 0 && !isfinite(sorted[valid_n - 1])) {
+        valid_n--;
+    }
+    if (valid_n < 10) {
+        free(sorted);
+        return false;
+    }
+
+    /* Compute 1st and 99th percentiles */
+    size_t idx_p1 = (size_t)(0.01 * (double)(valid_n - 1));
+    size_t idx_p99 = (size_t)(0.99 * (double)(valid_n - 1) + 0.5);
+    if (idx_p99 >= valid_n) idx_p99 = valid_n - 1;
+
+    double p1 = sorted[idx_p1];
+    double p99 = sorted[idx_p99];
+    free(sorted);
+
+    double span = p99 - p1;
+    double rmin, rmax;
+    if (span <= 1e-9) {
+        rmin = p1 - 1.0;
+        rmax = p99 + 1.0;
+    } else {
+        /* Add 5% margin to p1-p99 span */
+        double margin = span * 0.05;
+        rmin = p1 - margin;
+        rmax = p99 + margin;
+    }
+
+    uint32_t nbins = histo_nbins(eng->live_1d);
+    if (nbins < 5) nbins = 50;
+
+    histo_t *new_h = histo_create_uniform(nbins, rmin, rmax, eng->flags);
+    if (!new_h) return false;
+
+    if (eng->reservoir.has_weights && eng->reservoir.weights) {
+        histo_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, eng->reservoir.weights);
+    } else {
+        histo_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, NULL);
+    }
+
+    if (eng->live_1d) histo_destroy(eng->live_1d);
+    eng->live_1d = new_h;
+    return true;
+}
+
+void tui_engine_set_autorange(tui_engine_t *eng, bool enable, double threshold) {
+    if (!eng) return;
+    histo_mutex_lock(&eng->mutex);
+    eng->auto_range = enable;
+    if (threshold > 0.0 && threshold < 1.0) {
+        eng->auto_range_threshold = threshold;
+    }
+    histo_mutex_unlock(&eng->mutex);
+}
+
+bool tui_engine_check_and_autorange(tui_engine_t *eng) {
+    if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    bool r = tui_engine_check_and_autorange_locked(eng);
+    histo_mutex_unlock(&eng->mutex);
+    return r;
+}
+
 histo_t *tui_engine_get_snapshot_1d(tui_engine_t *eng) {
     if (!eng) return NULL;
     histo_mutex_lock(&eng->mutex);
+    tui_engine_check_and_autorange_locked(eng);
     histo_t *snapshot = NULL;
     if (eng->live_1d) {
         snapshot = histo_clone(eng->live_1d, false);

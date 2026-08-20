@@ -185,13 +185,14 @@ static void render_help_viewport(tui_frame_t *f, int width, int max_rows) {
         "NAVIGATION & VIEWPORT              DISPLAY & SCALING",
         "  + / -       Zoom in / out          l   Cycle Log scales (Y, X, Log-Log)",
         "  h / l, ←/→  Pan viewport left/right  L   Scale Selector Modal",
-        "  0           Reset to full range    C   Toggle TrueColor / Monochrome",
-        "  r / R       Rebin coarser / finer  k   Toggle KDE continuous curve",
-        "                                     f   Toggle Curve Fit overlay",
+        "  0           Reset to full range    a   Toggle Dynamic Auto-Range",
+        "  r / R       Rebin coarser / finer  C   Toggle TrueColor / Monochrome",
+        "  k           Toggle KDE curve       f   Toggle Curve Fit overlay",
         "COMMANDS & PROMPT (:)",
-        "  :bins <N>   Set bin count (e.g. :b 80)    [Space] Freeze / Unfreeze display",
-        "  :range A B  Set range (e.g. :r 0 100)     c       Clear all accumulators",
-        "  :help       Open full help modal          q       Quit cleanly",
+        "  :bins <N>       Set bin count (e.g. :b 80)     [Space] Freeze / Unfreeze display",
+        "  :range A B      Set range (e.g. :r 0 100)      c       Clear all accumulators",
+        "  :autorange [on|off] Toggle dynamic autorange   q       Quit cleanly",
+        "  :help           Open full help modal",
         "",
         "Press [?], [Esc], or [Space] to dismiss this help window."
     };
@@ -243,6 +244,23 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
                 st->scale_mode = SCALE_LINEAR;
                 tui_engine_rebuild_1d(eng, 50, 0, 0, NULL);
             }
+        }
+    } else if (strncasecmp(cmd, "autorange", 9) == 0 || (strncasecmp(cmd, "a", 1) == 0 && (cmd[1] == ' ' || cmd[1] == '\0'))) {
+        const char *arg = strchr(cmd, ' ');
+        if (arg) {
+            while (*arg == ' ') arg++;
+            if (strcasecmp(arg, "on") == 0 || strcasecmp(arg, "1") == 0 || strcasecmp(arg, "true") == 0) {
+                tui_engine_set_autorange(eng, true, eng->auto_range_threshold);
+            } else if (strcasecmp(arg, "off") == 0 || strcasecmp(arg, "0") == 0 || strcasecmp(arg, "false") == 0) {
+                tui_engine_set_autorange(eng, false, eng->auto_range_threshold);
+            } else {
+                double thresh = atof(arg);
+                if (thresh > 0.0 && thresh < 1.0) {
+                    tui_engine_set_autorange(eng, true, thresh);
+                }
+            }
+        } else {
+            tui_engine_set_autorange(eng, !eng->auto_range, eng->auto_range_threshold);
         }
     } else if (strcasecmp(cmd, "clear") == 0 || strcasecmp(cmd, "reset") == 0) {
         tui_engine_clear(eng);
@@ -398,6 +416,10 @@ int cmd_top_main(int argc, char **argv) {
                         case 'f':
                             st.show_fit = !st.show_fit;
                             break;
+                        case 'a':
+                        case 'A':
+                            tui_engine_set_autorange(&eng, !eng.auto_range, eng.auto_range_threshold);
+                            break;
                         case 'e':
                             st.show_errors = !st.show_errors;
                             break;
@@ -481,8 +503,9 @@ int cmd_top_main(int argc, char **argv) {
             const char *sc = (st.scale_mode == SCALE_LOG_Y) ? "LOG-Y" :
                              (st.scale_mode == SCALE_LOG_X) ? "LOG-X" :
                              (st.scale_mode == SCALE_LOG_LOG) ? "LOG-LOG" : "LIN";
-            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s %s%s",
+            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Auto: %s %s%s",
                      r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
+                     eng.auto_range ? "ON" : "OFF",
                      st.show_kde ? "│ KDE " : "", st.show_fit ? "│ FIT " : "");
         } else {
             snprintf(subhdr, sizeof(subhdr), "Initializing...");
@@ -508,7 +531,7 @@ int cmd_top_main(int argc, char **argv) {
             snprintf(cmd_line, sizeof(cmd_line), ":%s\033[7m \033[0m", st.cmd_buf);
             tui_render_row(&frame, cmd_line, cols, true);
         } else {
-            const char *hints = "[Space] Freeze  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [+/-] Zoom  [:] Cmd  [?] Help  [q]";
+            const char *hints = "[Space] Freeze  [a] Auto  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q]";
             tui_render_row(&frame, hints, cols, true);
         }
 

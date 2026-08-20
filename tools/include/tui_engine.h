@@ -54,6 +54,11 @@ typedef struct {
 
     /* Rolling reservoir cache */
     tui_reservoir_t reservoir;
+
+    /* Dynamic auto-range control */
+    bool auto_range;
+    double auto_range_threshold;
+    double last_autorange_time_sec;
 } tui_engine_t;
 
 /* Lifecycle */
@@ -69,6 +74,8 @@ histo2d_t *tui_engine_get_snapshot_2d(tui_engine_t *eng);
 /* Reservoir operations */
 bool tui_engine_rebuild_1d(tui_engine_t *eng, uint32_t nbins, double rmin, double rmax, histo_t **out_h);
 bool tui_engine_rebuild_1d_log(tui_engine_t *eng, uint32_t nbins, histo_t **out_h);
+void tui_engine_set_autorange(tui_engine_t *eng, bool enable, double threshold);
+bool tui_engine_check_and_autorange(tui_engine_t *eng);
 void tui_engine_clear(tui_engine_t *eng);
 bool tui_engine_is_finished(tui_engine_t *eng);
 

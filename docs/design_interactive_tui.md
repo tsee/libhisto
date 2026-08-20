@@ -114,6 +114,7 @@ For explicit configuration and precise numeric inputs, pressing **`:`** opens an
 | `:bins <N>` | `:b <N>` | Set exact number of bins (e.g. `:bins 100`, `:b 250`). |
 | `:range <MIN> <MAX>` | `:r <MIN> <MAX>` | Set explicit visible coordinate range (e.g. `:range 0 500`). |
 | `:min <X>`, `:max <X>` | | Set single boundary (e.g. `:min 10.5`). |
+| `:autorange [on|off|<thresh>]` | `:a` | Toggle or configure outlier-resistant dynamic auto-ranging (`:autorange on`, `:a off`, `:a 0.05`). |
 | `:fit <MODEL>` | `:f <MODEL>` | Run parametric fit (`:fit gaussian`, `:fit exp`, `:fit poly 3`, `:fit bw`). |
 | `:kde [on|off|<KERNEL>]`| `:k` | Configure KDE overlay (`:kde gaussian`, `:kde epanechnikov`, `:kde off`). |
 | `:scale <MODE>` | | Set scale (`:scale logy`, `:scale logx`, `:scale loglog`, `:scale lin`). |
@@ -141,8 +142,9 @@ Pressing **`?`** (or typing `:help`) displays an in-terminal interactive help ch
 │ NAVIGATION & VIEWPORT              DISPLAY & SCALING              ANALYSIS & CURVES       │
 │   + / -       Zoom range in / out    l     Cycle Log scale (X/Y)    k   Toggle KDE curve  │
 │   h / l, ←/→  Pan view left / right  L     Scale Selector Modal     f   Toggle Curve Fit  │
-│   0           Reset to full range    e     Toggle Error bars (±σ)   m   Cycle Moments mode│
-│   r / R       Rebin coarser / finer  S     Toggle Sparkline mode    Tab Cycle 1D/2D/CDF   │
+│   0           Reset to full range    a     Toggle Auto-Range        m   Cycle Moments mode│
+│   r / R       Rebin coarser / finer  e     Toggle Error bars (±σ)   Tab Cycle 1D/2D/CDF   │
+│                                      C     Toggle TrueColor/Mono                          │
 │                                                                                           │
 │ COMMANDS & SNAPSHOTS               STREAM CONTROL                                         │
 │   :           Open Command Prompt    Space Pause / Freeze display (Ingestion continues)   │
@@ -163,7 +165,7 @@ Pressing **`?`** (or typing `:help`) displays an in-terminal interactive help ch
 ┌─ libhisto top ────────────────────────── [LIVE: 142.5 k-ops/s | N=250,000 | W=250,000.0] ───┐
 │ Mean: 45.21 ± 8.12 │ Median: 44.95 │ IQR: 10.42 │ P95: 58.80 │ P99: 64.12 │ Mode: 44.80     │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Range: [10.00, 80.00] │ Bins: 35 (Δx=2.00) │ Scale: [X: LIN | Y: LOG10] │ KDE: GAUSSIAN     │
+│ Range: [10.00, 80.00] │ Bins: 35 (Δx=2.00) │ Scale: [X: LIN | Y: LOG10] │ Auto: ON │ KDE    │
 │                                                                                             │
 │ [10.0, 12.0)      12 │ █▎                                                                   │
 │ [12.0, 14.0)      45 │ ██▏                                                                  │
@@ -181,7 +183,7 @@ Pressing **`?`** (or typing `:help`) displays an in-terminal interactive help ch
 │ [36.0, 38.0)     110 │ ██▉                                                                  │
 │ [38.0, 40.0)      32 │ █▉                                                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ [Space] Freeze  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [+/-] Zoom  [:] Cmd  [?] Help  [q]  │
+│ [Space] Freeze  [a] Auto  [l] Log  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q]    │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -192,8 +194,9 @@ Pressing **`?`** (or typing `:help`) displays an in-terminal interactive help ch
 | Key | Action |
 | :--- | :--- |
 | **`Space`** | **Pause / Freeze Display** (background ingestion continues without pipe backpressure). |
-| **`:`** | **Open Command Prompt** (`:bins 100`, `:range 0 500`, `:fit gaussian`, `:export out.json`). |
+| **`:`** | **Open Command Prompt** (`:bins 100`, `:range 0 500`, `:autorange on`, `:fit gaussian`). |
 | **`?`** | **Open Online Help Modal** with full interactive keybinding cheatsheet. |
+| **`a`** / **`A`** | **Toggle Dynamic Auto-Ranging** (outlier-resistant $p_1$--$p_{99}$ reservoir re-ranging). |
 | **`l` / `L`** | **Toggle / Select Logarithmic Scale** (Log Y counts, Log X coordinates, Log-Log, Log Color). |
 | **`k`** | **Toggle KDE Density Curve Overlay** and Silverman bandwidth estimation. |
 | **`f`** | **Toggle Levenberg-Marquardt Curve Fit** with parameter error badges. |
