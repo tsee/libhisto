@@ -34,6 +34,9 @@ if os.path.exists(os.path.join(ROOT_DIR, "include", "histo", "histo.h")):
         os.path.join(ROOT_DIR, "tools", "src", "cmd_stats.c"),
         os.path.join(ROOT_DIR, "tools", "src", "cmd_cmp.c"),
         os.path.join(ROOT_DIR, "tools", "src", "cmd_fit.c"),
+        os.path.join(ROOT_DIR, "tools", "src", "cmd_top.c"),
+        os.path.join(ROOT_DIR, "tools", "src", "tui_term.c"),
+        os.path.join(ROOT_DIR, "tools", "src", "tui_engine.c"),
     ]
 else:
     # Standalone sdist with bundled sources
@@ -63,6 +66,9 @@ else:
         os.path.join(BASE_DIR, "bundled", "tools", "src", "cmd_stats.c"),
         os.path.join(BASE_DIR, "bundled", "tools", "src", "cmd_cmp.c"),
         os.path.join(BASE_DIR, "bundled", "tools", "src", "cmd_fit.c"),
+        os.path.join(BASE_DIR, "bundled", "tools", "src", "cmd_top.c"),
+        os.path.join(BASE_DIR, "bundled", "tools", "src", "tui_term.c"),
+        os.path.join(BASE_DIR, "bundled", "tools", "src", "tui_engine.c"),
     ]
 
 
