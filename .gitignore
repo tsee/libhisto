@@ -1,8 +1,9 @@
 # Build artifacts
 build/
 build-*/
-bin/
-lib/
+/bin/
+/lib/
+
 *.o
 *.obj
 *.so
