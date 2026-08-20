@@ -28,7 +28,7 @@ Welcome to **libhisto**! This manual is organized as a progressive-disclosure gu
 
 ## Level 0: 30-Second Quickstart
 
-`libhisto` is a high-performance, zero-dependency ISO C99 library and Unix CLI toolkit for distribution tracking, statistical estimation, curve fitting, and terminal visualization.
+`libhisto` is a high-performance, zero-dependency ISO C99 library and Unix CLI toolkit for 1D and 2D distribution tracking, bivariate spatial analysis, statistical estimation, kernel density estimation, parametric curve fitting, and real-time terminal visualization.
 
 ### 0.1 Terminal Power Showcase (Copy-Pasteable One-Liners)
 

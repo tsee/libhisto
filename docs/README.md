@@ -3,7 +3,7 @@
 This directory contains technical guides, reference specifications, and manuals for `libhisto`.
 
 ## Core Guides & Manuals
-- [User Manual & Architecture Reference (Levels 0–5)](manual.md): Comprehensive guide to 1D histograms, moments, CLI, bindings, and benchmarks.
+- [User Manual & Architecture Reference (Levels 0–6)](manual.md): Comprehensive guide to 1D and 2D histograms, moments, curve fitting, KDE, CLI, bindings, and benchmarks.
 - [Real-Time Interactive Monitor Guide (`histo top`)](top_manual.md): Dedicated manual for 1D & 2D real-time interactive terminal streaming, keybindings, KDE/fit overlays, and production recipes.
 - [Kernel Density Estimation & Automated Binning Guide](kde_guide.md): 1D continuous KDE engine, standard kernels, bandwidth selectors, and optimal binning heuristics.
 - [Curve Fitting & Non-Linear Regression Guide](curve_fitting_guide.md): Levenberg-Marquardt optimizer, built-in parametric models, custom callbacks, and covariance interpretation.

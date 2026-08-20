@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 
 project(libhisto
     VERSION 0.1.0
-    DESCRIPTION "Fast, portable, memory-safe 1D histogramming C library"
+    DESCRIPTION "Fast, portable, memory-safe 1D and 2D histogramming and statistical computing C library"
     LANGUAGES C
 )
 

@@ -1,6 +1,6 @@
 # libhisto
 
-**libhisto** is a high-performance, portable, memory-safe ISO C99 1D histogramming and quantile sketch library designed for high-throughput scientific computing, physics simulations, telemetry ingestion, and general statistical analysis. It offers exact online Welford moments, robust non-parametric statistics, DDSketch dynamic quantile sketches, SIMD vector acceleration (AVX-512 / AVX2 / NEON-ready), curve fitting (Levenberg-Marquardt), two-distribution distance metrics, deterministic binary serialization, and zero-allocation ingestion loops capable of processing hundreds of millions of samples per second.
+**libhisto** is a high-performance, portable, memory-safe ISO C99 1D and 2D histogramming, kernel density estimation, and quantile sketch library designed for high-throughput scientific computing, physics simulations, spatial and time-series telemetry ingestion, and general statistical analysis. It offers exact online 1D and bivariate Welford moments, robust non-parametric statistics, continuous KDE, Levenberg-Marquardt parametric curve fitting, 2D marginal projections and slices, DDSketch dynamic quantile sketches, SIMD vector acceleration (AVX-512 / AVX2 / NEON), two-distribution statistical distance metrics, deterministic binary/JSON serialization, interactive 60 FPS terminal dashboards (`histo top`), and zero-allocation ingestion loops capable of processing hundreds of millions of samples per second.
 
 ---
 
