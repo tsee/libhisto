@@ -1,7 +1,7 @@
 Revision history for Perl extension Math::Histo::PDL.
 
-0.1.1   2026-08-21
-        - Initial CPAN release of Math::Histo::PDL.
+0.2.0   2026-08-21
+        - Initial release of Math::Histo::PDL distribution.
         - Zero-copy 1D and 2D piddle ingestion via get_dataref into libhisto fill_packed_f64.
         - Transparent coercion for non-double data types and non-contiguous piddle slices.
         - Full weighted histogram ingestion support.

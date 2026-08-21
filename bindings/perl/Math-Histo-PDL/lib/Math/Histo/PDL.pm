@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use 5.010;
 
-our $VERSION = '0.1.1';
+our $VERSION = '0.2.0';
 
 use Math::Histo 0.1.1;
 use Math::Histo::2D;

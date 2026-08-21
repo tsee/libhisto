@@ -5,7 +5,7 @@ use warnings;
 use 5.008001;
 use base qw( Alien::Base );
 
-our $VERSION = '0.1.1';
+our $VERSION = '0.2.0';
 
 
 1;
