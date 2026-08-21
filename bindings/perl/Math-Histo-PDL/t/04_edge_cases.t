@@ -3,8 +3,14 @@ use warnings;
 use FindBin qw($Bin);
 use lib "$Bin/../lib", "$Bin/../../Math-Histo/blib/lib", "$Bin/../../Math-Histo/blib/arch", "$Bin/../../Alien-libhisto/blib/lib", "$Bin/../../Alien-libhisto/blib/arch";
 use Test2::V0 '!float';
-use PDL;
+
+BEGIN {
+    eval { require PDL; PDL->import; 1 }
+        or plan skip_all => 'PDL is required for this test';
+}
+
 use Math::Histo;
+use Math::Histo::2D;
 use Math::Histo::PDL qw(:all);
 
 subtest 'Empty piddles' => sub {
