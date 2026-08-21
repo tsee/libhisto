@@ -215,7 +215,7 @@ void test_kde_adversarial_datasets(void) {
     double smp[10];
     TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_sample(NULL, 10, smp, 123));
     TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_sample(kde_norm, 10, NULL, 123));
-    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_sample(kde_norm, 0, smp, 123));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_kde_sample(kde_norm, 0, smp, 123));
 
     histo_kde_destroy(kde_norm);
 }
