@@ -130,6 +130,29 @@ class TestHistogram(unittest.TestCase):
         bhatt = h1.bhattacharyya_distance(h2)
         self.assertAlmostEqual(bhatt, 0.0, places=4)
 
+    def test_plot_and_sparkline(self):
+        h = histo.Histogram(bins=10, range=(0.0, 100.0))
+        for x in [10, 20, 20, 30, 40, 50, 60, 70, 80, 90]:
+            h.fill(float(x))
+
+        # Sparkline
+        spk = h.sparkline(color=False, show=False)
+        self.assertTrue(len(spk) > 0)
+
+        # Plot ASCII / Unicode
+        out = h.plot(style="ascii", color=False, show=False)
+        self.assertIn("0", out)
+        self.assertTrue(len(out) > 0)
+
+        # Top-level plot
+        out_top = histo.plot(h, style="unicode", color=False, show=False)
+        self.assertTrue(len(out_top) > 0)
+
+        # Palettes constant
+        self.assertEqual(len(histo.PALETTES), 8)
+        self.assertIn("viridis", histo.PALETTES)
+        self.assertIn("turbo", histo.PALETTES)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -267,6 +267,16 @@ class Histogram2D:
         return self._raw.mean_y
 
     @property
+    def std_dev_x(self) -> float:
+        """Sample standard deviation along X."""
+        return self._raw.std_dev_x
+
+    @property
+    def std_dev_y(self) -> float:
+        """Sample standard deviation along Y."""
+        return self._raw.std_dev_y
+
+    @property
     def variance_x(self) -> float:
         """Sample variance along X."""
         return self._raw.variance_x
@@ -293,6 +303,44 @@ class Histogram2D:
         """Get accumulated weight in 2D cell (ix, iy)."""
         return self._raw.bin_content(int(ix), int(iy))
 
+    def bin_error(self, ix: int, iy: int) -> float:
+        """Get statistical uncertainty (standard error) of 2D cell (ix, iy)."""
+        return self._raw.bin_error(int(ix), int(iy))
+
+    def bin_sum_w2(self, ix: int, iy: int) -> float:
+        """Get sum of squared weights sum(w^2) of 2D cell (ix, iy)."""
+        return self._raw.bin_sum_w2(int(ix), int(iy))
+
+    def bin_bounds(self, ix: int, iy: int) -> Tuple[float, float, float, float]:
+        """Get bounding box (xmin, xmax, ymin, ymax) of 2D cell (ix, iy)."""
+        return self._raw.bin_bounds(int(ix), int(iy))
+
+    def bin_center(self, ix: int, iy: int) -> Tuple[float, float]:
+        """Get midpoint coordinate (cx, cy) of 2D cell (ix, iy)."""
+        return self._raw.bin_center(int(ix), int(iy))
+
+    def find_bin(self, x: float, y: float) -> Tuple[int, int]:
+        """Locate (ix, iy) bin indices for coordinate pair (x, y)."""
+        return self._raw.find_bin(float(x), float(y))
+
+    def find_region(self, x: float, y: float) -> int:
+        """Identify which of the 9 geometric regions (x, y) falls into."""
+        return self._raw.find_region(float(x), float(y))
+
+    def integral(
+        self,
+        ix_min: Optional[int] = None,
+        ix_max: Optional[int] = None,
+        iy_min: Optional[int] = None,
+        iy_max: Optional[int] = None,
+    ) -> float:
+        """
+        Compute total in-range 2D volume or sub-grid integral over [ix_min, ix_max] x [iy_min, iy_max].
+        """
+        if ix_min is not None and ix_max is not None and iy_min is not None and iy_max is not None:
+            return self._raw.integral(int(ix_min), int(ix_max), int(iy_min), int(iy_max))
+        return self._raw.integral()
+
     def __getitem__(self, idx: Tuple[int, int]) -> float:
         """Index access: h2[ix, iy]."""
         if not isinstance(idx, tuple) or len(idx) != 2:
@@ -300,7 +348,7 @@ class Histogram2D:
         return self.bin_content(idx[0], idx[1])
 
     # -------------------------------------------------------------------------
-    # Projections & Profiles
+    # Projections, Slices & Profiles
     # -------------------------------------------------------------------------
     def project_x(self) -> Histogram:
         """Project 2D histogram onto X-axis, integrating over Y."""
@@ -312,6 +360,16 @@ class Histogram2D:
         raw_1d = self._raw.project_y()
         return Histogram(_raw=raw_1d)
 
+    def slice_x(self, iy_min: int, iy_max: int) -> Histogram:
+        """Slice 2D histogram along X across Y-bin interval [iy_min, iy_max]."""
+        raw_1d = self._raw.slice_x(int(iy_min), int(iy_max))
+        return Histogram(_raw=raw_1d)
+
+    def slice_y(self, ix_min: int, ix_max: int) -> Histogram:
+        """Slice 2D histogram along Y across X-bin interval [ix_min, ix_max]."""
+        raw_1d = self._raw.slice_y(int(ix_min), int(ix_max))
+        return Histogram(_raw=raw_1d)
+
     def profile_x(self) -> Histogram:
         """Compute 1D Profile along X: mean of Y in each X bin."""
         raw_1d = self._raw.profile_x()
@@ -321,6 +379,142 @@ class Histogram2D:
         """Compute 1D Profile along Y: mean of X in each Y bin."""
         raw_1d = self._raw.profile_y()
         return Histogram(_raw=raw_1d)
+
+    # -------------------------------------------------------------------------
+    # Transformations & Arithmetic
+    # -------------------------------------------------------------------------
+    def scale(self, factor: float) -> "Histogram2D":
+        """Scale all bin contents and weights in-place by factor."""
+        self._raw.scale(float(factor))
+        return self
+
+    def normalize(self, target_integral: float = 1.0) -> "Histogram2D":
+        """Normalize 2D histogram in-place such that total volume equals target_integral."""
+        self._raw.normalize(float(target_integral))
+        return self
+
+    def rebin(self, factor_x: int, factor_y: int) -> "Histogram2D":
+        """Return new Histogram2D rebinned by integer factors (factor_x, factor_y)."""
+        raw = self._raw.rebin(int(factor_x), int(factor_y))
+        return Histogram2D(_raw=raw)
+
+    def reset(self) -> None:
+        """Reset all bin contents, moments, and counters to zero."""
+        self._raw.reset()
+
+    def clone(self, empty: bool = False) -> "Histogram2D":
+        """Create exact clone or empty schema copy."""
+        raw = self._raw.clone(empty=empty)
+        return Histogram2D(_raw=raw)
+
+    def add(self, other: "Histogram2D", scale: float = 1.0) -> "Histogram2D":
+        """In-place addition: self += scale * other."""
+        if not isinstance(other, Histogram2D):
+            raise TypeError("other must be a Histogram2D instance")
+        self._raw.add(other._raw, float(scale))
+        return self
+
+    def subtract(self, other: "Histogram2D") -> "Histogram2D":
+        """In-place subtraction: self -= other."""
+        if not isinstance(other, Histogram2D):
+            raise TypeError("other must be a Histogram2D instance")
+        self._raw.subtract(other._raw)
+        return self
+
+    def multiply(self, other: "Histogram2D") -> "Histogram2D":
+        """In-place multiplication: self *= other."""
+        if not isinstance(other, Histogram2D):
+            raise TypeError("other must be a Histogram2D instance")
+        self._raw.multiply(other._raw)
+        return self
+
+    def divide(self, other: "Histogram2D") -> "Histogram2D":
+        """In-place division: self /= other."""
+        if not isinstance(other, Histogram2D):
+            raise TypeError("other must be a Histogram2D instance")
+        self._raw.divide(other._raw)
+        return self
+
+    def __add__(self, other: "Histogram2D") -> "Histogram2D":
+        res = self.clone()
+        return res.add(other)
+
+    def __sub__(self, other: "Histogram2D") -> "Histogram2D":
+        res = self.clone()
+        return res.subtract(other)
+
+    def __mul__(self, other: Union["Histogram2D", float, int]) -> "Histogram2D":
+        res = self.clone()
+        if isinstance(other, (int, float)):
+            return res.scale(float(other))
+        return res.multiply(other)
+
+    def __rmul__(self, other: Union[float, int]) -> "Histogram2D":
+        return self.__mul__(other)
+
+    def __truediv__(self, other: Union["Histogram2D", float, int]) -> "Histogram2D":
+        res = self.clone()
+        if isinstance(other, (int, float)):
+            if float(other) == 0.0:
+                raise ZeroDivisionError("division by zero")
+            return res.scale(1.0 / float(other))
+        return res.divide(other)
+
+    # -------------------------------------------------------------------------
+    # Visualization
+    # -------------------------------------------------------------------------
+    def plot(
+        self,
+        style: str = "unicode",
+        color: Optional[Union[bool, str]] = None,
+        palette: str = "viridis",
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        log: bool = False,
+        show: bool = True,
+    ) -> str:
+        """
+        Render terminal visualization (2D heatmap) of the bivariate histogram.
+        """
+        import tempfile
+        import os
+        import sys
+        import histo.cli as cli
+
+        args = ["plot"]
+        if style:
+            args.append(f"--style={style}")
+        if color is True:
+            args.append("--color=always")
+        elif color is False:
+            args.append("--color=never")
+        elif isinstance(color, str):
+            args.append(f"--color={color}")
+        if palette:
+            args.append(f"--palette={palette}")
+        if width is not None:
+            args.append(f"-w={width}")
+        if height is not None:
+            args.append(f"-H={height}")
+        if log:
+            args.append("-l")
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tf:
+            tf.write(self.to_json())
+            tf_path = tf.name
+
+        try:
+            args.append(tf_path)
+            code, out, err = cli.run(*args)
+            if code != 0 and err:
+                raise RuntimeError(f"histo plot failed: {err}")
+            if show and out:
+                sys.stdout.write(out)
+                sys.stdout.flush()
+            return out
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
 
     def __repr__(self) -> str:
         return (

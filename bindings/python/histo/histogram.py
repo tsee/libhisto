@@ -633,5 +633,77 @@ class Histogram:
         )
         return FitResult(raw_res)
 
+    def plot(
+        self,
+        style: str = "unicode",
+        color: Optional[Union[bool, str]] = None,
+        palette: str = "viridis",
+        sparkline: bool = False,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        log: bool = False,
+        errors: bool = False,
+        fit: Optional[str] = None,
+        kde: bool = False,
+        cdf: bool = False,
+        show: bool = True,
+    ) -> str:
+        """
+        Render terminal visualization of the histogram.
+        """
+        import tempfile
+        import os
+        import sys
+        import histo.cli as cli
+
+        args = ["plot"]
+        if style:
+            args.append(f"--style={style}")
+        if color is True:
+            args.append("--color=always")
+        elif color is False:
+            args.append("--color=never")
+        elif isinstance(color, str):
+            args.append(f"--color={color}")
+        if palette:
+            args.append(f"--palette={palette}")
+        if sparkline:
+            args.append("-S")
+        if width is not None:
+            args.append(f"-w={width}")
+        if height is not None:
+            args.append(f"-H={height}")
+        if log:
+            args.append("-l")
+        if errors:
+            args.append("-e")
+        if fit:
+            args.append(f"--fit={fit}")
+        if kde:
+            args.append("--kde")
+        if cdf:
+            args.append("--cdf")
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tf:
+            tf.write(self.to_json())
+            tf_path = tf.name
+
+        try:
+            args.append(tf_path)
+            code, out, err = cli.run(*args)
+            if code != 0 and err:
+                raise RuntimeError(f"histo plot failed: {err}")
+            if show and out:
+                sys.stdout.write(out)
+                sys.stdout.flush()
+            return out
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
+
+    def sparkline(self, color: Optional[Union[bool, str]] = None, show: bool = True) -> str:
+        """Render a single-line Unicode sparkline summary."""
+        return self.plot(sparkline=True, color=color, show=show)
+
     def __repr__(self) -> str:
         return f"Histogram({self.nbins} bins, range=({self.min:.4g}, {self.max:.4g}), entries={self.num_entries})"

@@ -2,6 +2,7 @@
 libhisto: Fast, portable C histogramming and statistical computing library for Python.
 """
 
+from typing import Tuple, Any
 from histo.constants import (
     VERSION, VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH,
     FLAG_NONE, FLAG_TRACK_SUMW2, FLAG_EXACT_MOMENTS,
@@ -10,7 +11,8 @@ from histo.constants import (
     BIN_RULE_AUTO, BIN_RULE_FD, BIN_RULE_SCOTT, BIN_RULE_STURGES, BIN_RULE_DOANE, BIN_RULE_KNUTH,
     KDE_KERNEL_GAUSSIAN, KDE_KERNEL_EPANECHNIKOV, KDE_KERNEL_UNIFORM, KDE_KERNEL_TRIANGULAR,
     KDE_KERNEL_BIWEIGHT, KDE_KERNEL_COSINE,
-    KDE_BW_SILVERMAN, KDE_BW_SCOTT, KDE_BW_MANUAL
+    KDE_BW_SILVERMAN, KDE_BW_SCOTT, KDE_BW_MANUAL,
+    PALETTES
 )
 from histo.histogram import Histogram
 from histo.histogram2d import Histogram2D
@@ -24,6 +26,19 @@ Histo = Histogram
 Histo2D = Histogram2D
 DDSketch = Sketch
 
+
+def plot(obj, *args, **kwargs) -> str:
+    """Render terminal visualization of a Histogram or Histogram2D."""
+    if hasattr(obj, "plot"):
+        return obj.plot(*args, **kwargs)
+    raise TypeError(f"Object of type '{type(obj).__name__}' does not support plotting")
+
+
+def top(*args) -> Tuple[int, str, str]:
+    """Execute real-time interactive terminal monitor (histo top)."""
+    return cli.run("top", *args)
+
+
 __version__ = VERSION
 __all__ = [
     "Histogram",
@@ -35,6 +50,9 @@ __all__ = [
     "FitResult",
     "KDE",
     "cli",
+    "plot",
+    "top",
+    "PALETTES",
     "VERSION",
     "FLAG_NONE",
     "FLAG_TRACK_SUMW2",

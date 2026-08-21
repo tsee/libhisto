@@ -46,3 +46,15 @@ KDE_BW_SILVERMAN = _libhisto.KDE_BW_SILVERMAN
 KDE_BW_SCOTT = _libhisto.KDE_BW_SCOTT
 KDE_BW_MANUAL = _libhisto.KDE_BW_MANUAL
 
+# Colormap Palettes
+PALETTES = (
+    "viridis",
+    "plasma",
+    "inferno",
+    "magma",
+    "turbo",
+    "cividis",
+    "grayscale",
+    "rainbow",
+)
+

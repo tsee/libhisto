@@ -1465,12 +1465,14 @@ static PyObject *Histo2D_ymax(Histo2DObject *self, void *closure) {
 
 static PyObject *Histo2D_total_weight(Histo2DObject *self, void *closure) { (void)closure; return PyFloat_FromDouble(histo2d_total_weight(self->h2d)); }
 static PyObject *Histo2D_num_entries(Histo2DObject *self, void *closure) { (void)closure; return PyLong_FromUnsignedLongLong(histo2d_num_entries(self->h2d)); }
-static PyObject *Histo2D_mean_x(Histo2DObject *self, void *closure) { (void)closure; double v; histo2d_mean_x(self->h2d, &v); return PyFloat_FromDouble(v); }
-static PyObject *Histo2D_mean_y(Histo2DObject *self, void *closure) { (void)closure; double v; histo2d_mean_y(self->h2d, &v); return PyFloat_FromDouble(v); }
-static PyObject *Histo2D_variance_x(Histo2DObject *self, void *closure) { (void)closure; double v; histo2d_variance_x(self->h2d, &v); return PyFloat_FromDouble(v); }
-static PyObject *Histo2D_variance_y(Histo2DObject *self, void *closure) { (void)closure; double v; histo2d_variance_y(self->h2d, &v); return PyFloat_FromDouble(v); }
-static PyObject *Histo2D_covariance(Histo2DObject *self, void *closure) { (void)closure; double v; histo2d_covariance(self->h2d, &v); return PyFloat_FromDouble(v); }
-static PyObject *Histo2D_correlation(Histo2DObject *self, void *closure) { (void)closure; double v; histo2d_correlation(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_mean_x(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_mean_x(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_mean_y(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_mean_y(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_variance_x(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_variance_x(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_variance_y(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_variance_y(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_std_dev_x(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_std_dev_x(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_std_dev_y(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_std_dev_y(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_covariance(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_covariance(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_correlation(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_correlation(self->h2d, &v); return PyFloat_FromDouble(v); }
 
 static PyGetSetDef Histo2D_getsetters[] = {
     {"nx", (getter)Histo2D_nx, NULL, "Bins along X", NULL},
@@ -1485,6 +1487,8 @@ static PyGetSetDef Histo2D_getsetters[] = {
     {"mean_y", (getter)Histo2D_mean_y, NULL, "Mean Y", NULL},
     {"variance_x", (getter)Histo2D_variance_x, NULL, "Variance X", NULL},
     {"variance_y", (getter)Histo2D_variance_y, NULL, "Variance Y", NULL},
+    {"std_dev_x", (getter)Histo2D_std_dev_x, NULL, "Standard Deviation X", NULL},
+    {"std_dev_y", (getter)Histo2D_std_dev_y, NULL, "Standard Deviation Y", NULL},
     {"covariance", (getter)Histo2D_covariance, NULL, "Covariance", NULL},
     {"correlation", (getter)Histo2D_correlation, NULL, "Pearson correlation", NULL},
     {NULL, NULL, NULL, NULL, NULL}
@@ -1498,6 +1502,185 @@ static PyObject *Histo2D_bin_content(Histo2DObject *self, PyObject *args) {
     histo_status_t st = histo2d_bin_content(self->h2d, ix, iy, &val);
     if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
     return PyFloat_FromDouble(val);
+}
+
+static PyObject *Histo2D_bin_error(Histo2DObject *self, PyObject *args) {
+    unsigned int ix = 0, iy = 0;
+    if (!PyArg_ParseTuple(args, "II", &ix, &iy)) return NULL;
+    double val = 0.0;
+    histo_status_t st = histo2d_bin_error(self->h2d, ix, iy, &val);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return PyFloat_FromDouble(val);
+}
+
+static PyObject *Histo2D_bin_sum_w2(Histo2DObject *self, PyObject *args) {
+    unsigned int ix = 0, iy = 0;
+    if (!PyArg_ParseTuple(args, "II", &ix, &iy)) return NULL;
+    double val = 0.0;
+    histo_status_t st = histo2d_bin_sum_w2(self->h2d, ix, iy, &val);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return PyFloat_FromDouble(val);
+}
+
+static PyObject *Histo2D_bin_bounds(Histo2DObject *self, PyObject *args) {
+    unsigned int ix = 0, iy = 0;
+    if (!PyArg_ParseTuple(args, "II", &ix, &iy)) return NULL;
+    double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0;
+    histo_status_t st = histo2d_bin_bounds(self->h2d, ix, iy, &xmin, &xmax, &ymin, &ymax);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return Py_BuildValue("(dddd)", xmin, xmax, ymin, ymax);
+}
+
+static PyObject *Histo2D_bin_center(Histo2DObject *self, PyObject *args) {
+    unsigned int ix = 0, iy = 0;
+    if (!PyArg_ParseTuple(args, "II", &ix, &iy)) return NULL;
+    double cx = 0.0, cy = 0.0;
+    histo_status_t st = histo2d_bin_center(self->h2d, ix, iy, &cx, &cy);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return Py_BuildValue("(dd)", cx, cy);
+}
+
+static PyObject *Histo2D_find_bin(Histo2DObject *self, PyObject *args) {
+    double x = 0.0, y = 0.0;
+    if (!PyArg_ParseTuple(args, "dd", &x, &y)) return NULL;
+    int64_t ix = 0, iy = 0;
+    histo_status_t st = histo2d_find_bin(self->h2d, x, y, &ix, &iy);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return Py_BuildValue("(LL)", (long long)ix, (long long)iy);
+}
+
+static PyObject *Histo2D_find_region(Histo2DObject *self, PyObject *args) {
+    double x = 0.0, y = 0.0;
+    if (!PyArg_ParseTuple(args, "dd", &x, &y)) return NULL;
+    histo2d_region_t reg = HISTO2D_REGION_CENTER;
+    histo_status_t st = histo2d_find_region(self->h2d, x, y, &reg);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return PyLong_FromLong((long)reg);
+}
+
+static PyObject *Histo2D_integral(Histo2DObject *self, PyObject *args) {
+    unsigned int ix_min = 0, ix_max = 0, iy_min = 0, iy_max = 0;
+    uint32_t nx = histo2d_nbins_x(self->h2d);
+    uint32_t ny = histo2d_nbins_y(self->h2d);
+    if (nx == 0 || ny == 0) return PyFloat_FromDouble(0.0);
+    ix_max = nx - 1;
+    iy_max = ny - 1;
+
+    if (!PyArg_ParseTuple(args, "|IIII", &ix_min, &ix_max, &iy_min, &iy_max)) return NULL;
+
+    double val = 0.0;
+    histo_status_t st;
+    if (PyTuple_Size(args) == 4) {
+        st = histo2d_integral_range(self->h2d, ix_min, ix_max, iy_min, iy_max, &val);
+    } else {
+        st = histo2d_integral(self->h2d, &val);
+    }
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return PyFloat_FromDouble(val);
+}
+
+static PyObject *Histo2D_slice_x(Histo2DObject *self, PyObject *args) {
+    unsigned int iy_min = 0, iy_max = 0;
+    if (!PyArg_ParseTuple(args, "II", &iy_min, &iy_max)) return NULL;
+    histo_t *p = NULL;
+    histo_status_t st = histo2d_slice_x(self->h2d, iy_min, iy_max, &p);
+    if (st != HISTO_OK || !p) { set_histo_error(st, "slice_x failed"); return NULL; }
+    return Histo1D_new_from_ptr(p);
+}
+
+static PyObject *Histo2D_slice_y(Histo2DObject *self, PyObject *args) {
+    unsigned int ix_min = 0, ix_max = 0;
+    if (!PyArg_ParseTuple(args, "II", &ix_min, &ix_max)) return NULL;
+    histo_t *p = NULL;
+    histo_status_t st = histo2d_slice_y(self->h2d, ix_min, ix_max, &p);
+    if (st != HISTO_OK || !p) { set_histo_error(st, "slice_y failed"); return NULL; }
+    return Histo1D_new_from_ptr(p);
+}
+
+static PyObject *Histo2D_scale(Histo2DObject *self, PyObject *args) {
+    double factor = 1.0;
+    if (!PyArg_ParseTuple(args, "d", &factor)) return NULL;
+    histo_status_t st = histo2d_scale(self->h2d, factor);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *Histo2D_normalize(Histo2DObject *self, PyObject *args) {
+    double target = 1.0;
+    if (!PyArg_ParseTuple(args, "|d", &target)) return NULL;
+    histo_status_t st = histo2d_normalize(self->h2d, target);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *Histo2D_rebin(Histo2DObject *self, PyObject *args) {
+    unsigned int fx = 1, fy = 1;
+    if (!PyArg_ParseTuple(args, "II", &fx, &fy)) return NULL;
+    histo2d_t *rebinned = NULL;
+    histo_status_t st = histo2d_rebin(self->h2d, fx, fy, &rebinned);
+    if (st != HISTO_OK || !rebinned) { set_histo_error(st, "rebin failed"); return NULL; }
+    return Histo2D_new_from_ptr(rebinned);
+}
+
+static PyObject *Histo2D_add(Histo2DObject *self, PyObject *args) {
+    PyObject *other_obj = NULL;
+    double scale = 1.0;
+    if (!PyArg_ParseTuple(args, "O!|d", &Histo2DType, &other_obj, &scale)) return NULL;
+    Histo2DObject *other = (Histo2DObject *)other_obj;
+    histo_status_t st = histo2d_add(self->h2d, other->h2d, scale);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *Histo2D_subtract(Histo2DObject *self, PyObject *args) {
+    PyObject *other_obj = NULL;
+    if (!PyArg_ParseTuple(args, "O!", &Histo2DType, &other_obj)) return NULL;
+    Histo2DObject *other = (Histo2DObject *)other_obj;
+    histo_status_t st = histo2d_subtract(self->h2d, other->h2d);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *Histo2D_multiply(Histo2DObject *self, PyObject *args) {
+    PyObject *other_obj = NULL;
+    if (!PyArg_ParseTuple(args, "O!", &Histo2DType, &other_obj)) return NULL;
+    Histo2DObject *other = (Histo2DObject *)other_obj;
+    histo_status_t st = histo2d_multiply(self->h2d, other->h2d);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *Histo2D_divide(Histo2DObject *self, PyObject *args) {
+    PyObject *other_obj = NULL;
+    if (!PyArg_ParseTuple(args, "O!", &Histo2DType, &other_obj)) return NULL;
+    Histo2DObject *other = (Histo2DObject *)other_obj;
+    histo_status_t st = histo2d_divide(self->h2d, other->h2d);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *Histo2D_reset(Histo2DObject *self, PyObject *Py_UNUSED(ignored)) {
+    histo_status_t st = histo2d_reset(self->h2d);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    Py_RETURN_NONE;
+}
+
+static PyObject *Histo2D_clone(Histo2DObject *self, PyObject *args, PyObject *kwargs) {
+    static char *kwlist[] = {"empty", NULL};
+    int empty = 0;
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|p", kwlist, &empty)) return NULL;
+    histo2d_t *cloned = histo2d_clone(self->h2d, empty ? true : false);
+    if (!cloned) {
+        PyErr_SetString(HistoError, "Failed to clone 2D histogram");
+        return NULL;
+    }
+    return Histo2D_new_from_ptr(cloned);
 }
 
 static PyObject *Histo2D_project_x(Histo2DObject *self, PyObject *Py_UNUSED(ignored)) {
@@ -1558,10 +1741,28 @@ static PyMethodDef Histo2D_methods[] = {
     {"fill_n", (PyCFunction)(void(*)(void))Histo2D_fill_n, METH_VARARGS | METH_KEYWORDS, "Batch fill 2D sequences"},
     {"fill_buffer", (PyCFunction)(void(*)(void))Histo2D_fill_buffer, METH_VARARGS | METH_KEYWORDS, "Zero-copy 2D SIMD fill from buffers"},
     {"bin_content", (PyCFunction)(void(*)(void))Histo2D_bin_content, METH_VARARGS, "Get 2D bin content"},
+    {"bin_error", (PyCFunction)(void(*)(void))Histo2D_bin_error, METH_VARARGS, "Get 2D bin uncertainty"},
+    {"bin_sum_w2", (PyCFunction)(void(*)(void))Histo2D_bin_sum_w2, METH_VARARGS, "Get 2D bin sum of squared weights"},
+    {"bin_bounds", (PyCFunction)(void(*)(void))Histo2D_bin_bounds, METH_VARARGS, "Get 2D bin bounding box (xmin, xmax, ymin, ymax)"},
+    {"bin_center", (PyCFunction)(void(*)(void))Histo2D_bin_center, METH_VARARGS, "Get 2D bin midpoint (cx, cy)"},
+    {"find_bin", (PyCFunction)(void(*)(void))Histo2D_find_bin, METH_VARARGS, "Find (ix, iy) bin indices for coordinate (x, y)"},
+    {"find_region", (PyCFunction)(void(*)(void))Histo2D_find_region, METH_VARARGS, "Identify 9-guard region for coordinate (x, y)"},
+    {"integral", (PyCFunction)(void(*)(void))Histo2D_integral, METH_VARARGS, "Calculate 2D volume/integral"},
     {"project_x", (PyCFunction)(void(*)(void))Histo2D_project_x, METH_VARARGS, "Project along X to 1D"},
     {"project_y", (PyCFunction)(void(*)(void))Histo2D_project_y, METH_VARARGS, "Project along Y to 1D"},
+    {"slice_x", (PyCFunction)(void(*)(void))Histo2D_slice_x, METH_VARARGS, "Slice along X across Y-bin interval"},
+    {"slice_y", (PyCFunction)(void(*)(void))Histo2D_slice_y, METH_VARARGS, "Slice along Y across X-bin interval"},
     {"profile_x", (PyCFunction)(void(*)(void))Histo2D_profile_x, METH_NOARGS, "Profile histogram along X"},
     {"profile_y", (PyCFunction)(void(*)(void))Histo2D_profile_y, METH_NOARGS, "Profile histogram along Y"},
+    {"scale", (PyCFunction)(void(*)(void))Histo2D_scale, METH_VARARGS, "Scale 2D histogram by factor"},
+    {"normalize", (PyCFunction)(void(*)(void))Histo2D_normalize, METH_VARARGS, "Normalize 2D histogram to target area"},
+    {"rebin", (PyCFunction)(void(*)(void))Histo2D_rebin, METH_VARARGS, "Rebin 2D histogram by (factor_x, factor_y)"},
+    {"add", (PyCFunction)(void(*)(void))Histo2D_add, METH_VARARGS, "In-place add another 2D histogram"},
+    {"subtract", (PyCFunction)(void(*)(void))Histo2D_subtract, METH_VARARGS, "In-place subtract another 2D histogram"},
+    {"multiply", (PyCFunction)(void(*)(void))Histo2D_multiply, METH_VARARGS, "In-place multiply by another 2D histogram"},
+    {"divide", (PyCFunction)(void(*)(void))Histo2D_divide, METH_VARARGS, "In-place divide by another 2D histogram"},
+    {"reset", (PyCFunction)(void(*)(void))Histo2D_reset, METH_NOARGS, "Reset all 2D bins and moments to zero"},
+    {"clone", (PyCFunction)(void(*)(void))Histo2D_clone, METH_VARARGS | METH_KEYWORDS, "Clone 2D histogram"},
     {"serialize_binary", (PyCFunction)(void(*)(void))Histo2D_serialize_binary, METH_NOARGS, "Serialize to binary bytes"},
     {"serialize_json", (PyCFunction)(void(*)(void))Histo2D_serialize_json, METH_NOARGS, "Serialize to JSON"},
     {NULL, NULL, 0, NULL}
