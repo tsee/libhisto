@@ -17,6 +17,7 @@ CMAKELIST_ROOT = os.path.join(REPO_ROOT, "CMakeLists.txt")
 PYPROJECT_TOML = os.path.join(REPO_ROOT, "bindings", "python", "pyproject.toml")
 PERL_MATH_HISTO = os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo", "lib", "Math", "Histo.pm")
 PERL_ALIEN_HISTO = os.path.join(REPO_ROOT, "bindings", "perl", "Alien-libhisto", "lib", "Alien", "libhisto.pm")
+PERL_MATH_HISTO_PDL = os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo-PDL", "lib", "Math", "Histo", "PDL.pm")
 
 
 def get_core_version():
@@ -82,6 +83,16 @@ def check_all_versions():
         print("[FAIL] Could not find $VERSION in Alien::libhisto")
         status = False
 
+    with open(PERL_MATH_HISTO_PDL, "r", encoding="utf-8") as f:
+        pdl_content = f.read()
+    m = re.search(r'our\s+\$VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', pdl_content)
+    if m:
+        pdl_ver = m.group(1)
+        print(f"[OK] Perl Math::Histo::PDL: {pdl_ver}")
+    else:
+        print("[FAIL] Could not find $VERSION in Math::Histo::PDL")
+        status = False
+
     return status
 
 
@@ -120,7 +131,7 @@ def set_version(new_version):
         f.write(content)
     print(f"[UPDATED] {PYPROJECT_TOML}")
 
-    # 4. Perl Math::Histo & Alien::libhisto
+    # 4. Perl Math::Histo, Alien::libhisto & Math::Histo::PDL
     with open(PERL_MATH_HISTO, "r", encoding="utf-8") as f:
         content = f.read()
     content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
@@ -134,6 +145,13 @@ def set_version(new_version):
     with open(PERL_ALIEN_HISTO, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"[UPDATED] {PERL_ALIEN_HISTO}")
+
+    with open(PERL_MATH_HISTO_PDL, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
+    with open(PERL_MATH_HISTO_PDL, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"[UPDATED] {PERL_MATH_HISTO_PDL}")
 
 
 def main():

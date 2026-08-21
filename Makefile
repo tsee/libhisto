@@ -1,4 +1,4 @@
-.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-dist test-python python-dist test-python-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-python python-dist test-python-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -11,7 +11,7 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-dist test-python test-python-dist test-fuzz test-tsan memcheck docs
+test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl-dist test-python test-python-dist test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
 	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL & PYTHON BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
@@ -31,12 +31,18 @@ test-perl-histo: test-perl-alien
 perl-histo-dist:
 	cd bindings/perl/Math-Histo && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
 
-test-perl: test-perl-alien test-perl-histo
+test-perl-pdl: test-perl-histo
+	cd bindings/perl/Math-Histo-PDL && perl Makefile.PL && $(MAKE) test
+
+perl-pdl-dist:
+	cd bindings/perl/Math-Histo-PDL && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
+
+test-perl: test-perl-alien test-perl-histo test-perl-pdl
 
 test-perl-dist:
 	perl tests/scripts/test_perl_dist.pl
 
-perl-dist: perl-alien-dist perl-histo-dist
+perl-dist: perl-alien-dist perl-histo-dist perl-pdl-dist
 
 test-python:
 	cd bindings/python && python3 setup.py build_ext --inplace && PYTHONPATH=. python3 -m unittest discover -s tests -v
