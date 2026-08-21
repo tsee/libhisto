@@ -368,6 +368,272 @@ void test_tui_engine_zoom_pan_2d(void) {
     fclose(in_fp);
 }
 
+void test_tui_term_mouse_and_shift_tab_parsing(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    /* 1. SGR Mouse Click at (col 12, row 7): \033[<0;12;7M */
+    const char *click_seq = "\033[<0;12;7M";
+    TEST_ASSERT_EQUAL((int)strlen(click_seq), write(fds[1], click_seq, strlen(click_seq)));
+    tui_key_event_t ev1 = tui_term_read_key(fds[0], 100);
+    TEST_ASSERT_EQUAL(TUI_KEY_MOUSE_CLICK, ev1.type);
+    TEST_ASSERT_EQUAL_INT(12, ev1.mouse_x);
+    TEST_ASSERT_EQUAL_INT(7, ev1.mouse_y);
+
+    /* 2. SGR Mouse Scroll Up at (col 25, row 10): \033[<64;25;10M */
+    const char *scroll_up_seq = "\033[<64;25;10M";
+    TEST_ASSERT_EQUAL((int)strlen(scroll_up_seq), write(fds[1], scroll_up_seq, strlen(scroll_up_seq)));
+    tui_key_event_t ev2 = tui_term_read_key(fds[0], 100);
+    TEST_ASSERT_EQUAL(TUI_KEY_MOUSE_SCROLL_UP, ev2.type);
+    TEST_ASSERT_EQUAL_INT(25, ev2.mouse_x);
+    TEST_ASSERT_EQUAL_INT(10, ev2.mouse_y);
+
+    /* 3. SGR Mouse Scroll Down at (col 30, row 15): \033[<65;30;15M */
+    const char *scroll_dn_seq = "\033[<65;30;15M";
+    TEST_ASSERT_EQUAL((int)strlen(scroll_dn_seq), write(fds[1], scroll_dn_seq, strlen(scroll_dn_seq)));
+    tui_key_event_t ev3 = tui_term_read_key(fds[0], 100);
+    TEST_ASSERT_EQUAL(TUI_KEY_MOUSE_SCROLL_DOWN, ev3.type);
+    TEST_ASSERT_EQUAL_INT(30, ev3.mouse_x);
+    TEST_ASSERT_EQUAL_INT(15, ev3.mouse_y);
+
+    /* 4. Shift-Tab escape sequence: \033[Z */
+    const char *shift_tab_seq = "\033[Z";
+    TEST_ASSERT_EQUAL((int)strlen(shift_tab_seq), write(fds[1], shift_tab_seq, strlen(shift_tab_seq)));
+    tui_key_event_t ev4 = tui_term_read_key(fds[0], 100);
+    TEST_ASSERT_EQUAL(TUI_KEY_TAB, ev4.type);
+    TEST_ASSERT_EQUAL_INT(-1, ev4.ch);
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
+void test_tui_engine_multi_column_switching(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 1000, 0.0, 1000.0, HISTO_FLAG_TRACK_SUMW2, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Write 30 rows with 4 columns: Col1=10, Col2=100, Col3=500, Col4=900 */
+    for (int i = 0; i < 30; i++) {
+        const char *line = "10.0  100.0  500.0  900.0\n";
+        TEST_ASSERT_EQUAL((int)strlen(line), write(fds[1], line, strlen(line)));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* Initial active column is 1: Mean should be ~10.0 */
+    histo_t *snap1 = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(snap1);
+    double m1 = 0;
+    histo_mean(snap1, &m1);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 10.0, m1);
+    histo_destroy(snap1);
+
+    /* Switch to column 2: Mean should be ~100.0 */
+    histo_t *snap2 = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_column(&eng, 2, 0, 0, &snap2, NULL));
+    TEST_ASSERT_NOT_NULL(snap2);
+    double m2 = 0;
+    histo_mean(snap2, &m2);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 100.0, m2);
+    histo_destroy(snap2);
+
+    /* Switch to column 3: Mean should be ~500.0 */
+    histo_t *snap3 = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_column(&eng, 3, 0, 0, &snap3, NULL));
+    TEST_ASSERT_NOT_NULL(snap3);
+    double m3 = 0;
+    histo_mean(snap3, &m3);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 500.0, m3);
+    histo_destroy(snap3);
+
+    /* Switch to column 4: Mean should be ~900.0 */
+    histo_t *snap4 = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_column(&eng, 4, 0, 0, &snap4, NULL));
+    TEST_ASSERT_NOT_NULL(snap4);
+    double m4 = 0;
+    histo_mean(snap4, &m4);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 900.0, m4);
+    histo_destroy(snap4);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_rolling_window(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 110, 0.0, 110.0, 0, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Write 100 samples from 1.0 to 100.0 */
+    for (int i = 1; i <= 100; i++) {
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "%d\n", i);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* Restrict window to last 10 samples (91 to 100) */
+    histo_t *win_snap = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_window(&eng, 10, &win_snap, NULL));
+    TEST_ASSERT_NOT_NULL(win_snap);
+    TEST_ASSERT_EQUAL_UINT64(10, histo_num_entries(win_snap));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 10.0, histo_total_weight(win_snap));
+
+    double mean = 0.0;
+    histo_mean(win_snap, &mean);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 95.5, mean);
+    histo_destroy(win_snap);
+
+    /* Reset window to 0 (all samples) */
+    histo_t *all_snap = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_window(&eng, 0, &all_snap, NULL));
+    TEST_ASSERT_NOT_NULL(all_snap);
+    TEST_ASSERT_EQUAL_UINT64(100, histo_num_entries(all_snap));
+    histo_destroy(all_snap);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_exponential_decay(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 50, 0.0, 100.0, 0, false));
+    tui_engine_set_decay(&eng, 0.5); /* decay rate lambda = 0.5 */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 0.5, eng.decay_lambda);
+
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Write 10 samples */
+    for (int i = 1; i <= 10; i++) {
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "%d\n", i * 5);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    histo_t *snap = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(snap);
+    TEST_ASSERT_TRUE(histo_total_weight(snap) > 0.0);
+    histo_destroy(snap);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_snapshot_export_roundtrip(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 25, 0.0, 100.0, 0, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    for (int i = 1; i <= 50; i++) {
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "%d\n", i);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* Export binary snapshot to temp file */
+    const char *bin_path = "/tmp/test_snapshot.histo";
+    TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, bin_path, false));
+
+    /* Read back file and deserialize */
+    FILE *bfp = fopen(bin_path, "rb");
+    TEST_ASSERT_NOT_NULL(bfp);
+    fseek(bfp, 0, SEEK_END);
+    long sz = ftell(bfp);
+    fseek(bfp, 0, SEEK_SET);
+    void *buf = malloc((size_t)sz);
+    TEST_ASSERT_EQUAL((size_t)sz, fread(buf, 1, (size_t)sz, bfp));
+    fclose(bfp);
+
+    histo_t *deser = NULL;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_deserialize_binary(buf, (size_t)sz, &deser));
+    TEST_ASSERT_NOT_NULL(deser);
+    TEST_ASSERT_EQUAL_UINT64(50, histo_num_entries(deser));
+    double d_mean = 0.0;
+    histo_mean(deser, &d_mean);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 25.5, d_mean);
+    histo_destroy(deser);
+    free(buf);
+    unlink(bin_path);
+
+    /* Export JSON snapshot */
+    const char *json_path = "/tmp/test_snapshot.json";
+    TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, json_path, true));
+
+    FILE *jfp = fopen(json_path, "r");
+    TEST_ASSERT_NOT_NULL(jfp);
+    fseek(jfp, 0, SEEK_END);
+    long jsz = ftell(jfp);
+    fseek(jfp, 0, SEEK_SET);
+    char *jbuf = (char *)malloc((size_t)jsz + 1);
+    TEST_ASSERT_EQUAL((size_t)jsz, fread(jbuf, 1, (size_t)jsz, jfp));
+    jbuf[jsz] = '\0';
+    fclose(jfp);
+
+    histo_t *j_deser = NULL;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_deserialize_json(jbuf, &j_deser));
+    TEST_ASSERT_NOT_NULL(j_deser);
+    TEST_ASSERT_EQUAL_UINT64(50, histo_num_entries(j_deser));
+    histo_destroy(j_deser);
+    free(jbuf);
+    unlink(json_path);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
@@ -379,5 +645,10 @@ int main(void) {
     RUN_TEST(test_tui_engine_weights);
     RUN_TEST(test_tui_engine_zoom_pan_1d);
     RUN_TEST(test_tui_engine_zoom_pan_2d);
+    RUN_TEST(test_tui_term_mouse_and_shift_tab_parsing);
+    RUN_TEST(test_tui_engine_multi_column_switching);
+    RUN_TEST(test_tui_engine_rolling_window);
+    RUN_TEST(test_tui_engine_exponential_decay);
+    RUN_TEST(test_tui_engine_snapshot_export_roundtrip);
     return UNITY_END();
 }

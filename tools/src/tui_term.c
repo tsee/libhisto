@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ioctl.h>
@@ -97,8 +98,8 @@ bool tui_term_raw_enter(void) {
     }
     term_is_raw = true;
 
-    /* Enter alternate screen and hide cursor */
-    printf("\033[?1049h\033[?25l");
+    /* Enter alternate screen, hide cursor, and enable SGR 1006 mouse tracking */
+    printf("\033[?1049h\033[?25l\033[?1000h\033[?1006h");
     fflush(stdout);
 #endif
     return true;
@@ -111,8 +112,8 @@ void tui_term_raw_leave(void) {
     if (fd >= 0) {
         tcsetattr(fd, TCSAFLUSH, &orig_termios);
     }
-    /* Exit alternate screen and show cursor */
-    printf("\033[?25h\033[?1049l");
+    /* Disable mouse tracking, show cursor, and exit alternate screen */
+    printf("\033[?1006l\033[?1000l\033[?25h\033[?1049l");
     fflush(stdout);
     term_is_raw = false;
 #endif
@@ -154,7 +155,7 @@ void tui_term_get_size(int *out_cols, int *out_rows) {
 }
 
 tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
-    tui_key_event_t ev = { .type = TUI_KEY_NONE, .ch = 0 };
+    tui_key_event_t ev = { .type = TUI_KEY_NONE, .ch = 0, .mouse_x = 0, .mouse_y = 0, .mouse_btn = 0 };
 
 #if !defined(_WIN32)
     if (g_resized) {
@@ -175,14 +176,17 @@ tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
     }
 
     if (c == '\033') {
-        char seq[8];
+        char seq[64];
         seq[0] = '\033';
         int n = 1;
-        while (n < 7) {
+        while (n < 63) {
             struct pollfd pfd_seq = { .fd = tty_fd, .events = POLLIN, .revents = 0 };
             if (poll(&pfd_seq, 1, 10) > 0 && (pfd_seq.revents & POLLIN)) {
                 if (read(tty_fd, &seq[n], 1) == 1) {
+                    char last_ch = seq[n];
                     n++;
+                    if (seq[1] == '[' && seq[2] == '<' && (last_ch == 'M' || last_ch == 'm')) break;
+                    if (n >= 4 && (last_ch == '~' || isalpha((unsigned char)last_ch))) break;
                 } else break;
             } else break;
         }
@@ -195,7 +199,35 @@ tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
         }
 
         if (seq[1] == '[') {
-            if (seq[2] >= '0' && seq[2] <= '9') {
+            if (seq[2] == '<') {
+                /* SGR 1006 mouse event: \033[<btn;x;y(M|m) */
+                int btn = 0, mx = 0, my = 0;
+                char act = 0;
+                if (sscanf(seq + 3, "%d;%d;%d%c", &btn, &mx, &my, &act) >= 3) {
+                    if (btn == 64) {
+                        ev.type = TUI_KEY_MOUSE_SCROLL_UP;
+                        ev.mouse_x = mx;
+                        ev.mouse_y = my;
+                        return ev;
+                    } else if (btn == 65) {
+                        ev.type = TUI_KEY_MOUSE_SCROLL_DOWN;
+                        ev.mouse_x = mx;
+                        ev.mouse_y = my;
+                        return ev;
+                    } else if (act == 'M' || act == 0) {
+                        ev.type = TUI_KEY_MOUSE_CLICK;
+                        ev.mouse_btn = btn;
+                        ev.mouse_x = mx;
+                        ev.mouse_y = my;
+                        return ev;
+                    }
+                }
+            } else if (seq[2] == 'Z') {
+                /* Shift-Tab (back-tab) */
+                ev.type = TUI_KEY_TAB;
+                ev.ch = -1;
+                return ev;
+            } else if (seq[2] >= '0' && seq[2] <= '9') {
                 if (seq[3] == '~') {
                     switch (seq[2]) {
                         case '1': ev.type = TUI_KEY_HOME; break;

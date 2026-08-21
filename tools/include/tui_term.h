@@ -27,12 +27,18 @@ typedef enum {
     TUI_KEY_HOME,
     TUI_KEY_END,
     TUI_KEY_CTRL_C,
-    TUI_KEY_RESIZE
+    TUI_KEY_RESIZE,
+    TUI_KEY_MOUSE_CLICK,
+    TUI_KEY_MOUSE_SCROLL_UP,
+    TUI_KEY_MOUSE_SCROLL_DOWN
 } tui_key_type_t;
 
 typedef struct {
     tui_key_type_t type;
     int ch;
+    int mouse_x;
+    int mouse_y;
+    int mouse_btn;
 } tui_key_event_t;
 
 /* Double-buffered frame buffer */

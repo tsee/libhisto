@@ -52,6 +52,9 @@ typedef struct {
     bool paused;
     bool cmd_active;
     bool log_z;  /* 2D: logarithmic intensity scaling */
+    bool compact_header;
+    bool auto_bins;
+    int inspect_row;
 
     char cmd_buf[256];
     size_t cmd_len;
@@ -537,15 +540,20 @@ static void render_help_viewport(tui_frame_t *f, const tui_state_t *st, int widt
         "── Interactive Help Cheatsheet ───────────────────────────────────────────",
         "",
         "NAVIGATION & VIEWPORT              DISPLAY & SCALING",
-        "  + / -       Zoom in / out          l   Cycle Log scales (Y, X, Log-Log)",
-        "  h / l, ←/→  Pan viewport left/right  p   Cycle color palettes",
-        "  0           Reset to full range    a   Toggle Dynamic Auto-Range",
-        "  r / R       Rebin coarser / finer  C   Toggle TrueColor / Monochrome",
-        "  k           Toggle KDE curve       f   Toggle Curve Fit overlay",
+        "  + / - , Wheel Zoom in / out          l   Cycle Log scales (Y, X, Log-Log)",
+        "  ←/→, h/l    Pan viewport left/right  p   Cycle color palettes",
+        "  0           Reset to full range      a   Toggle Dynamic Auto-Range",
+        "  r / R       Rebin coarser / finer    C   Toggle TrueColor / Monochrome",
+        "  k           Toggle KDE curve         f   Toggle Curve Fit overlay",
+        "  Tab / 1..9  Switch active column     s   Save snapshot to disk",
+        "  w           Cycle rolling window     H   Toggle Compact header mode",
+        "  B           Auto-fit bins to rows    Click  Inspect bin details",
         "COMMANDS & PROMPT (:)",
-        "  :bins <N>       Set bin count (e.g. :b 80)     :palette <NAME> Set color palette",
+        "  :bins <N|auto>  Set bin count / auto-fit       :save [path]    Save binary / JSON snapshot",
+        "  :col <N>        Select metric column (1..16)   :window <N>     Set rolling window size",
+        "  :decay <lambda> Set exponential decay rate     :compact [on]   Toggle compact header",
         "  :range A B      Set range (e.g. :r 0 100)      [Space] Freeze / Unfreeze display",
-        "  :autorange [on|off] Toggle dynamic autorange   c       Clear all accumulators",
+        "  :autorange      Toggle dynamic autorange       c       Clear all accumulators",
         "  :help           Open full help modal           q       Quit cleanly",
         "",
         "Press [?], [Esc], or [Space] to dismiss this help window."
@@ -571,16 +579,79 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
     if (strncasecmp(cmd, "bins ", 5) == 0 || strncasecmp(cmd, "b ", 2) == 0) {
         const char *arg = strchr(cmd, ' ');
         if (arg) {
-            uint32_t n = (uint32_t)atoi(arg + 1);
-            if (n > 0 && n <= 100000) {
-                tui_engine_rebuild_1d(eng, n, 0, 0, NULL);
+            while (*arg == ' ') arg++;
+            if (strcasecmp(arg, "auto") == 0) {
+                st->auto_bins = true;
+                snprintf(st->status_msg, sizeof(st->status_msg), "Auto-Bins: ON");
+                st->status_msg_time = cli_get_time_sec();
+            } else {
+                st->auto_bins = false;
+                uint32_t n = (uint32_t)atoi(arg);
+                if (n > 0 && n <= 100000) {
+                    tui_engine_rebuild_1d(eng, n, 0, 0, NULL);
+                }
             }
         }
     } else if (strncasecmp(cmd, "range ", 6) == 0 || strncasecmp(cmd, "r ", 2) == 0) {
         double rmin = 0, rmax = 0;
         if (sscanf(cmd + (*cmd == 'r' ? 2 : 6), "%lf %lf", &rmin, &rmax) == 2 && rmin < rmax) {
+            st->auto_bins = false;
             tui_engine_rebuild_1d(eng, 50, rmin, rmax, NULL);
         }
+    } else if (strncasecmp(cmd, "save", 4) == 0 || strncasecmp(cmd, "s ", 2) == 0 || strncasecmp(cmd, "export", 6) == 0 || strncasecmp(cmd, "dump", 4) == 0) {
+        const char *arg = strchr(cmd, ' ');
+        char path_buf[256];
+        if (arg) {
+            while (*arg == ' ') arg++;
+            snprintf(path_buf, sizeof(path_buf), "%s", arg);
+        } else {
+            snprintf(path_buf, sizeof(path_buf), "./histo_snapshot_%ld.histo", (long)time(NULL));
+        }
+        bool is_json = (strstr(path_buf, ".json") != NULL);
+        bool ok = tui_engine_export_snapshot(eng, path_buf, is_json);
+        snprintf(st->status_msg, sizeof(st->status_msg), ok ? "Saved: %s" : "Failed to save: %s", path_buf);
+        st->status_msg_time = cli_get_time_sec();
+    } else if (strncasecmp(cmd, "col ", 4) == 0 || strncasecmp(cmd, "c ", 2) == 0) {
+        const char *arg = strchr(cmd, ' ');
+        if (arg) {
+            int c = atoi(arg + 1);
+            if (c >= 1 && c <= 16) {
+                tui_engine_set_column(eng, c, 0, 0, st->paused ? &st->frozen_snapshot : NULL, NULL);
+                snprintf(st->status_msg, sizeof(st->status_msg), "Switched to Column %d", c);
+                st->status_msg_time = cli_get_time_sec();
+            }
+        }
+    } else if (strncasecmp(cmd, "xcol ", 5) == 0) {
+        int c = atoi(cmd + 5);
+        if (c >= 1 && c <= 16) {
+            tui_engine_set_column(eng, 0, c, 0, NULL, st->paused ? &st->frozen_snapshot_2d : NULL);
+            snprintf(st->status_msg, sizeof(st->status_msg), "Switched X-Column to %d", c);
+            st->status_msg_time = cli_get_time_sec();
+        }
+    } else if (strncasecmp(cmd, "ycol ", 5) == 0) {
+        int c = atoi(cmd + 5);
+        if (c >= 1 && c <= 16) {
+            tui_engine_set_column(eng, 0, 0, c, NULL, st->paused ? &st->frozen_snapshot_2d : NULL);
+            snprintf(st->status_msg, sizeof(st->status_msg), "Switched Y-Column to %d", c);
+            st->status_msg_time = cli_get_time_sec();
+        }
+    } else if (strncasecmp(cmd, "window ", 7) == 0 || strncasecmp(cmd, "w ", 2) == 0) {
+        const char *arg = strchr(cmd, ' ');
+        if (arg) {
+            size_t win = (size_t)atol(arg + 1);
+            tui_engine_set_window(eng, win, st->paused ? &st->frozen_snapshot : NULL, st->paused ? &st->frozen_snapshot_2d : NULL);
+            snprintf(st->status_msg, sizeof(st->status_msg), win ? "Window: Last %zu samples" : "Window: ALL samples", win);
+            st->status_msg_time = cli_get_time_sec();
+        }
+    } else if (strncasecmp(cmd, "decay ", 6) == 0) {
+        double d = atof(cmd + 6);
+        tui_engine_set_decay(eng, d);
+        snprintf(st->status_msg, sizeof(st->status_msg), "Decay rate: %.3f/s", d);
+        st->status_msg_time = cli_get_time_sec();
+    } else if (strncasecmp(cmd, "compact", 7) == 0 || strcasecmp(cmd, "H") == 0) {
+        st->compact_header = !st->compact_header;
+        snprintf(st->status_msg, sizeof(st->status_msg), "Compact header: %s", st->compact_header ? "ON" : "OFF");
+        st->status_msg_time = cli_get_time_sec();
     } else if (strncasecmp(cmd, "palette", 7) == 0 || (strncasecmp(cmd, "p", 1) == 0 && (cmd[1] == ' ' || cmd[1] == '\0'))) {
         const char *arg = strchr(cmd, ' ');
         if (arg) {
@@ -884,7 +955,53 @@ int cmd_top_main(int argc, char **argv) {
                     st.modal = MODAL_NONE;
                 }
             } else {
-                if (ev.type == TUI_KEY_LEFT) {
+                if (ev.type == TUI_KEY_TAB) {
+                    int cur_c = eng.val_col;
+                    if (ev.ch == -1) { /* Shift-Tab */
+                        cur_c = (cur_c > 1) ? cur_c - 1 : (eng.reservoir.num_cols > 0 ? (int)eng.reservoir.num_cols : 9);
+                    } else { /* Tab */
+                        cur_c = (cur_c < (int)eng.reservoir.num_cols && cur_c < 16) ? cur_c + 1 : 1;
+                    }
+                    tui_engine_set_column(&eng, cur_c, 0, 0, st.paused ? &st.frozen_snapshot : NULL, NULL);
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Switched to Column %d", cur_c);
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_MOUSE_SCROLL_UP) {
+                    if (eng.is_2d) {
+                        tui_engine_zoom_2d(&eng, 0.80, st.paused ? &st.frozen_snapshot_2d : NULL);
+                    } else {
+                        tui_engine_zoom_1d(&eng, 0.80, st.paused ? &st.frozen_snapshot : NULL);
+                    }
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Zoom In [1.25x]");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_MOUSE_SCROLL_DOWN) {
+                    if (eng.is_2d) {
+                        tui_engine_zoom_2d(&eng, 1.25, st.paused ? &st.frozen_snapshot_2d : NULL);
+                    } else {
+                        tui_engine_zoom_1d(&eng, 1.25, st.paused ? &st.frozen_snapshot : NULL);
+                    }
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Zoom Out [0.8x]");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_MOUSE_CLICK) {
+                    int start_row = st.compact_header ? 3 : 5;
+                    int clicked_row = ev.mouse_y - start_row;
+                    if (!eng.is_2d && clicked_row >= 0) {
+                        histo_t *cur_h = st.paused ? st.frozen_snapshot : eng.live_1d;
+                        if (cur_h) {
+                            uint32_t nb = histo_nbins(cur_h);
+                            if (clicked_row < (int)nb) {
+                                double edge_low = 0.0, edge_high = 0.0, cnt = 0.0, err = 0.0;
+                                histo_bin_bounds(cur_h, (uint32_t)clicked_row, &edge_low, &edge_high);
+                                histo_bin_content(cur_h, (uint32_t)clicked_row, &cnt);
+                                histo_bin_error(cur_h, (uint32_t)clicked_row, &err);
+                                double tot = histo_total_weight(cur_h);
+                                double pct = tot > 0.0 ? (cnt / tot * 100.0) : 0.0;
+                                snprintf(st.status_msg, sizeof(st.status_msg), "Bin %d [%.2f, %.2f): Count=%.2f (%.1f%%) ±%.2f",
+                                         clicked_row, edge_low, edge_high, cnt, pct, err);
+                                st.status_msg_time = cli_get_time_sec();
+                            }
+                        }
+                    }
+                } else if (ev.type == TUI_KEY_LEFT) {
                     if (eng.is_2d) {
                         tui_engine_pan_2d(&eng, -0.10, 0.0, st.paused ? &st.frozen_snapshot_2d : NULL);
                     } else {
@@ -964,6 +1081,40 @@ int cmd_top_main(int argc, char **argv) {
                                     st.frozen_snapshot_2d = NULL;
                                 }
                             }
+                            break;
+                        case '1': case '2': case '3': case '4': case '5':
+                        case '6': case '7': case '8': case '9': {
+                            int c = ev.ch - '0';
+                            tui_engine_set_column(&eng, c, 0, 0, st.paused ? &st.frozen_snapshot : NULL, NULL);
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Switched to Column %d", c);
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        }
+                        case 's': {
+                            char fname[128];
+                            snprintf(fname, sizeof(fname), "./histo_snapshot_%ld.histo", (long)time(NULL));
+                            bool ok = tui_engine_export_snapshot(&eng, fname, false);
+                            snprintf(st.status_msg, sizeof(st.status_msg), ok ? "Saved: %s" : "Failed to save: %s", fname);
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        }
+                        case 'w': {
+                            size_t cur = eng.window_size;
+                            size_t next_win = (cur == 0) ? 1000 : (cur == 1000) ? 5000 : (cur == 5000) ? 10000 : (cur == 10000) ? 50000 : 0;
+                            tui_engine_set_window(&eng, next_win, st.paused ? &st.frozen_snapshot : NULL, st.paused ? &st.frozen_snapshot_2d : NULL);
+                            snprintf(st.status_msg, sizeof(st.status_msg), next_win ? "Window: Last %zu samples" : "Window: ALL samples", next_win);
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        }
+                        case 'H':
+                            st.compact_header = !st.compact_header;
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Header: %s", st.compact_header ? "Compact" : "Detailed");
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        case 'B':
+                            st.auto_bins = !st.auto_bins;
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Auto-Bins: %s", st.auto_bins ? "ON" : "OFF");
+                            st.status_msg_time = cli_get_time_sec();
                             break;
                         case '+':
                         case '=':
@@ -1111,6 +1262,18 @@ int cmd_top_main(int argc, char **argv) {
         int cols = term_cols - 1;
         int rows = term_rows;
 
+        // Viewport rows budget
+        int viewport_rows = st.compact_header ? (rows - 4) : (rows - 7);
+        if (viewport_rows < 3) viewport_rows = 3;
+
+        if (st.auto_bins && !eng.is_2d) {
+            uint32_t target_nb = (viewport_rows > 3) ? (uint32_t)viewport_rows : 10;
+            histo_t *active = st.paused ? st.frozen_snapshot : eng.live_1d;
+            if (active && histo_nbins(active) != target_nb) {
+                tui_engine_rebuild_1d(&eng, target_nb, 0, 0, st.paused ? &st.frozen_snapshot : NULL);
+            }
+        }
+
         histo_t *snap = NULL;
         histo2d_t *snap_2d = NULL;
         uint64_t n_entries = 0;
@@ -1158,104 +1321,135 @@ int cmd_top_main(int argc, char **argv) {
         }
         render_top_border(&frame, eng.is_2d ? "libhisto top (2D)" : "libhisto top", badge, cols);
 
-        // Row 2: Stats summary
-        char stats_buf[256];
-        if (eng.is_2d) {
-            if (snap_2d && n_entries > 0) {
-                histo2d_axis_t ax, ay;
-                histo2d_axis_x(snap_2d, &ax);
-                histo2d_axis_y(snap_2d, &ay);
-                snprintf(stats_buf, sizeof(stats_buf),
-                         "X: [%.2f, %.2f] %ux │ Y: [%.2f, %.2f] %uy │ Entries: %lu │ Weight: %.2f",
-                         ax.min, ax.max, histo2d_nbins_x(snap_2d),
-                         ay.min, ay.max, histo2d_nbins_y(snap_2d),
-                         (unsigned long)n_entries, tot_w);
+        if (st.compact_header) {
+            char stats_buf[256];
+            if (eng.is_2d) {
+                if (snap_2d && n_entries > 0) {
+                    histo2d_axis_t ax, ay;
+                    histo2d_axis_x(snap_2d, &ax);
+                    histo2d_axis_y(snap_2d, &ay);
+                    snprintf(stats_buf, sizeof(stats_buf), "[2D] X:[%.1f,%.1f] Y:[%.1f,%.1f] │ N=%lu │ %s │ Pal:%s",
+                             ax.min, ax.max, ay.min, ay.max, (unsigned long)n_entries,
+                             st.log_z ? "LOG-Z" : "LIN", histo_palette_name(st.palette));
+                } else {
+                    snprintf(stats_buf, sizeof(stats_buf), "Waiting for 2D stream...");
+                }
             } else {
-                snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming 'x y' samples...");
+                if (snap && n_entries > 0) {
+                    double mean = 0, sdev = 0, med = 0, p95 = 0;
+                    histo_mean(snap, &mean);
+                    histo_std_dev(snap, &sdev);
+                    histo_median(snap, &med);
+                    histo_quantile(snap, 0.95, &p95);
+                    snprintf(stats_buf, sizeof(stats_buf), "[Col %d] Mean: %.2f ± %.2f │ Med: %.2f │ P95: %.2f │ N=%lu │ Pal:%s",
+                             eng.val_col, mean, sdev, med, p95, (unsigned long)n_entries, histo_palette_name(st.palette));
+                } else {
+                    snprintf(stats_buf, sizeof(stats_buf), "Waiting for stream...");
+                }
             }
+            tui_render_row(&frame, stats_buf, cols, true);
+            render_divider(&frame, cols);
         } else {
-            if (snap && n_entries > 0) {
-                double mean = 0, sdev = 0, med = 0, iqr = 0, p95 = 0, p99 = 0;
-                histo_mean(snap, &mean);
-                histo_std_dev(snap, &sdev);
-                histo_median(snap, &med);
-                histo_iqr(snap, &iqr);
-                histo_quantile(snap, 0.95, &p95);
-                histo_quantile(snap, 0.99, &p99);
-                snprintf(stats_buf, sizeof(stats_buf), "Mean: %.2f ± %.2f │ Med: %.2f │ IQR: %.2f │ P95: %.2f │ P99: %.2f",
-                         mean, sdev, med, iqr, p95, p99);
+            // Row 2: Stats summary
+            char stats_buf[256];
+            if (eng.is_2d) {
+                if (snap_2d && n_entries > 0) {
+                    histo2d_axis_t ax, ay;
+                    histo2d_axis_x(snap_2d, &ax);
+                    histo2d_axis_y(snap_2d, &ay);
+                    snprintf(stats_buf, sizeof(stats_buf),
+                             "X: [%.2f, %.2f] %ux │ Y: [%.2f, %.2f] %uy │ Entries: %lu │ Weight: %.2f",
+                             ax.min, ax.max, histo2d_nbins_x(snap_2d),
+                             ay.min, ay.max, histo2d_nbins_y(snap_2d),
+                             (unsigned long)n_entries, tot_w);
+                } else {
+                    snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming 'x y' samples...");
+                }
             } else {
-                snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming samples...");
+                if (snap && n_entries > 0) {
+                    double mean = 0, sdev = 0, med = 0, iqr = 0, p95 = 0, p99 = 0;
+                    histo_mean(snap, &mean);
+                    histo_std_dev(snap, &sdev);
+                    histo_median(snap, &med);
+                    histo_iqr(snap, &iqr);
+                    histo_quantile(snap, 0.95, &p95);
+                    histo_quantile(snap, 0.99, &p99);
+                    snprintf(stats_buf, sizeof(stats_buf), "Mean: %.2f ± %.2f │ Med: %.2f │ IQR: %.2f │ P95: %.2f │ P99: %.2f",
+                             mean, sdev, med, iqr, p95, p99);
+                } else {
+                    snprintf(stats_buf, sizeof(stats_buf), "Waiting for streaming samples...");
+                }
             }
-        }
-        tui_render_row(&frame, stats_buf, cols, true);
+            tui_render_row(&frame, stats_buf, cols, true);
 
-        // Row 3: Divider
-        render_divider(&frame, cols);
+            // Row 3: Divider
+            render_divider(&frame, cols);
 
-        // Row 4: Subheader
-        char subhdr[384];
-        if (eng.is_2d) {
-            if (snap_2d) {
-                histo2d_axis_t ax, ay;
-                histo2d_axis_x(snap_2d, &ax);
-                histo2d_axis_y(snap_2d, &ay);
-                snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Pal: %s │ %s %s",
-                         histo2d_nbins_x(snap_2d), ax.min, ax.max,
-                         histo2d_nbins_y(snap_2d), ay.min, ay.max,
+            // Row 4: Subheader
+            char subhdr[384];
+            if (eng.is_2d) {
+                if (snap_2d) {
+                    histo2d_axis_t ax, ay;
+                    histo2d_axis_x(snap_2d, &ax);
+                    histo2d_axis_y(snap_2d, &ay);
+                    snprintf(subhdr, sizeof(subhdr), "2D Heatmap │ X: %u bins [%.1f, %.1f] │ Y: %u bins [%.1f, %.1f] │ Pal: %s │ %s %s",
+                             histo2d_nbins_x(snap_2d), ax.min, ax.max,
+                             histo2d_nbins_y(snap_2d), ay.min, ay.max,
+                             histo_palette_name(st.palette),
+                             st.log_z ? "LOG-Z" : "LIN",
+                             st.show_legend ? "│ Legend: ON" : "");
+                } else {
+                    snprintf(subhdr, sizeof(subhdr), "Initializing 2D...");
+                }
+            } else if (snap) {
+                double r_min = 0, r_max = 0;
+                histo_range(snap, &r_min, &r_max);
+                uint32_t nb = histo_nbins(snap);
+                const char *sc = (st.scale_mode == SCALE_LOG_Y) ? "LOG-Y" :
+                                 (st.scale_mode == SCALE_LOG_X) ? "LOG-X" :
+                                 (st.scale_mode == SCALE_LOG_LOG) ? "LOG-LOG" : "LIN";
+                char kde_tag[64] = "";
+                char fit_tag[64] = "";
+                if (st.show_kde && n_entries >= 5) {
+                    histo_kde_t *sub_kde = histo_kde_create_from_histo(snap, NULL);
+                    if (sub_kde) {
+                        double bw = histo_kde_get_bandwidth(sub_kde);
+                        snprintf(kde_tag, sizeof(kde_tag), "│ KDE: Gauss(h=%.2g) ", bw);
+                        histo_kde_destroy(sub_kde);
+                    } else {
+                        snprintf(kde_tag, sizeof(kde_tag), "│ KDE ");
+                    }
+                }
+                if (st.show_fit && n_entries >= 5) {
+                    histo_fit_result_t *sub_fit = NULL;
+                    histo_fit_model(snap, HISTO_FIT_MODEL_GAUSSIAN, NULL, NULL, &sub_fit);
+                    if (sub_fit && sub_fit->converged) {
+                        snprintf(fit_tag, sizeof(fit_tag), "│ Fit: μ=%.2f σ=%.2f ", sub_fit->params[1], sub_fit->params[2]);
+                        histo_fit_result_destroy(sub_fit);
+                    } else {
+                        if (sub_fit) histo_fit_result_destroy(sub_fit);
+                        snprintf(fit_tag, sizeof(fit_tag), "│ Fit: Gauss ");
+                    }
+                }
+                char err_tag[32] = "";
+                if (st.show_errors) snprintf(err_tag, sizeof(err_tag), "│ Err: ON ");
+                char yaxis_tag[32] = "";
+                if (st.show_y_axis) snprintf(yaxis_tag, sizeof(yaxis_tag), "│ Axis: ON ");
+                char col_tag[32] = "";
+                if (eng.val_col > 1) snprintf(col_tag, sizeof(col_tag), "Col:%d │ ", eng.val_col);
+                char win_tag[32] = "";
+                if (eng.window_size > 0) snprintf(win_tag, sizeof(win_tag), "Win:%zu │ ", eng.window_size);
+
+                snprintf(subhdr, sizeof(subhdr), "%s%sRange: [%.2f, %.2f] │ Bins: %u │ Scale: %s │ Pal: %s │ Auto: %s %s%s%s%s",
+                         col_tag, win_tag, r_min, r_max, nb, sc,
                          histo_palette_name(st.palette),
-                         st.log_z ? "LOG-Z" : "LIN",
-                         st.show_legend ? "│ Legend: ON" : "");
+                         eng.auto_range ? "ON" : "OFF",
+                         kde_tag, fit_tag, err_tag, yaxis_tag);
             } else {
-                snprintf(subhdr, sizeof(subhdr), "Initializing 2D...");
+                snprintf(subhdr, sizeof(subhdr), "Initializing...");
             }
-        } else if (snap) {
-            double r_min = 0, r_max = 0;
-            histo_range(snap, &r_min, &r_max);
-            uint32_t nb = histo_nbins(snap);
-            const char *sc = (st.scale_mode == SCALE_LOG_Y) ? "LOG-Y" :
-                             (st.scale_mode == SCALE_LOG_X) ? "LOG-X" :
-                             (st.scale_mode == SCALE_LOG_LOG) ? "LOG-LOG" : "LIN";
-            char kde_tag[64] = "";
-            char fit_tag[64] = "";
-            if (st.show_kde && n_entries >= 5) {
-                histo_kde_t *sub_kde = histo_kde_create_from_histo(snap, NULL);
-                if (sub_kde) {
-                    double bw = histo_kde_get_bandwidth(sub_kde);
-                    snprintf(kde_tag, sizeof(kde_tag), "│ KDE: Gauss(h=%.2g) ", bw);
-                    histo_kde_destroy(sub_kde);
-                } else {
-                    snprintf(kde_tag, sizeof(kde_tag), "│ KDE ");
-                }
-            }
-            if (st.show_fit && n_entries >= 5) {
-                histo_fit_result_t *sub_fit = NULL;
-                histo_fit_model(snap, HISTO_FIT_MODEL_GAUSSIAN, NULL, NULL, &sub_fit);
-                if (sub_fit && sub_fit->converged) {
-                    snprintf(fit_tag, sizeof(fit_tag), "│ Fit: μ=%.2f σ=%.2f ", sub_fit->params[1], sub_fit->params[2]);
-                    histo_fit_result_destroy(sub_fit);
-                } else {
-                    if (sub_fit) histo_fit_result_destroy(sub_fit);
-                    snprintf(fit_tag, sizeof(fit_tag), "│ Fit: Gauss ");
-                }
-            }
-            char err_tag[32] = "";
-            if (st.show_errors) snprintf(err_tag, sizeof(err_tag), "│ Err: ON ");
-            char yaxis_tag[32] = "";
-            if (st.show_y_axis) snprintf(yaxis_tag, sizeof(yaxis_tag), "│ Axis: ON ");
-            snprintf(subhdr, sizeof(subhdr), "Range: [%.2f, %.2f] │ Bins: %u (Δ=%.2f) │ Scale: %s │ Pal: %s │ Auto: %s %s%s%s%s",
-                     r_min, r_max, nb, (r_max - r_min) / (nb ? (double)nb : 1.0), sc,
-                     histo_palette_name(st.palette),
-                     eng.auto_range ? "ON" : "OFF",
-                     kde_tag, fit_tag, err_tag, yaxis_tag);
-        } else {
-            snprintf(subhdr, sizeof(subhdr), "Initializing...");
+            tui_render_row(&frame, subhdr, cols, true);
         }
-        tui_render_row(&frame, subhdr, cols, true);
-
-        // Viewport rows budget: rows - 7 lines (Top, Stats, Div, Subhdr, Div, Footer, Bottom)
-        int viewport_rows = rows - 7;
-        if (viewport_rows < 3) viewport_rows = 3;
 
         if (st.modal == MODAL_HELP) {
             render_help_viewport(&frame, &st, cols, viewport_rows);
@@ -1280,7 +1474,7 @@ int cmd_top_main(int argc, char **argv) {
         } else {
             const char *hints = eng.is_2d ?
                 "[Space] Freeze  [+/-] Zoom  [←↑→↓] Pan  [l] Log-Z  [p] Pal  [g] Legend  [:] Cmd  [?] Help  [q] Quit" :
-                "[Space] Freeze  [+/-] Zoom  [←/→] Pan  [0] Full  [l] Log  [p] Pal  [k] KDE  [f] Fit  [:] Cmd  [?] Help  [q] Quit";
+                "[Space] Freeze  [+/-] Zoom  [Tab] Col  [w] Win  [s] Save  [H] Compact  [B] Auto-Bins  [:] Cmd  [?] Help";
             tui_render_row(&frame, hints, cols, true);
         }
 

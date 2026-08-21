@@ -14,14 +14,15 @@ extern "C" {
 #endif
 
 #define TUI_RESERVOIR_DEFAULT_CAP 100000
+#define TUI_MAX_COLS 16
 
 typedef struct {
-    double *samples;
-    double *samples_y;
+    double *col_data[TUI_MAX_COLS];
     double *weights;
     size_t count;
     size_t cap;
     size_t head;
+    size_t num_cols;
     bool is_2d;
     bool has_weights;
 } tui_reservoir_t;
@@ -61,6 +62,11 @@ typedef struct {
     bool auto_range;
     double auto_range_threshold;
     double last_autorange_time_sec;
+
+    /* Ergonomic features: windowing & exponential decay */
+    size_t window_size;     /* 0 = all reservoir */
+    double decay_lambda;    /* 0.0 = no decay, > 0.0 = rate of decay per sec */
+    double last_decay_time;
 } tui_engine_t;
 
 /* Lifecycle */
@@ -85,6 +91,12 @@ void tui_engine_set_autorange(tui_engine_t *eng, bool enable, double threshold);
 bool tui_engine_check_and_autorange(tui_engine_t *eng);
 void tui_engine_clear(tui_engine_t *eng);
 bool tui_engine_is_finished(tui_engine_t *eng);
+
+/* Multi-Column Switching, Windowing, Decay, and Export */
+bool tui_engine_set_column(tui_engine_t *eng, int val_col, int x_col, int y_col, histo_t **out_1d, histo2d_t **out_2d);
+bool tui_engine_set_window(tui_engine_t *eng, size_t window_size, histo_t **out_1d, histo2d_t **out_2d);
+void tui_engine_set_decay(tui_engine_t *eng, double decay_lambda);
+bool tui_engine_export_snapshot(tui_engine_t *eng, const char *filepath, bool is_json);
 
 #ifdef __cplusplus
 }
