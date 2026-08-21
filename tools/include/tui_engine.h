@@ -17,10 +17,12 @@ extern "C" {
 
 typedef struct {
     double *samples;
+    double *samples_y;
     double *weights;
     size_t count;
     size_t cap;
     size_t head;
+    bool is_2d;
     bool has_weights;
 } tui_reservoir_t;
 
@@ -71,9 +73,14 @@ void tui_engine_free(tui_engine_t *eng);
 histo_t *tui_engine_get_snapshot_1d(tui_engine_t *eng);
 histo2d_t *tui_engine_get_snapshot_2d(tui_engine_t *eng);
 
-/* Reservoir operations */
+/* Reservoir operations & Zoom / Pan */
 bool tui_engine_rebuild_1d(tui_engine_t *eng, uint32_t nbins, double rmin, double rmax, histo_t **out_h);
 bool tui_engine_rebuild_1d_log(tui_engine_t *eng, uint32_t nbins, histo_t **out_h);
+bool tui_engine_zoom_1d(tui_engine_t *eng, double factor, histo_t **out_h);
+bool tui_engine_pan_1d(tui_engine_t *eng, double fraction, histo_t **out_h);
+bool tui_engine_rebuild_2d(tui_engine_t *eng, uint32_t xbins, double xmin, double xmax, uint32_t ybins, double ymin, double ymax, histo2d_t **out_h);
+bool tui_engine_zoom_2d(tui_engine_t *eng, double factor, histo2d_t **out_h);
+bool tui_engine_pan_2d(tui_engine_t *eng, double frac_x, double frac_y, histo2d_t **out_h);
 void tui_engine_set_autorange(tui_engine_t *eng, bool enable, double threshold);
 bool tui_engine_check_and_autorange(tui_engine_t *eng);
 void tui_engine_clear(tui_engine_t *eng);

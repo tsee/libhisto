@@ -19,26 +19,30 @@ static double get_time_now_sec(void) {
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
 }
 
-static void reservoir_init(tui_reservoir_t *r, size_t cap, bool has_weights) {
+static void reservoir_init(tui_reservoir_t *r, size_t cap, bool is_2d, bool has_weights) {
     if (!r) return;
     if (cap < 1000) cap = TUI_RESERVOIR_DEFAULT_CAP;
     r->samples = (double *)malloc(cap * sizeof(double));
+    r->samples_y = is_2d ? (double *)malloc(cap * sizeof(double)) : NULL;
     r->weights = has_weights ? (double *)malloc(cap * sizeof(double)) : NULL;
     r->count = 0;
     r->cap = cap;
     r->head = 0;
+    r->is_2d = is_2d;
     r->has_weights = has_weights;
 }
 
-static void reservoir_push(tui_reservoir_t *r, double x, double w) {
+static void reservoir_push(tui_reservoir_t *r, double x, double y, double w) {
     if (!r || !r->samples) return;
     if (r->count < r->cap) {
         r->samples[r->count] = x;
+        if (r->samples_y) r->samples_y[r->count] = y;
         if (r->weights) r->weights[r->count] = w;
         r->count++;
     } else {
         /* Ring buffer overwrite */
         r->samples[r->head] = x;
+        if (r->samples_y) r->samples_y[r->head] = y;
         if (r->weights) r->weights[r->head] = w;
         r->head = (r->head + 1) % r->cap;
     }
@@ -47,8 +51,10 @@ static void reservoir_push(tui_reservoir_t *r, double x, double w) {
 static void reservoir_free(tui_reservoir_t *r) {
     if (!r) return;
     if (r->samples) free(r->samples);
+    if (r->samples_y) free(r->samples_y);
     if (r->weights) free(r->weights);
     r->samples = NULL;
+    r->samples_y = NULL;
     r->weights = NULL;
     r->count = 0;
     r->cap = 0;
@@ -93,7 +99,7 @@ static void *ingest_worker_thread(void *arg) {
                     }
                 }
                 for (size_t i = 0; i < batch_len; ++i) {
-                    reservoir_push(&eng->reservoir, batch_x[i], batch_w[i]);
+                    reservoir_push(&eng->reservoir, batch_x[i], batch_y[i], batch_w[i]);
                 }
                 eng->total_samples += batch_len;
                 batch_len = 0;
@@ -155,7 +161,7 @@ static void *ingest_worker_thread(void *arg) {
                 }
             }
             for (size_t i = 0; i < batch_len; ++i) {
-                reservoir_push(&eng->reservoir, batch_x[i], batch_w[i]);
+                reservoir_push(&eng->reservoir, batch_x[i], batch_y[i], batch_w[i]);
             }
             eng->total_samples += batch_len;
             histo_mutex_unlock(&eng->mutex);
@@ -188,7 +194,7 @@ static void *ingest_worker_thread(void *arg) {
             }
         }
         for (size_t i = 0; i < batch_len; ++i) {
-            reservoir_push(&eng->reservoir, batch_x[i], batch_w[i]);
+            reservoir_push(&eng->reservoir, batch_x[i], batch_y[i], batch_w[i]);
         }
         eng->total_samples += batch_len;
         histo_mutex_unlock(&eng->mutex);
@@ -228,7 +234,7 @@ bool tui_engine_init(tui_engine_t *eng, FILE *in_stream, bool is_2d, uint32_t nb
         eng->live_1d = histo_create_uniform(nbins, rmin, rmax, flags);
     }
 
-    reservoir_init(&eng->reservoir, TUI_RESERVOIR_DEFAULT_CAP, eng->has_weights);
+    reservoir_init(&eng->reservoir, TUI_RESERVOIR_DEFAULT_CAP, is_2d, eng->has_weights);
     eng->auto_range = true;
     eng->auto_range_threshold = 0.05;
     eng->last_autorange_time_sec = get_time_now_sec();
@@ -441,11 +447,10 @@ bool tui_engine_rebuild_1d(tui_engine_t *eng, uint32_t nbins, double rmin, doubl
         histo_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, NULL);
     }
 
+    if (eng->live_1d) histo_destroy(eng->live_1d);
+    eng->live_1d = new_h;
     if (out_h) {
-        *out_h = new_h;
-    } else {
-        if (eng->live_1d) histo_destroy(eng->live_1d);
-        eng->live_1d = new_h;
+        *out_h = histo_clone(new_h, false);
     }
 
     histo_mutex_unlock(&eng->mutex);
@@ -503,15 +508,155 @@ bool tui_engine_rebuild_1d_log(tui_engine_t *eng, uint32_t nbins, histo_t **out_
         histo_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, NULL);
     }
 
+    if (eng->live_1d) histo_destroy(eng->live_1d);
+    eng->live_1d = new_h;
     if (out_h) {
-        *out_h = new_h;
-    } else {
-        if (eng->live_1d) histo_destroy(eng->live_1d);
-        eng->live_1d = new_h;
+        *out_h = histo_clone(new_h, false);
     }
 
     histo_mutex_unlock(&eng->mutex);
     return true;
+}
+
+bool tui_engine_zoom_1d(tui_engine_t *eng, double factor, histo_t **out_h) {
+    if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    histo_t *source = eng->live_1d;
+    if (!source) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+    double rmin = 0.0, rmax = 0.0;
+    histo_range(source, &rmin, &rmax);
+    uint32_t nbins = histo_nbins(source);
+    if (nbins < 2) nbins = 50;
+
+    double center = 0.5 * (rmin + rmax);
+    double half_span = 0.5 * (rmax - rmin) * factor;
+    if (half_span < 1e-12) half_span = 1.0;
+
+    double new_min = center - half_span;
+    double new_max = center + half_span;
+
+    eng->auto_range = false; /* Manual zoom overrides auto-range */
+    histo_mutex_unlock(&eng->mutex);
+
+    return tui_engine_rebuild_1d(eng, nbins, new_min, new_max, out_h);
+}
+
+bool tui_engine_pan_1d(tui_engine_t *eng, double fraction, histo_t **out_h) {
+    if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    histo_t *source = eng->live_1d;
+    if (!source) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+    double rmin = 0.0, rmax = 0.0;
+    histo_range(source, &rmin, &rmax);
+    uint32_t nbins = histo_nbins(source);
+    if (nbins < 2) nbins = 50;
+
+    double shift = (rmax - rmin) * fraction;
+    double new_min = rmin + shift;
+    double new_max = rmax + shift;
+
+    eng->auto_range = false; /* Manual pan overrides auto-range */
+    histo_mutex_unlock(&eng->mutex);
+
+    return tui_engine_rebuild_1d(eng, nbins, new_min, new_max, out_h);
+}
+
+bool tui_engine_rebuild_2d(tui_engine_t *eng, uint32_t xbins, double xmin, double xmax,
+                           uint32_t ybins, double ymin, double ymax, histo2d_t **out_h) {
+    if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    if (eng->reservoir.count == 0 || !eng->reservoir.samples_y) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+
+    if (xbins < 2) xbins = 50;
+    if (ybins < 2) ybins = 50;
+    if (xmin >= xmax) { xmin = 0.0; xmax = 100.0; }
+    if (ymin >= ymax) { ymin = 0.0; ymax = 100.0; }
+
+    histo2d_t *new_h = histo2d_create_uniform(xbins, xmin, xmax, ybins, ymin, ymax, eng->flags);
+    if (!new_h) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+
+    if (eng->reservoir.has_weights && eng->reservoir.weights) {
+        histo2d_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, eng->reservoir.samples_y, eng->reservoir.weights);
+    } else {
+        histo2d_fill_n(new_h, eng->reservoir.count, eng->reservoir.samples, eng->reservoir.samples_y, NULL);
+    }
+
+    if (eng->live_2d) histo2d_destroy(eng->live_2d);
+    eng->live_2d = new_h;
+    if (out_h) {
+        *out_h = histo2d_clone(new_h, false);
+    }
+
+    histo_mutex_unlock(&eng->mutex);
+    return true;
+}
+
+bool tui_engine_zoom_2d(tui_engine_t *eng, double factor, histo2d_t **out_h) {
+    if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    histo2d_t *source = eng->live_2d;
+    if (!source) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+    histo2d_axis_t ax, ay;
+    histo2d_axis_x(source, &ax);
+    histo2d_axis_y(source, &ay);
+    uint32_t nx = histo2d_nbins_x(source);
+    uint32_t ny = histo2d_nbins_y(source);
+
+    double cx = 0.5 * (ax.min + ax.max);
+    double cy = 0.5 * (ay.min + ay.max);
+    double hx = 0.5 * (ax.max - ax.min) * factor;
+    double hy = 0.5 * (ay.max - ay.min) * factor;
+    if (hx < 1e-12) hx = 1.0;
+    if (hy < 1e-12) hy = 1.0;
+
+    double n_xmin = cx - hx, n_xmax = cx + hx;
+    double n_ymin = cy - hy, n_ymax = cy + hy;
+
+    eng->auto_range = false;
+    histo_mutex_unlock(&eng->mutex);
+
+    return tui_engine_rebuild_2d(eng, nx, n_xmin, n_xmax, ny, n_ymin, n_ymax, out_h);
+}
+
+bool tui_engine_pan_2d(tui_engine_t *eng, double frac_x, double frac_y, histo2d_t **out_h) {
+    if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    histo2d_t *source = eng->live_2d;
+    if (!source) {
+        histo_mutex_unlock(&eng->mutex);
+        return false;
+    }
+    histo2d_axis_t ax, ay;
+    histo2d_axis_x(source, &ax);
+    histo2d_axis_y(source, &ay);
+    uint32_t nx = histo2d_nbins_x(source);
+    uint32_t ny = histo2d_nbins_y(source);
+
+    double shift_x = (ax.max - ax.min) * frac_x;
+    double shift_y = (ay.max - ay.min) * frac_y;
+
+    double n_xmin = ax.min + shift_x, n_xmax = ax.max + shift_x;
+    double n_ymin = ay.min + shift_y, n_ymax = ay.max + shift_y;
+
+    eng->auto_range = false;
+    histo_mutex_unlock(&eng->mutex);
+
+    return tui_engine_rebuild_2d(eng, nx, n_xmin, n_xmax, ny, n_ymin, n_ymax, out_h);
 }
 
 void tui_engine_clear(tui_engine_t *eng) {

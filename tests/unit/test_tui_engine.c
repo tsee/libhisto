@@ -250,6 +250,124 @@ void test_tui_engine_weights(void) {
     fclose(in_fp);
 }
 
+void test_tui_engine_zoom_pan_1d(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 100.0, 0, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    for (int i = 0; i <= 100; i++) {
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "%d\n", i);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* Initial range is [0.0, 100.0] */
+    histo_t *snap = NULL;
+    /* Zoom in by 0.8 (factor 0.8 -> span 80.0 centered at 50.0: [10.0, 90.0]) */
+    TEST_ASSERT_TRUE(tui_engine_zoom_1d(&eng, 0.80, &snap));
+    TEST_ASSERT_NOT_NULL(snap);
+    TEST_ASSERT_FALSE(eng.auto_range);
+    double rmin = 0.0, rmax = 0.0;
+    histo_range(snap, &rmin, &rmax);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 10.0, rmin);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 90.0, rmax);
+    histo_destroy(snap);
+
+    /* Pan right by +0.10 (+8.0 -> [18.0, 98.0]) */
+    TEST_ASSERT_TRUE(tui_engine_pan_1d(&eng, 0.10, &snap));
+    TEST_ASSERT_NOT_NULL(snap);
+    histo_range(snap, &rmin, &rmax);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 18.0, rmin);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 98.0, rmax);
+    histo_destroy(snap);
+
+    /* Pan left by -0.10 (-8.0 -> [10.0, 90.0]) */
+    TEST_ASSERT_TRUE(tui_engine_pan_1d(&eng, -0.10, &snap));
+    TEST_ASSERT_NOT_NULL(snap);
+    histo_range(snap, &rmin, &rmax);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 10.0, rmin);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 90.0, rmax);
+    histo_destroy(snap);
+
+    /* Zoom out by 1.25 (span 80.0 * 1.25 = 100.0 centered at 50.0: [0.0, 100.0]) */
+    TEST_ASSERT_TRUE(tui_engine_zoom_1d(&eng, 1.25, &snap));
+    TEST_ASSERT_NOT_NULL(snap);
+    histo_range(snap, &rmin, &rmax);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 0.0, rmin);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 100.0, rmax);
+    histo_destroy(snap);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_zoom_pan_2d(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, true, 20, 0.0, 100.0, 0, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    for (int i = 0; i <= 50; i++) {
+        char buf[64];
+        int len = snprintf(buf, sizeof(buf), "%d %d\n", i * 2, i * 2);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    histo2d_t *snap2d = NULL;
+    /* Zoom in 2D by 0.8 */
+    TEST_ASSERT_TRUE(tui_engine_zoom_2d(&eng, 0.80, &snap2d));
+    TEST_ASSERT_NOT_NULL(snap2d);
+    histo2d_axis_t ax, ay;
+    histo2d_axis_x(snap2d, &ax);
+    histo2d_axis_y(snap2d, &ay);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 10.0, ax.min);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 90.0, ax.max);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 10.0, ay.min);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 90.0, ay.max);
+    histo2d_destroy(snap2d);
+
+    /* Pan X right +0.10 and Y up +0.20 */
+    TEST_ASSERT_TRUE(tui_engine_pan_2d(&eng, 0.10, 0.20, &snap2d));
+    TEST_ASSERT_NOT_NULL(snap2d);
+    histo2d_axis_x(snap2d, &ax);
+    histo2d_axis_y(snap2d, &ay);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 18.0, ax.min);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 98.0, ax.max);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 26.0, ay.min);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-5, 106.0, ay.max);
+    histo2d_destroy(snap2d);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
@@ -259,5 +377,7 @@ int main(void) {
     RUN_TEST(test_tui_engine_streaming_and_snapshot);
     RUN_TEST(test_tui_engine_autorange_p1_p99);
     RUN_TEST(test_tui_engine_weights);
+    RUN_TEST(test_tui_engine_zoom_pan_1d);
+    RUN_TEST(test_tui_engine_zoom_pan_2d);
     return UNITY_END();
 }

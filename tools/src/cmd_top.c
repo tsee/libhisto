@@ -626,6 +626,29 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
         } else {
             tui_engine_set_autorange(eng, !eng->auto_range, eng->auto_range_threshold);
         }
+    } else if (strncasecmp(cmd, "zoom ", 5) == 0 || strncasecmp(cmd, "z ", 2) == 0) {
+        double factor = atof(cmd + (*cmd == 'z' ? 2 : 5));
+        if (factor > 0.0) {
+            if (eng->is_2d) {
+                tui_engine_zoom_2d(eng, 1.0 / factor, st->paused ? &st->frozen_snapshot_2d : NULL);
+            } else {
+                tui_engine_zoom_1d(eng, 1.0 / factor, st->paused ? &st->frozen_snapshot : NULL);
+            }
+            snprintf(st->status_msg, sizeof(st->status_msg), "Zoomed %.2fx", factor);
+            st->status_msg_time = cli_get_time_sec();
+        }
+    } else if (strncasecmp(cmd, "pan ", 4) == 0) {
+        double frac_x = 0.0, frac_y = 0.0;
+        int n_parsed = sscanf(cmd + 4, "%lf %lf", &frac_x, &frac_y);
+        if (n_parsed >= 1) {
+            if (eng->is_2d) {
+                tui_engine_pan_2d(eng, frac_x, (n_parsed >= 2 ? frac_y : 0.0), st->paused ? &st->frozen_snapshot_2d : NULL);
+            } else {
+                tui_engine_pan_1d(eng, frac_x, st->paused ? &st->frozen_snapshot : NULL);
+            }
+            snprintf(st->status_msg, sizeof(st->status_msg), "Panned %.0f%%", frac_x * 100.0);
+            st->status_msg_time = cli_get_time_sec();
+        }
     } else if (strcasecmp(cmd, "clear") == 0 || strcasecmp(cmd, "reset") == 0) {
         tui_engine_clear(eng);
     } else if (strcasecmp(cmd, "help") == 0 || strcasecmp(cmd, "h") == 0) {
@@ -861,7 +884,61 @@ int cmd_top_main(int argc, char **argv) {
                     st.modal = MODAL_NONE;
                 }
             } else {
-                if (ev.type == TUI_KEY_CHAR) {
+                if (ev.type == TUI_KEY_LEFT) {
+                    if (eng.is_2d) {
+                        tui_engine_pan_2d(&eng, -0.10, 0.0, st.paused ? &st.frozen_snapshot_2d : NULL);
+                    } else {
+                        tui_engine_pan_1d(&eng, -0.10, st.paused ? &st.frozen_snapshot : NULL);
+                    }
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Pan Left [-10%%]");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_RIGHT) {
+                    if (eng.is_2d) {
+                        tui_engine_pan_2d(&eng, 0.10, 0.0, st.paused ? &st.frozen_snapshot_2d : NULL);
+                    } else {
+                        tui_engine_pan_1d(&eng, 0.10, st.paused ? &st.frozen_snapshot : NULL);
+                    }
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Pan Right [+10%%]");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_UP) {
+                    if (eng.is_2d) {
+                        tui_engine_pan_2d(&eng, 0.0, 0.10, st.paused ? &st.frozen_snapshot_2d : NULL);
+                        snprintf(st.status_msg, sizeof(st.status_msg), "Pan Up [+10%%]");
+                    } else {
+                        tui_engine_zoom_1d(&eng, 0.80, st.paused ? &st.frozen_snapshot : NULL);
+                        snprintf(st.status_msg, sizeof(st.status_msg), "Zoom In [1.25x]");
+                    }
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_DOWN) {
+                    if (eng.is_2d) {
+                        tui_engine_pan_2d(&eng, 0.0, -0.10, st.paused ? &st.frozen_snapshot_2d : NULL);
+                        snprintf(st.status_msg, sizeof(st.status_msg), "Pan Down [-10%%]");
+                    } else {
+                        tui_engine_zoom_1d(&eng, 1.25, st.paused ? &st.frozen_snapshot : NULL);
+                        snprintf(st.status_msg, sizeof(st.status_msg), "Zoom Out [0.8x]");
+                    }
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_PAGE_UP) {
+                    if (eng.is_2d) {
+                        tui_engine_zoom_2d(&eng, 0.80, st.paused ? &st.frozen_snapshot_2d : NULL);
+                    } else {
+                        tui_engine_zoom_1d(&eng, 0.80, st.paused ? &st.frozen_snapshot : NULL);
+                    }
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Zoom In [1.25x]");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_PAGE_DOWN) {
+                    if (eng.is_2d) {
+                        tui_engine_zoom_2d(&eng, 1.25, st.paused ? &st.frozen_snapshot_2d : NULL);
+                    } else {
+                        tui_engine_zoom_1d(&eng, 1.25, st.paused ? &st.frozen_snapshot : NULL);
+                    }
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Zoom Out [0.8x]");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_HOME) {
+                    tui_engine_set_autorange(&eng, true, eng.auto_range_threshold);
+                    snprintf(st.status_msg, sizeof(st.status_msg), "Auto-range: ON (Reset View)");
+                    st.status_msg_time = cli_get_time_sec();
+                } else if (ev.type == TUI_KEY_CHAR) {
                     switch (ev.ch) {
                         case 'q':
                         case 'Q':
@@ -887,6 +964,54 @@ int cmd_top_main(int argc, char **argv) {
                                     st.frozen_snapshot_2d = NULL;
                                 }
                             }
+                            break;
+                        case '+':
+                        case '=':
+                        case 'z':
+                            if (eng.is_2d) {
+                                tui_engine_zoom_2d(&eng, 0.80, st.paused ? &st.frozen_snapshot_2d : NULL);
+                            } else {
+                                tui_engine_zoom_1d(&eng, 0.80, st.paused ? &st.frozen_snapshot : NULL);
+                            }
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Zoom In [1.25x]");
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        case '-':
+                        case '_':
+                        case 'Z':
+                            if (eng.is_2d) {
+                                tui_engine_zoom_2d(&eng, 1.25, st.paused ? &st.frozen_snapshot_2d : NULL);
+                            } else {
+                                tui_engine_zoom_1d(&eng, 1.25, st.paused ? &st.frozen_snapshot : NULL);
+                            }
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Zoom Out [0.8x]");
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        case '[':
+                        case '<':
+                        case 'h':
+                            if (eng.is_2d) {
+                                tui_engine_pan_2d(&eng, -0.10, 0.0, st.paused ? &st.frozen_snapshot_2d : NULL);
+                            } else {
+                                tui_engine_pan_1d(&eng, -0.10, st.paused ? &st.frozen_snapshot : NULL);
+                            }
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Pan Left [-10%%]");
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        case ']':
+                        case '>':
+                            if (eng.is_2d) {
+                                tui_engine_pan_2d(&eng, 0.10, 0.0, st.paused ? &st.frozen_snapshot_2d : NULL);
+                            } else {
+                                tui_engine_pan_1d(&eng, 0.10, st.paused ? &st.frozen_snapshot : NULL);
+                            }
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Pan Right [+10%%]");
+                            st.status_msg_time = cli_get_time_sec();
+                            break;
+                        case '0':
+                            tui_engine_set_autorange(&eng, true, eng.auto_range_threshold);
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Auto-range: ON (Reset View)");
+                            st.status_msg_time = cli_get_time_sec();
                             break;
                         case ':':
                             st.cmd_active = true;
@@ -940,7 +1065,11 @@ int cmd_top_main(int argc, char **argv) {
                             break;
                         case 'a':
                         case 'A':
-                            if (!eng.is_2d) tui_engine_set_autorange(&eng, !eng.auto_range, eng.auto_range_threshold);
+                            if (!eng.is_2d) {
+                                tui_engine_set_autorange(&eng, !eng.auto_range, eng.auto_range_threshold);
+                                snprintf(st.status_msg, sizeof(st.status_msg), "Auto-range: %s", eng.auto_range ? "ON" : "OFF");
+                                st.status_msg_time = cli_get_time_sec();
+                            }
                             break;
                         case 'e':
                             if (!eng.is_2d) st.show_errors = !st.show_errors;
@@ -958,6 +1087,8 @@ int cmd_top_main(int argc, char **argv) {
                                 histo2d_destroy(st.frozen_snapshot_2d);
                                 st.frozen_snapshot_2d = NULL;
                             }
+                            snprintf(st.status_msg, sizeof(st.status_msg), "Cleared data");
+                            st.status_msg_time = cli_get_time_sec();
                             break;
                         case 'r':
                             if (!eng.is_2d) tui_engine_rebuild_1d(&eng, (nbins > 10) ? nbins / 2 : 5, 0, 0, NULL);
@@ -1148,8 +1279,8 @@ int cmd_top_main(int argc, char **argv) {
             tui_render_row(&frame, status_row, cols, true);
         } else {
             const char *hints = eng.is_2d ?
-                "[Space] Freeze  [l] Log-Z  [p] Palette  [g] Legend  [C] Mono  [:] Cmd  [?] Help  [q] Quit" :
-                "[Space] Freeze  [a] Auto  [l] Log  [p] Pal  [y] Axis  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?] Help  [q] Quit";
+                "[Space] Freeze  [+/-] Zoom  [←↑→↓] Pan  [l] Log-Z  [p] Pal  [g] Legend  [:] Cmd  [?] Help  [q] Quit" :
+                "[Space] Freeze  [+/-] Zoom  [←/→] Pan  [0] Full  [l] Log  [p] Pal  [k] KDE  [f] Fit  [:] Cmd  [?] Help  [q] Quit";
             tui_render_row(&frame, hints, cols, true);
         }
 
