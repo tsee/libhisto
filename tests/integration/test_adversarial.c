@@ -208,8 +208,8 @@ void test_all_ieee754_specials_matrix(void) {
     TEST_ASSERT_EQUAL(HISTO_OK, histo_fill(h, -0.0));
 
     /* 2. NaNs */
-    TEST_ASSERT_EQUAL(HISTO_WARN_NON_FINITE, histo_fill(h, NAN));
-    TEST_ASSERT_EQUAL(HISTO_WARN_NON_FINITE, histo_fill(h, -NAN));
+    TEST_ASSERT_EQUAL(HISTO_ERR_NON_FINITE, histo_fill(h, NAN));
+    TEST_ASSERT_EQUAL(HISTO_ERR_NON_FINITE, histo_fill(h, -NAN));
 
     /* 3. Infinities */
     TEST_ASSERT_EQUAL(HISTO_OK, histo_fill(h, INFINITY));
