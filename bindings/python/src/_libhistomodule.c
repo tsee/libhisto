@@ -1,3 +1,7 @@
+/*
+ * CPython C extension module bridging libhisto C APIs to Python.
+ */
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
