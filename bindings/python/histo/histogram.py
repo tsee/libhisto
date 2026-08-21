@@ -584,7 +584,8 @@ class Histogram:
         """
         Fit built-in model to histogram.
 
-        Supported models: 'gaussian', 'exponential', 'polynomial', 'breit_wigner', 'power_law'.
+        Supported models: 'gaussian', 'exponential', 'polynomial', 'breit_wigner', 'power_law',
+        'lognormal', 'gauss+linear', 'weibull', 'gamma', 'poisson', 'laplace'.
         """
         m_code = MODEL_MAP.get(model.lower())
         if m_code is None:

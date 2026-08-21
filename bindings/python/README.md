@@ -11,7 +11,7 @@
 - **Statistical Moments**: Running Welford mean, variance, skewness, kurtosis, continuous mode, FWHM, and RMS.
 - **Robust Dispersion**: Quantiles, median, IQR, MAD, trimmed and Winsorized means.
 - **Hypothesis Testing & Distances**: $\chi^2$ test, Kolmogorov-Smirnov, 1D Wasserstein (Earth Mover's Distance), Kullback-Leibler divergence, and Bhattacharyya distance.
-- **Non-Linear Curve Fitting**: Levenberg-Marquardt optimizer for Gaussian, Exponential, Polynomial, Breit-Wigner, Power Law, and custom Python callback models.
+- **Non-Linear Curve Fitting**: Levenberg-Marquardt optimizer for Gaussian, Exponential, Polynomial, Breit-Wigner, Power Law, Log-Normal, Gauss+Linear, Weibull, Gamma, Poisson, Laplace, and custom Python callback models.
 - **Online Quantile Sketches**: DDSketch logarithmic dynamic sketches with provable relative error guarantees ($\epsilon \le 1\%$).
 - **CLI Integration**: Built-in in-process execution and standalone `pyhisto` command.
 
