@@ -177,6 +177,7 @@ tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
 
     if (c == '\033') {
         char seq[64];
+        memset(seq, 0, sizeof(seq));
         seq[0] = '\033';
         int n = 1;
         while (n < 63) {
@@ -185,7 +186,7 @@ tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
                 if (read(tty_fd, &seq[n], 1) == 1) {
                     char last_ch = seq[n];
                     n++;
-                    if (seq[1] == '[' && seq[2] == '<' && (last_ch == 'M' || last_ch == 'm')) break;
+                    if (n >= 3 && seq[1] == '[' && seq[2] == '<' && (last_ch == 'M' || last_ch == 'm')) break;
                     if (n >= 4 && (last_ch == '~' || isalpha((unsigned char)last_ch))) break;
                 } else break;
             } else break;

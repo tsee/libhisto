@@ -116,12 +116,36 @@ static void *ingest_worker_thread(void *arg) {
         if (!fgets(line, sizeof(line), eng->in_stream)) {
             histo_mutex_lock(&eng->mutex);
             if (batch_len > 0) {
-                if (eng->is_2d && eng->live_2d) {
+                int val_col = eng->val_col;
+                int x_col = eng->x_col;
+                int y_col = eng->y_col;
+                int w_col = eng->w_col;
+                bool is_2d = eng->is_2d;
+                bool has_w = eng->has_weights;
+
+                for (size_t i = 0; i < batch_len; ++i) {
+                    size_t nc = batch_ncols[i];
+                    int v_idx = (val_col >= 1 && val_col <= (int)nc) ? val_col - 1 : 0;
+                    int x_idx = (x_col >= 1 && x_col <= (int)nc) ? x_col - 1 : 0;
+                    int y_idx = (y_col >= 1 && y_col <= (int)nc) ? y_col - 1 : (nc > 1 ? 1 : 0);
+                    int w_idx = (w_col >= 1 && w_col <= (int)nc) ? w_col - 1 : -1;
+
+                    batch_w[i] = (w_idx >= 0) ? batch_cols[i][w_idx] : 1.0;
+                    if (is_2d) {
+                        batch_x[i] = batch_cols[i][x_idx];
+                        batch_y[i] = batch_cols[i][y_idx];
+                    } else {
+                        batch_x[i] = batch_cols[i][v_idx];
+                        batch_y[i] = 0.0;
+                    }
+                }
+
+                if (is_2d && eng->live_2d) {
                     for (size_t i = 0; i < batch_len; ++i) {
                         histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
                     }
                 } else if (eng->live_1d) {
-                    if (eng->has_weights) {
+                    if (has_w) {
                         histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
                     } else {
                         histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
@@ -160,24 +184,6 @@ static void *ingest_worker_thread(void *arg) {
 
         if (n_cols == 0) continue;
 
-        /* Extract active 1D/2D coordinates and optional weights */
-        int v_idx = (eng->val_col >= 1 && eng->val_col <= (int)n_cols) ? eng->val_col - 1 : 0;
-        int x_idx = (eng->x_col >= 1 && eng->x_col <= (int)n_cols) ? eng->x_col - 1 : 0;
-        int y_idx = (eng->y_col >= 1 && eng->y_col <= (int)n_cols) ? eng->y_col - 1 : (n_cols > 1 ? 1 : 0);
-        int w_idx = (eng->w_col >= 1 && eng->w_col <= (int)n_cols) ? eng->w_col - 1 : -1;
-
-        double val_x = parsed_cols[x_idx];
-        double val_y = parsed_cols[y_idx];
-        double weight = (w_idx >= 0) ? parsed_cols[w_idx] : 1.0;
-
-        if (eng->is_2d) {
-            batch_x[batch_len] = val_x;
-            batch_y[batch_len] = val_y;
-        } else {
-            batch_x[batch_len] = parsed_cols[v_idx];
-            batch_y[batch_len] = 0.0;
-        }
-        batch_w[batch_len] = weight;
         for (size_t c = 0; c < TUI_MAX_COLS; ++c) {
             batch_cols[batch_len][c] = (c < n_cols) ? parsed_cols[c] : 0.0;
         }
@@ -187,6 +193,30 @@ static void *ingest_worker_thread(void *arg) {
         double now = get_time_now_sec();
         if (batch_len >= batch_max || (batch_len > 0 && now - last_flush_time >= 0.05)) {
             histo_mutex_lock(&eng->mutex);
+
+            int val_col = eng->val_col;
+            int x_col = eng->x_col;
+            int y_col = eng->y_col;
+            int w_col = eng->w_col;
+            bool is_2d = eng->is_2d;
+            bool has_w = eng->has_weights;
+
+            for (size_t i = 0; i < batch_len; ++i) {
+                size_t nc = batch_ncols[i];
+                int v_idx = (val_col >= 1 && val_col <= (int)nc) ? val_col - 1 : 0;
+                int x_idx = (x_col >= 1 && x_col <= (int)nc) ? x_col - 1 : 0;
+                int y_idx = (y_col >= 1 && y_col <= (int)nc) ? y_col - 1 : (nc > 1 ? 1 : 0);
+                int w_idx = (w_col >= 1 && w_col <= (int)nc) ? w_col - 1 : -1;
+
+                batch_w[i] = (w_idx >= 0) ? batch_cols[i][w_idx] : 1.0;
+                if (is_2d) {
+                    batch_x[i] = batch_cols[i][x_idx];
+                    batch_y[i] = batch_cols[i][y_idx];
+                } else {
+                    batch_x[i] = batch_cols[i][v_idx];
+                    batch_y[i] = 0.0;
+                }
+            }
 
             /* Apply exponential decay if active */
             if (eng->decay_lambda > 0.0 && eng->last_decay_time > 0.0) {
@@ -199,12 +229,12 @@ static void *ingest_worker_thread(void *arg) {
                 }
             }
 
-            if (eng->is_2d && eng->live_2d) {
+            if (is_2d && eng->live_2d) {
                 for (size_t i = 0; i < batch_len; ++i) {
                     histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
                 }
             } else if (eng->live_1d) {
-                if (eng->has_weights) {
+                if (has_w) {
                     histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
                 } else {
                     histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
@@ -232,12 +262,36 @@ static void *ingest_worker_thread(void *arg) {
 
     if (batch_len > 0) {
         histo_mutex_lock(&eng->mutex);
-        if (eng->is_2d && eng->live_2d) {
+        int val_col = eng->val_col;
+        int x_col = eng->x_col;
+        int y_col = eng->y_col;
+        int w_col = eng->w_col;
+        bool is_2d = eng->is_2d;
+        bool has_w = eng->has_weights;
+
+        for (size_t i = 0; i < batch_len; ++i) {
+            size_t nc = batch_ncols[i];
+            int v_idx = (val_col >= 1 && val_col <= (int)nc) ? val_col - 1 : 0;
+            int x_idx = (x_col >= 1 && x_col <= (int)nc) ? x_col - 1 : 0;
+            int y_idx = (y_col >= 1 && y_col <= (int)nc) ? y_col - 1 : (nc > 1 ? 1 : 0);
+            int w_idx = (w_col >= 1 && w_col <= (int)nc) ? w_col - 1 : -1;
+
+            batch_w[i] = (w_idx >= 0) ? batch_cols[i][w_idx] : 1.0;
+            if (is_2d) {
+                batch_x[i] = batch_cols[i][x_idx];
+                batch_y[i] = batch_cols[i][y_idx];
+            } else {
+                batch_x[i] = batch_cols[i][v_idx];
+                batch_y[i] = 0.0;
+            }
+        }
+
+        if (is_2d && eng->live_2d) {
             for (size_t i = 0; i < batch_len; ++i) {
                 histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
             }
         } else if (eng->live_1d) {
-            if (eng->has_weights) {
+            if (has_w) {
                 histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
             } else {
                 histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
