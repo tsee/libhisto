@@ -481,6 +481,121 @@ void test_fit_adversarial_and_pathological(void) {
     histo_destroy(h_bnd);
 }
 
+void test_fit_lognormal_recovery(void) {
+    const double true_params[] = {500.0, 1.5, 0.4}; /* A, mu, sigma */
+    histo_t *h = create_synthetic_histo(100, 0.1, 15.0, HISTO_FIT_MODEL_LOG_NORMAL, true_params, 3);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_LOG_NORMAL, NULL, NULL, &res);
+    TEST_ASSERT_EQUAL(HISTO_OK, status);
+    TEST_ASSERT_NOT_NULL(res);
+    TEST_ASSERT_TRUE(res->converged);
+
+    TEST_ASSERT_DOUBLE_WITHIN(5.0, true_params[0], res->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.05, true_params[1], res->params[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.05, true_params[2], res->params[2]);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+}
+
+void test_fit_gaussian_plus_linear_recovery(void) {
+    const double true_params[] = {80.0, 5.0, 0.8, 10.0, 0.5}; /* A, mu, sigma, c0, c1 */
+    histo_t *h = create_synthetic_histo(100, 0.0, 10.0, HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, true_params, 5);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, NULL, NULL, &res);
+    TEST_ASSERT_EQUAL(HISTO_OK, status);
+    TEST_ASSERT_NOT_NULL(res);
+    TEST_ASSERT_TRUE(res->converged);
+
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, true_params[0], res->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.05, true_params[1], res->params[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.05, true_params[2], res->params[2]);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, true_params[3], res->params[3]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, true_params[4], res->params[4]);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+}
+
+void test_fit_weibull_recovery(void) {
+    const double true_params[] = {300.0, 2.2, 4.0}; /* A, k, lambda */
+    histo_t *h = create_synthetic_histo(80, 0.1, 12.0, HISTO_FIT_MODEL_WEIBULL, true_params, 3);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_WEIBULL, NULL, NULL, &res);
+    TEST_ASSERT_EQUAL(HISTO_OK, status);
+    TEST_ASSERT_NOT_NULL(res);
+    TEST_ASSERT_TRUE(res->converged);
+
+    TEST_ASSERT_DOUBLE_WITHIN(5.0, true_params[0], res->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, true_params[1], res->params[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, true_params[2], res->params[2]);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+}
+
+void test_fit_gamma_recovery(void) {
+    const double true_params[] = {250.0, 3.5, 1.2}; /* A, k, theta */
+    histo_t *h = create_synthetic_histo(100, 0.1, 15.0, HISTO_FIT_MODEL_GAMMA, true_params, 3);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_GAMMA, NULL, NULL, &res);
+    TEST_ASSERT_EQUAL(HISTO_OK, status);
+    TEST_ASSERT_NOT_NULL(res);
+    TEST_ASSERT_TRUE(res->converged);
+
+    TEST_ASSERT_DOUBLE_WITHIN(5.0, true_params[0], res->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.15, true_params[1], res->params[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.15, true_params[2], res->params[2]);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+}
+
+void test_fit_poisson_recovery(void) {
+    const double true_params[] = {100.0, 4.5}; /* A, lambda */
+    histo_t *h = create_synthetic_histo(30, 0.0, 15.0, HISTO_FIT_MODEL_POISSON, true_params, 2);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_POISSON, NULL, NULL, &res);
+    TEST_ASSERT_EQUAL(HISTO_OK, status);
+    TEST_ASSERT_NOT_NULL(res);
+    TEST_ASSERT_TRUE(res->converged);
+
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, true_params[0], res->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, true_params[1], res->params[1]);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+}
+
+void test_fit_laplace_recovery(void) {
+    const double true_params[] = {150.0, 5.0, 1.2}; /* A, mu, b */
+    histo_t *h = create_synthetic_histo(100, 0.0, 10.0, HISTO_FIT_MODEL_LAPLACE, true_params, 3);
+    TEST_ASSERT_NOT_NULL(h);
+
+    histo_fit_result_t *res = NULL;
+    histo_status_t status = histo_fit_model(h, HISTO_FIT_MODEL_LAPLACE, NULL, NULL, &res);
+    TEST_ASSERT_EQUAL(HISTO_OK, status);
+    TEST_ASSERT_NOT_NULL(res);
+    TEST_ASSERT_TRUE(res->converged);
+
+    TEST_ASSERT_DOUBLE_WITHIN(3.0, true_params[0], res->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, true_params[1], res->params[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, true_params[2], res->params[2]);
+
+    histo_fit_result_destroy(res);
+    histo_destroy(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -489,6 +604,12 @@ int main(void) {
     RUN_TEST(test_fit_polynomial_linear_and_quadratic);
     RUN_TEST(test_fit_breit_wigner);
     RUN_TEST(test_fit_power_law);
+    RUN_TEST(test_fit_lognormal_recovery);
+    RUN_TEST(test_fit_gaussian_plus_linear_recovery);
+    RUN_TEST(test_fit_weibull_recovery);
+    RUN_TEST(test_fit_gamma_recovery);
+    RUN_TEST(test_fit_poisson_recovery);
+    RUN_TEST(test_fit_laplace_recovery);
     RUN_TEST(test_fit_custom_model);
     RUN_TEST(test_fit_box_constraints);
     RUN_TEST(test_fit_fixed_parameters);

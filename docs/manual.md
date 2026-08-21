@@ -493,7 +493,7 @@ cat data.bin | histo fit -m exponential --mle
 
 | Option | Shorthand | Description |
 | :--- | :--- | :--- |
-| `-m <M>`, `--model=<M>` | `-m` | Model: `gaussian` (default), `exponential`, `polynomial`, `breit-wigner`, `power-law` |
+| `-m <M>`, `--model=<M>` | `-m` | Model: `gaussian` (default), `exponential`, `polynomial`, `breit-wigner`, `power-law`, `lognormal`, `gauss+linear`, `weibull`, `gamma`, `poisson`, `laplace` |
 | `--mle` | | Use Poisson Maximum Likelihood Estimation (-2 ln L) |
 | `--unweighted` | | Use Unweighted Least Squares |
 | `-p`, `--plot` | `-p` | Render terminal ASCII curve fit overlay |

@@ -8,7 +8,7 @@
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (size < 10) return 0;
     
-    uint8_t fit_type = data[0] % 4;
+    uint8_t fit_type = data[0] % 11;
     
     histo_t *h = histo_create_uniform(100, -50.0, 50.0, HISTO_FLAG_TRACK_SUMW2);
     if (!h) return 0;
@@ -35,8 +35,28 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             histo_fit_model(h, HISTO_FIT_MODEL_POLYNOMIAL, NULL, &opts, &res);
             break;
         case 3:
-            opts.poly_degree = 3;
-            histo_fit_model(h, HISTO_FIT_MODEL_POLYNOMIAL, NULL, &opts, &res);
+            histo_fit_model(h, HISTO_FIT_MODEL_BREIT_WIGNER, NULL, &opts, &res);
+            break;
+        case 4:
+            histo_fit_model(h, HISTO_FIT_MODEL_POWER_LAW, NULL, &opts, &res);
+            break;
+        case 5:
+            histo_fit_model(h, HISTO_FIT_MODEL_LOG_NORMAL, NULL, &opts, &res);
+            break;
+        case 6:
+            histo_fit_model(h, HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, NULL, &opts, &res);
+            break;
+        case 7:
+            histo_fit_model(h, HISTO_FIT_MODEL_WEIBULL, NULL, &opts, &res);
+            break;
+        case 8:
+            histo_fit_model(h, HISTO_FIT_MODEL_GAMMA, NULL, &opts, &res);
+            break;
+        case 9:
+            histo_fit_model(h, HISTO_FIT_MODEL_POISSON, NULL, &opts, &res);
+            break;
+        case 10:
+            histo_fit_model(h, HISTO_FIT_MODEL_LAPLACE, NULL, &opts, &res);
             break;
     }
     

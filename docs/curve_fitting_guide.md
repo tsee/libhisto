@@ -18,6 +18,12 @@ The `histo fit` command-line tool fits parametric models directly to streaming d
 | **Polynomial** | `-m polynomial -d N` | \f$ f(x) = \sum_{k=0}^N c_k x^k \f$ | [0] c0, [1] c1, ..., [N] cN (Degree 0 to 10) |
 | **Breit-Wigner** | `-m breit-wigner` | \f$ f(x) = \frac{A}{\pi} \frac{\Gamma/2}{(x - M)^2 + (\Gamma/2)^2} \f$ | [0] Area Scale (A), [1] Peak Mass (M), [2] FWHM (Γ) |
 | **Power Law** | `-m power-law` | \f$ f(x) = A \cdot (x - x_0)^k \f$ | [0] Amplitude (A), [1] Exponent (k), [2] Origin (x0) |
+| **Log-Normal** | `-m lognormal` | \f$ f(x) = \frac{A}{x\sigma\sqrt{2\pi}} \exp\left(-\frac{(\ln x - \mu)^2}{2\sigma^2}\right) \f$ | [0] Scale (A), [1] Log-Mean (μ), [2] Log-Std (σ) |
+| **Gauss + Linear** | `-m gauss+linear` | \f$ f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right) + c_0 + c_1 x \f$ | [0] Amp (A), [1] Mean (μ), [2] Std (σ), [3] c0, [4] c1 |
+| **Weibull** | `-m weibull` | \f$ f(x) = A \frac{k}{\lambda} \left(\frac{x}{\lambda}\right)^{k-1} \exp\left(-\left(\frac{x}{\lambda}\right)^k\right) \f$ | [0] Scale (A), [1] Shape (k), [2] Scale (λ) |
+| **Gamma / Erlang** | `-m gamma` | \f$ f(x) = A \frac{x^{k-1} \exp(-x/\theta)}{\Gamma(k) \theta^k} \f$ | [0] Scale (A), [1] Shape (k), [2] Scale (θ) |
+| **Poisson** | `-m poisson` | \f$ f(x) = A \frac{\lambda^x \exp(-\lambda)}{\Gamma(x + 1)} \f$ | [0] Scale (A), [1] Rate (λ) |
+| **Laplace** | `-m laplace` | \f$ f(x) = \frac{A}{2b} \exp\left(-\frac{\lvert x - \mu \rvert}{b}\right) \f$ | [0] Scale (A), [1] Location (μ), [2] Diversity (b) |
 
 
 ### 1.2 CLI Usage Recipes
