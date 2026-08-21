@@ -6,7 +6,9 @@ from typing import List, Optional, Tuple, Dict, Callable
 import _libhisto
 from histo.constants import (
     FIT_GAUSSIAN, FIT_EXPONENTIAL, FIT_POLYNOMIAL,
-    FIT_BREIT_WIGNER, FIT_POWER_LAW, FIT_LOSS_CHI2, FIT_LOSS_POISSON_MLE
+    FIT_BREIT_WIGNER, FIT_POWER_LAW, FIT_LOG_NORMAL,
+    FIT_GAUSSIAN_PLUS_LINEAR, FIT_WEIBULL, FIT_GAMMA,
+    FIT_POISSON, FIT_LAPLACE, FIT_LOSS_CHI2, FIT_LOSS_POISSON_MLE
 )
 
 MODEL_MAP = {
@@ -19,6 +21,16 @@ MODEL_MAP = {
     "breit_wigner": FIT_BREIT_WIGNER,
     "cauchy": FIT_BREIT_WIGNER,
     "power_law": FIT_POWER_LAW,
+    "lognormal": FIT_LOG_NORMAL,
+    "log_normal": FIT_LOG_NORMAL,
+    "gauss_linear": FIT_GAUSSIAN_PLUS_LINEAR,
+    "gauss+linear": FIT_GAUSSIAN_PLUS_LINEAR,
+    "gauss+poly1": FIT_GAUSSIAN_PLUS_LINEAR,
+    "weibull": FIT_WEIBULL,
+    "gamma": FIT_GAMMA,
+    "erlang": FIT_GAMMA,
+    "poisson": FIT_POISSON,
+    "laplace": FIT_LAPLACE,
 }
 
 LOSS_MAP = {

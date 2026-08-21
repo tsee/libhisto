@@ -2412,6 +2412,12 @@ PyMODINIT_FUNC PyInit__libhisto(void) {
     PyModule_AddIntConstant(m, "FIT_POLYNOMIAL", HISTO_FIT_MODEL_POLYNOMIAL);
     PyModule_AddIntConstant(m, "FIT_BREIT_WIGNER", HISTO_FIT_MODEL_BREIT_WIGNER);
     PyModule_AddIntConstant(m, "FIT_POWER_LAW", HISTO_FIT_MODEL_POWER_LAW);
+    PyModule_AddIntConstant(m, "FIT_LOG_NORMAL", HISTO_FIT_MODEL_LOG_NORMAL);
+    PyModule_AddIntConstant(m, "FIT_GAUSSIAN_PLUS_LINEAR", HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR);
+    PyModule_AddIntConstant(m, "FIT_WEIBULL", HISTO_FIT_MODEL_WEIBULL);
+    PyModule_AddIntConstant(m, "FIT_GAMMA", HISTO_FIT_MODEL_GAMMA);
+    PyModule_AddIntConstant(m, "FIT_POISSON", HISTO_FIT_MODEL_POISSON);
+    PyModule_AddIntConstant(m, "FIT_LAPLACE", HISTO_FIT_MODEL_LAPLACE);
 
     /* Auto Binning Rules */
     PyModule_AddIntConstant(m, "BIN_RULE_AUTO", HISTO_BIN_RULE_AUTO);
