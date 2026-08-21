@@ -98,4 +98,15 @@ subtest 'Laplace fitting' => sub {
     is $p->[2], within(1.2, 0.3), 'b near 1.2';
 };
 
+subtest 'Direct model evaluation and analytical gradient evaluation' => sub {
+    my $val = Math::Histo::Fit->eval('gaussian', [100.0, 5.0, 2.0], 5.0);
+    is $val, within(100.0, 1e-6), 'Gaussian eval at peak is amplitude';
+
+    my $grad = Math::Histo::Fit->eval_grad('gaussian', [100.0, 5.0, 2.0], 5.0);
+    is ref($grad), 'ARRAY', 'grad is arrayref';
+    is scalar(@$grad), 3, 'grad has 3 components';
+    is $grad->[0], within(1.0, 1e-6), 'df/dA = 1 at peak';
+    is $grad->[1], within(0.0, 1e-6), 'df/dmu = 0 at peak';
+};
+
 done_testing;

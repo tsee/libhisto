@@ -7,6 +7,40 @@ use Math::Histo::Constants qw(:fit);
 
 our $VERSION = '0.1.1';
 
+my %MODEL_STR_MAP = (
+    gaussian     => HISTO_FIT_GAUSSIAN,
+    gauss        => HISTO_FIT_GAUSSIAN,
+    exponential  => HISTO_FIT_EXPONENTIAL,
+    exp          => HISTO_FIT_EXPONENTIAL,
+    polynomial   => HISTO_FIT_POLYNOMIAL,
+    poly         => HISTO_FIT_POLYNOMIAL,
+    breit_wigner => HISTO_FIT_BREIT_WIGNER,
+    cauchy       => HISTO_FIT_BREIT_WIGNER,
+    power_law    => HISTO_FIT_POWER_LAW,
+    powerlaw     => HISTO_FIT_POWER_LAW,
+    lognormal    => HISTO_FIT_LOG_NORMAL,
+    log_normal   => HISTO_FIT_LOG_NORMAL,
+    gauss_linear => HISTO_FIT_GAUSSIAN_PLUS_LINEAR,
+    gauss_poly1  => HISTO_FIT_GAUSSIAN_PLUS_LINEAR,
+    weibull      => HISTO_FIT_WEIBULL,
+    gamma        => HISTO_FIT_GAMMA,
+    erlang       => HISTO_FIT_GAMMA,
+    poisson      => HISTO_FIT_POISSON,
+    laplace      => HISTO_FIT_LAPLACE,
+);
+
+sub eval {
+    my ($class, $model, $params, $x) = @_;
+    my $m = (defined $model && exists $MODEL_STR_MAP{lc($model)}) ? $MODEL_STR_MAP{lc($model)} : int($model // 0);
+    return $class->eval_model($m, $params, $x);
+}
+
+sub eval_grad {
+    my ($class, $model, $params, $x) = @_;
+    my $m = (defined $model && exists $MODEL_STR_MAP{lc($model)}) ? $MODEL_STR_MAP{lc($model)} : int($model // 0);
+    return $class->eval_gradient($m, $params, $x);
+}
+
 package Math::Histo::Fit::Result;
 
 use strict;

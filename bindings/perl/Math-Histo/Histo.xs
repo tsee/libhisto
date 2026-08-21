@@ -1503,6 +1503,72 @@ _fit_builtin(CLASS, histo_t *h, int model_type, SV *init_ref, SV *lower_ref=NULL
     OUTPUT:
         RETVAL
 
+double
+eval_model(CLASS, int model_type, SV *params_ref, double x)
+    char *CLASS
+    CODE:
+        (void)CLASS;
+        if (!params_ref || !SvOK(params_ref) || !SvROK(params_ref) || SvTYPE(SvRV(params_ref)) != SVt_PVAV) {
+            croak("Math::Histo::Fit::eval_model: params must be an arrayref");
+        }
+        AV *av = (AV*)SvRV(params_ref);
+        SSize_t n = av_top_index(av) + 1;
+        double stack_p[16];
+        double *p = stack_p;
+        if (n > 16) {
+            p = (double*)malloc((size_t)n * sizeof(double));
+            if (!p) croak("Out of memory");
+        }
+        for (SSize_t i = 0; i < n; i++) {
+            SV **v = av_fetch(av, i, 0);
+            p[i] = (v && SvOK(*v)) ? SvNV(*v) : 0.0;
+        }
+        RETVAL = histo_fit_eval((histo_fit_model_t)model_type, p, (size_t)n, x);
+        if (p != stack_p) free(p);
+    OUTPUT:
+        RETVAL
+
+SV *
+eval_gradient(CLASS, int model_type, SV *params_ref, double x)
+    char *CLASS
+    CODE:
+        (void)CLASS;
+        if (!params_ref || !SvOK(params_ref) || !SvROK(params_ref) || SvTYPE(SvRV(params_ref)) != SVt_PVAV) {
+            croak("Math::Histo::Fit::eval_gradient: params must be an arrayref");
+        }
+        AV *av = (AV*)SvRV(params_ref);
+        SSize_t n = av_top_index(av) + 1;
+        double stack_p[16];
+        double *p = stack_p;
+        if (n > 16) {
+            p = (double*)malloc((size_t)n * sizeof(double));
+            if (!p) croak("Out of memory");
+        }
+        for (SSize_t i = 0; i < n; i++) {
+            SV **v = av_fetch(av, i, 0);
+            p[i] = (v && SvOK(*v)) ? SvNV(*v) : 0.0;
+        }
+        double *grad = (double*)malloc((size_t)n * sizeof(double));
+        if (!grad) {
+            if (p != stack_p) free(p);
+            croak("Out of memory");
+        }
+        histo_status_t st = histo_fit_eval_gradient((histo_fit_model_t)model_type, p, (size_t)n, x, grad);
+        if (p != stack_p) free(p);
+        if (st != HISTO_OK) {
+            free(grad);
+            croak("Math::Histo::Fit::eval_gradient failed");
+        }
+        AV *res_av = newAV();
+        av_extend(res_av, n - 1);
+        for (SSize_t i = 0; i < n; i++) {
+            av_push(res_av, newSVnv(grad[i]));
+        }
+        free(grad);
+        RETVAL = newRV_noinc((SV*)res_av);
+    OUTPUT:
+        RETVAL
+
 
 MODULE = Math::Histo    PACKAGE = Math::Histo::Fit::Result    PREFIX = histo_fit_res_xs_
 
