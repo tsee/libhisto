@@ -371,6 +371,24 @@ double histo_fit_eval(
 );
 
 /**
+ * @brief Evaluate the analytical parameter gradient of a built-in parametric model at coordinate x.
+ *
+ * @param model Built-in model type.
+ * @param params Array of model parameters.
+ * @param num_params Number of parameters.
+ * @param x Coordinate value.
+ * @param grad Output array to receive partial derivatives [df/dp0, df/dp1, ...]. Must hold num_params doubles.
+ * @return HISTO_OK on success, or error code.
+ */
+histo_status_t histo_fit_eval_gradient(
+    histo_fit_model_t model,
+    const double     *params,
+    size_t            num_params,
+    double            x,
+    double           *grad
+);
+
+/**
  * @brief Evaluate a custom parametric model callback at a given coordinate x.
  *
  * @param fn Custom model function pointer.

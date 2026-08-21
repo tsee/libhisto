@@ -209,6 +209,86 @@ void test_cmp_kl_divergence_smoothing(void) {
     histo_destroy(h2);
 }
 
+/* ========================================================================= */
+/* Statistical Distances Mathematical Invariants                             */
+/* ========================================================================= */
+
+void test_cmp_mathematical_invariants_and_metrics(void) {
+    const uint32_t nbins = 10;
+    histo_t *p = histo_create_uniform(nbins, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    histo_t *q = histo_create_uniform(nbins, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    histo_t *r = histo_create_uniform(nbins, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_NOT_NULL(q);
+    TEST_ASSERT_NOT_NULL(r);
+
+    /* P: left-skewed, Q: center-peaked, R: right-skewed */
+    for (uint32_t i = 0; i < nbins; ++i) {
+        histo_fill_bin(p, i, 1.0 + (double)(nbins - i));
+        histo_fill_bin(q, i, 1.0 + (double)((i < 5) ? i : (nbins - 1 - i)));
+        histo_fill_bin(r, i, 1.0 + (double)(i + 1));
+    }
+
+    /* 1. Identity of indiscernibles: D(P, P) == 0 */
+    double ks_pp = -1.0, chi2_pp = -1.0, wass_pp = -1.0, kl_pp = -1.0, bhatt_pp = -1.0;
+    uint32_t ndf_pp = 0;
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_ks(p, p, &ks_pp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_chi2(p, p, &chi2_pp, &ndf_pp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_wasserstein_1d(p, p, &wass_pp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_kl_divergence(p, p, &kl_pp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_bhattacharyya(p, p, &bhatt_pp));
+
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, ks_pp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, chi2_pp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, wass_pp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, kl_pp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, bhatt_pp);
+
+    /* 2. Non-negativity: D(P, Q) >= 0 */
+    double ks_pq = 0.0, chi2_pq = 0.0, wass_pq = 0.0, kl_pq = 0.0, bhatt_pq = 0.0;
+    double ks_qp = 0.0, chi2_qp = 0.0, wass_qp = 0.0, kl_qp = 0.0, bhatt_qp = 0.0;
+    uint32_t ndf_pq = 0, ndf_qp = 0;
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_ks(p, q, &ks_pq));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_chi2(p, q, &chi2_pq, &ndf_pq));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_wasserstein_1d(p, q, &wass_pq));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_kl_divergence(p, q, &kl_pq));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_bhattacharyya(p, q, &bhatt_pq));
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_kl_divergence(q, p, &kl_qp));
+
+    TEST_ASSERT_TRUE(ks_pq >= 0.0);
+    TEST_ASSERT_TRUE(chi2_pq >= 0.0);
+    TEST_ASSERT_TRUE(wass_pq >= 0.0);
+    TEST_ASSERT_TRUE(kl_pq >= 0.0); /* Gibbs' inequality KL(P||Q) >= 0 */
+    TEST_ASSERT_TRUE(kl_qp >= 0.0); /* Gibbs' inequality KL(Q||P) >= 0 */
+    TEST_ASSERT_TRUE(bhatt_pq >= 0.0);
+
+    /* 3. Symmetry: D(P, Q) == D(Q, P) */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_ks(q, p, &ks_qp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_chi2(q, p, &chi2_qp, &ndf_qp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_wasserstein_1d(q, p, &wass_qp));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_bhattacharyya(q, p, &bhatt_qp));
+
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, ks_pq, ks_qp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, chi2_pq, chi2_qp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, wass_pq, wass_qp);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, bhatt_pq, bhatt_qp);
+
+    /* 4. Triangle Inequality for Wasserstein-1 metric: W1(P, R) <= W1(P, Q) + W1(Q, R) */
+    double wass_pr = 0.0, wass_qr = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_wasserstein_1d(p, r, &wass_pr));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_cmp_wasserstein_1d(q, r, &wass_qr));
+
+    TEST_ASSERT_TRUE(wass_pr <= wass_pq + wass_qr + 1e-9);
+
+    histo_destroy(p);
+    histo_destroy(q);
+    histo_destroy(r);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_cmp_identical);
@@ -219,5 +299,6 @@ int main(void) {
     RUN_TEST(test_cmp_empty_and_null);
     RUN_TEST(test_cmp_variable_metrics);
     RUN_TEST(test_cmp_kl_divergence_smoothing);
+    RUN_TEST(test_cmp_mathematical_invariants_and_metrics);
     return UNITY_END();
 }

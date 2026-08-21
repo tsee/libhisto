@@ -3,6 +3,7 @@
 #include "histo/fit.h"
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include <float.h>
 
 #ifndef M_PI
@@ -643,6 +644,207 @@ void test_fit_new_models_options_and_mle(void) {
     histo_destroy(h_g);
 }
 
+/* Helper to compare analytical gradient against central finite difference */
+static void verify_model_gradient(
+    histo_fit_model_t model,
+    const double *params,
+    size_t num_params,
+    double x
+) {
+    double grad_ana[16] = {0};
+    double grad_num[16] = {0};
+    double p_work[16] = {0};
+    const double eps = 1.0e-6;
+
+    TEST_ASSERT_TRUE(num_params <= 16);
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fit_eval_gradient(model, params, num_params, x, grad_ana));
+
+    for (size_t j = 0; j < num_params; ++j) {
+        memcpy(p_work, params, num_params * sizeof(double));
+        p_work[j] = params[j] + eps;
+        double f_plus = histo_fit_eval(model, p_work, num_params, x);
+
+        p_work[j] = params[j] - eps;
+        double f_minus = histo_fit_eval(model, p_work, num_params, x);
+
+        grad_num[j] = (f_plus - f_minus) / (2.0 * eps);
+
+        double abs_diff = fabs(grad_ana[j] - grad_num[j]);
+        double scale = fmax(fabs(grad_num[j]), 1.0);
+        double rel_error = abs_diff / scale;
+
+        TEST_ASSERT_DOUBLE_WITHIN(1.0e-4, 0.0, rel_error);
+    }
+}
+
+void test_fit_all_models_analytical_gradients_vs_numerical_fd(void) {
+    /* 1. Gaussian */
+    {
+        const double p1[] = {100.0, 5.0, 1.5};
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN, p1, 3, 5.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN, p1, 3, 3.5);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN, p1, 3, 6.2);
+
+        const double p2[] = {2.5, -3.0, 0.8};
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN, p2, 3, -3.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN, p2, 3, -2.4);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN, p2, 3, -4.1);
+    }
+
+    /* 2. Exponential */
+    {
+        const double p1[] = {50.0, 0.3, 5.0};
+        verify_model_gradient(HISTO_FIT_MODEL_EXPONENTIAL, p1, 3, 0.0);
+        verify_model_gradient(HISTO_FIT_MODEL_EXPONENTIAL, p1, 3, 2.5);
+        verify_model_gradient(HISTO_FIT_MODEL_EXPONENTIAL, p1, 3, 7.0);
+
+        const double p2[] = {8.0, 1.5, -2.0};
+        verify_model_gradient(HISTO_FIT_MODEL_EXPONENTIAL, p2, 3, 0.5);
+        verify_model_gradient(HISTO_FIT_MODEL_EXPONENTIAL, p2, 3, 1.8);
+    }
+
+    /* 3. Polynomial */
+    {
+        const double p0[] = {7.5};
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p0, 1, 3.0);
+
+        const double p1[] = {4.0, 2.5};
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p1, 2, -1.5);
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p1, 2, 4.0);
+
+        const double p2[] = {1.0, -3.0, 0.5};
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p2, 3, 0.0);
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p2, 3, 2.2);
+
+        const double p3[] = {-2.0, 1.5, -0.4, 0.05};
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p3, 4, 3.5);
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p3, 4, -2.0);
+
+        const double p5[] = {1.0, 2.0, -0.5, 0.1, -0.02, 0.003};
+        verify_model_gradient(HISTO_FIT_MODEL_POLYNOMIAL, p5, 6, 1.8);
+    }
+
+    /* 4. Breit-Wigner */
+    {
+        const double p1[] = {80.0, 10.0, 2.0};
+        verify_model_gradient(HISTO_FIT_MODEL_BREIT_WIGNER, p1, 3, 10.0);
+        verify_model_gradient(HISTO_FIT_MODEL_BREIT_WIGNER, p1, 3, 8.5);
+        verify_model_gradient(HISTO_FIT_MODEL_BREIT_WIGNER, p1, 3, 12.0);
+
+        const double p2[] = {5.0, 0.0, 0.8};
+        verify_model_gradient(HISTO_FIT_MODEL_BREIT_WIGNER, p2, 3, 0.0);
+        verify_model_gradient(HISTO_FIT_MODEL_BREIT_WIGNER, p2, 3, 0.6);
+        verify_model_gradient(HISTO_FIT_MODEL_BREIT_WIGNER, p2, 3, -1.2);
+    }
+
+    /* 5. Power Law */
+    {
+        const double p1[] = {10.0, -2.2, 1.0};
+        verify_model_gradient(HISTO_FIT_MODEL_POWER_LAW, p1, 3, 2.0);
+        verify_model_gradient(HISTO_FIT_MODEL_POWER_LAW, p1, 3, 3.5);
+        verify_model_gradient(HISTO_FIT_MODEL_POWER_LAW, p1, 3, 6.0);
+
+        const double p2[] = {2.5, 1.5, 0.0};
+        verify_model_gradient(HISTO_FIT_MODEL_POWER_LAW, p2, 3, 1.5);
+        verify_model_gradient(HISTO_FIT_MODEL_POWER_LAW, p2, 3, 4.0);
+    }
+
+    /* 6. Log-Normal */
+    {
+        const double p1[] = {100.0, 1.5, 0.4};
+        verify_model_gradient(HISTO_FIT_MODEL_LOG_NORMAL, p1, 3, 2.5);
+        verify_model_gradient(HISTO_FIT_MODEL_LOG_NORMAL, p1, 3, 4.5);
+        verify_model_gradient(HISTO_FIT_MODEL_LOG_NORMAL, p1, 3, 7.0);
+
+        const double p2[] = {10.0, 0.0, 1.0};
+        verify_model_gradient(HISTO_FIT_MODEL_LOG_NORMAL, p2, 3, 0.5);
+        verify_model_gradient(HISTO_FIT_MODEL_LOG_NORMAL, p2, 3, 1.0);
+        verify_model_gradient(HISTO_FIT_MODEL_LOG_NORMAL, p2, 3, 3.0);
+    }
+
+    /* 7. Gaussian + Linear */
+    {
+        const double p1[] = {50.0, 4.0, 1.0, 10.0, -0.5};
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p1, 5, 4.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p1, 5, 3.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p1, 5, 5.5);
+
+        const double p2[] = {120.0, 0.0, 2.5, 5.0, 2.0};
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p2, 5, 0.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p2, 5, -2.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p2, 5, 3.0);
+    }
+
+    /* 8. Weibull */
+    {
+        const double p1[] = {50.0, 1.8, 4.0};
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p1, 3, 1.5);
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p1, 3, 3.5);
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p1, 3, 5.5);
+
+        const double p2[] = {20.0, 3.5, 2.0};
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p2, 3, 1.2);
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p2, 3, 2.0);
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p2, 3, 2.8);
+
+        const double p3[] = {10.0, 0.8, 5.0};
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p3, 3, 2.0);
+        verify_model_gradient(HISTO_FIT_MODEL_WEIBULL, p3, 3, 4.0);
+    }
+
+    /* 9. Gamma */
+    {
+        const double p1[] = {40.0, 2.5, 1.5};
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p1, 3, 1.5);
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p1, 3, 3.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p1, 3, 6.0);
+
+        const double p2[] = {15.0, 5.0, 0.8};
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p2, 3, 2.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p2, 3, 4.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p2, 3, 5.5);
+
+        const double p3[] = {30.0, 1.2, 3.0};
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p3, 3, 1.0);
+        verify_model_gradient(HISTO_FIT_MODEL_GAMMA, p3, 3, 4.0);
+    }
+
+    /* 10. Poisson */
+    {
+        const double p1[] = {100.0, 5.0};
+        verify_model_gradient(HISTO_FIT_MODEL_POISSON, p1, 2, 2.0);
+        verify_model_gradient(HISTO_FIT_MODEL_POISSON, p1, 2, 5.0);
+        verify_model_gradient(HISTO_FIT_MODEL_POISSON, p1, 2, 8.0);
+
+        const double p2[] = {25.0, 12.0};
+        verify_model_gradient(HISTO_FIT_MODEL_POISSON, p2, 2, 8.0);
+        verify_model_gradient(HISTO_FIT_MODEL_POISSON, p2, 2, 12.0);
+        verify_model_gradient(HISTO_FIT_MODEL_POISSON, p2, 2, 16.0);
+    }
+
+    /* 11. Laplace */
+    {
+        const double p1[] = {60.0, 5.0, 1.5};
+        verify_model_gradient(HISTO_FIT_MODEL_LAPLACE, p1, 3, 3.5);
+        verify_model_gradient(HISTO_FIT_MODEL_LAPLACE, p1, 3, 6.5);
+        verify_model_gradient(HISTO_FIT_MODEL_LAPLACE, p1, 3, 8.0);
+
+        const double p2[] = {20.0, 0.0, 2.0};
+        verify_model_gradient(HISTO_FIT_MODEL_LAPLACE, p2, 3, -2.5);
+        verify_model_gradient(HISTO_FIT_MODEL_LAPLACE, p2, 3, 1.8);
+        verify_model_gradient(HISTO_FIT_MODEL_LAPLACE, p2, 3, 4.0);
+    }
+
+    /* Test gradient error handling */
+    double dummy_grad[4] = {0};
+    const double valid_p[3] = {1.0, 2.0, 3.0};
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fit_eval_gradient(HISTO_FIT_MODEL_GAUSSIAN, NULL, 3, 1.0, dummy_grad));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fit_eval_gradient(HISTO_FIT_MODEL_GAUSSIAN, valid_p, 3, 1.0, NULL));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fit_eval_gradient(HISTO_FIT_MODEL_GAUSSIAN, valid_p, 3, NAN, dummy_grad));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fit_eval_gradient(HISTO_FIT_MODEL_GAUSSIAN, valid_p, 2, 1.0, dummy_grad)); /* too few params */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_fit_eval_gradient(HISTO_FIT_MODEL_CUSTOM, valid_p, 3, 1.0, dummy_grad));
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -657,6 +859,7 @@ int main(void) {
     RUN_TEST(test_fit_gamma_recovery);
     RUN_TEST(test_fit_poisson_recovery);
     RUN_TEST(test_fit_laplace_recovery);
+    RUN_TEST(test_fit_all_models_analytical_gradients_vs_numerical_fd);
     RUN_TEST(test_fit_new_models_options_and_mle);
     RUN_TEST(test_fit_custom_model);
     RUN_TEST(test_fit_box_constraints);

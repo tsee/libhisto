@@ -487,7 +487,7 @@ static bool model_eval_analytical_grad(
             double f = A * (k / lambda) * pow(u, k - 1.0) * exp(-u_k);
             grad[0] = (k / lambda) * pow(u, k - 1.0) * exp(-u_k);
             grad[1] = f * (1.0 / k + (1.0 - u_k) * log(u));
-            grad[2] = (f / lambda) * (k * (u_k - 1.0) - 1.0);
+            grad[2] = (f / lambda) * k * (u_k - 1.0);
             return true;
         }
         case HISTO_FIT_MODEL_GAMMA: {
@@ -550,6 +550,26 @@ static bool model_eval_analytical_grad(
         default:
             return false;
     }
+}
+
+histo_status_t histo_fit_eval_gradient(
+    histo_fit_model_t model,
+    const double     *params,
+    size_t            num_params,
+    double            x,
+    double           *grad
+) {
+    if (!params || !grad || !isfinite(x)) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    size_t expected_params = histo_fit_model_num_params(model, (model == HISTO_FIT_MODEL_POLYNOMIAL && num_params > 0) ? (uint32_t)(num_params - 1) : 0);
+    if (num_params < expected_params || num_params == 0) {
+        return HISTO_ERR_INVALID_ARG;
+    }
+    if (model_eval_analytical_grad(model, params, num_params, x, grad)) {
+        return HISTO_OK;
+    }
+    return HISTO_ERR_INVALID_ARG;
 }
 
 /**

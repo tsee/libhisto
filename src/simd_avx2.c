@@ -65,7 +65,7 @@ bool histo_fill_uniform_avx2(histo_t *h, const double *x, size_t n) {
                 if (idx > 0 && val < h->min + (double)idx * h->binsize) idx--;
                 h->bins[idx] += 1.0;
                 h->total_weight += 1.0;
-                h->total_sum_w2 += 1.0;
+                if (h->sum_w2) h->total_sum_w2 += 1.0;
                 h->n_fills++;
             }
         }
@@ -300,6 +300,7 @@ bool histo2d_fill_uniform_avx2(histo2d_t *h, const double *x, const double *y, s
 
                 size_t idx = histo2d_linear_index((uint32_t)ix, (uint32_t)iy, ny);
                 h->bins[idx] += 1.0;
+                if (h->sum_w2) h->sum_w2[idx] += 1.0;
                 h->total_weight += 1.0;
                 h->total_sum_w2 += 1.0;
                 h->n_fills++;
