@@ -21,6 +21,8 @@ Welcome to **libhisto**! This manual is organized as a progressive-disclosure gu
  │ Level 5: Streaming Dynamic Quantile Sketches (DDSketch, Log-Bins)      │
  ├────────────────────────────────────────────────────────────────────────┤
  │ Level 6: High Performance, SIMD Vectorization & System Architecture    │
+ ├────────────────────────────────────────────────────────────────────────┤
+ │ CLI Reference: Detailed Guide to all `histo` Subcommands               │
  └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +65,6 @@ python3 -c "import random; print('\n'.join(str(random.gauss(125.0, 3.5)) for _ i
 ```bash
 python3 -c "import random; print('\n'.join(str(random.gauss(100, 15)) for _ in range(5000)))" | \
   histo fill -a --auto-range | histo plot -S
-# Output:   ▂▃▅▇██▇▅▃▂   [N=5000, range=[45.2, 156.1), μ=100.1, σ=14.9]
 ```
 
 ### 0.2 Static CLI Plot Pipeline
@@ -98,7 +99,7 @@ python3 -c "import random; print('\n'.join(str(random.gauss(50, 10)) for _ in ra
  ─────────────────────┴──────────────────────────────────────────────────────
 ```
 
-### 0.2 Python 3 API
+### 0.3 Python 3 API
 
 ```python
 import histo
@@ -111,7 +112,7 @@ print(f"Mean: {h.mean():.2f} ± {h.std_dev():.2f} | Median: {h.median():.2f}")
 h.plot()
 ```
 
-### 0.3 Perl API
+### 0.4 Perl API
 
 ```perl
 use Math::Histo;
@@ -122,7 +123,7 @@ printf "Mean: %.2f | StdDev: %.2f | Median: %.2f\n", $h->mean, $h->std_dev, $h->
 $h->plot();
 ```
 
-### 0.4 Minimal C99 Program
+### 0.5 Minimal C99 Program
 
 ```c
 #include <stdio.h>
@@ -206,7 +207,7 @@ int main(void) {
 
 ## Level 2: Kernel Density Estimation (KDE) & Smooth Curves
 
-Non-parametric continuous density estimation with standard kernels (Gaussian, Epanechnikov, Boxcar, Triangular, Biweight, Cosine) and automated bandwidth selection (Silverman's rule of thumb, Scott's rule).
+Non-parametric continuous density estimation with standard kernels (Gaussian, Epanechnikov, Boxcar, Triangular, Biweight, Cosine) and automated bandwidth selection (Silverman's rule of thumb, Scott's rule). See the [Kernel Density Estimation & Automated Binning Guide](kde_guide.md).
 
 ### 2.1 C99 KDE Recipe
 
@@ -256,7 +257,7 @@ my $median = $kde->quantile(0.50);
 
 ## Level 3: Parametric Curve Fitting & Regression
 
-`libhisto` includes a non-linear least squares engine in `histo/fit.h` powered by the Levenberg-Marquardt optimizer with parameter box constraints and Poisson Maximum Likelihood Estimation (MLE).
+`libhisto` includes a non-linear least squares engine in `histo/fit.h` powered by the Levenberg-Marquardt optimizer with parameter box constraints and Poisson Maximum Likelihood Estimation (MLE). See the [Curve Fitting & Non-Linear Regression Guide](curve_fitting_guide.md).
 
 ### 3.1 CLI Curve Fitting (`histo fit`)
 
@@ -275,7 +276,9 @@ python3 -c "import random; print('\n'.join(str(random.gauss(50.0, 5.0)) for _ in
 
 int main(void) {
     histo_t *h = histo_create_uniform(50, 20.0, 80.0, HISTO_FLAG_TRACK_SUMW2);
-    // (Fill h with data...)
+    for (int i = 0; i < 1000; ++i) {
+        histo_fill(h, 50.0 + ((i % 20) - 10) * 1.5);
+    }
 
     histo_fit_options_t opts;
     histo_fit_options_init(&opts);
@@ -302,7 +305,7 @@ int main(void) {
 
 ## Level 4: 2-Dimensional Histograms & Spatial Heatmaps
 
-Track bivariate distributions (X, Y) with online running covariance Cov(X, Y), Pearson correlation rho_xy, 9-region partitioned guard matrices, and marginal projections.
+Track bivariate distributions (X, Y) with online running covariance Cov(X, Y), Pearson correlation rho_xy, 9-region partitioned guard matrices, marginal projections, and slices. See the [2D Histograms, Projections & Heatmaps Guide](histo2d_guide.md).
 
 ### 4.1 CLI 2D Pipeline
 
@@ -416,7 +419,118 @@ histo_fill_n(h, N_SAMPLES, values, NULL);
 
 ---
 
-## 7. Building & Installation
+## 7. CLI Subcommands Reference Guide
+
+The `histo` CLI executable provides a complete Unix toolkit for stream processing, plotting, fitting, and hypothesis testing.
+
+### 7.1 `histo fill`: Ingestion & Aggregation
+Ingests streaming values or multi-column data, aggregates into 1D or 2D histograms, and serializes output.
+
+```bash
+# Ingest 1D data with automatic range detection and output JSON
+cat data.txt | histo fill --bins=50 -a -o json -f output.json
+
+# Ingest 2D coordinates with weights
+cat sensor_data.csv | histo fill --2d --xbins=30 --ybins=20 -w -o binary -f matrix.histo
+```
+
+| Option | Shorthand | Description |
+| :--- | :--- | :--- |
+| `-n <N>`, `--bins=<N>` | `-n` | Number of bins (default: 20) |
+| `--min=<X>`, `--max=<X>` | | Explicit lower and upper range boundaries |
+| `-a`, `--auto-range` | `-a` | Auto-detect range using P1 to P99 quantiles |
+| `-w`, `--weights` | `-w` | Input contains weights (`value weight` or `x y weight`) |
+| `--2d` | | Enable bivariate 2D mode |
+| `-o <fmt>`, `--output=<fmt>` | `-o` | Output format: `binary` (default), `json`, or `text` |
+| `-f <path>`, `--file=<path>` | `-f` | Write serialized histogram to file path |
+
+### 7.2 `histo plot`: Terminal Visualization
+Renders 1D Unicode bar charts, 24-bit TrueColor palettes, or compact 1-line sparklines.
+
+```bash
+# Render TrueColor plot with plasma colormap
+cat data.json | histo plot --palette=plasma --title="Latency Distribution"
+
+# Render 1-line sparkline for compact monitoring
+cat data.bin | histo plot -S
+```
+
+| Option | Shorthand | Description |
+| :--- | :--- | :--- |
+| `-S`, `--sparkline` | `-S` | Render single-line inline sparkline |
+| `-p <P>`, `--palette=<P>` | `-p` | Palette: `viridis`, `plasma`, `inferno`, `magma`, `turbo`, `cividis`, `grayscale`, `rainbow` |
+| `-s <S>`, `--style=<S>` | `-s` | Style: `unicode` (default) or `ascii` |
+| `-c <M>`, `--color=<M>` | `-c` | Color mode: `auto` (default), `always`, `never` |
+| `-w <W>`, `--width=<W>` | `-w` | Maximum plot bar width in characters |
+| `-t <T>`, `--title=<T>` | `-t` | Chart header title string |
+
+### 7.3 `histo stats`: Moments & Non-Parametric Metrics
+Computes detailed statistical tables, robust dispersion metrics, and quantiles.
+
+```bash
+# Output human-readable statistical report
+cat data.bin | histo stats
+
+# Output machine-readable JSON summary for CI/CD pipelines
+cat data.bin | histo stats -f json
+```
+
+| Option | Shorthand | Description |
+| :--- | :--- | :--- |
+| `-f <fmt>`, `--format=<fmt>` | `-f` | Output format: `table` (default), `json`, `csv` |
+| `-q <list>`, `--quantiles=<list>`| | Comma-separated quantile list (e.g. `0.5,0.9,0.95,0.99`) |
+
+### 7.4 `histo fit`: Parametric Curve Fitting
+Fits analytical models using Levenberg-Marquardt non-linear regression with terminal overlays.
+
+```bash
+# Fit Gaussian peak with terminal overlay plot
+cat data.bin | histo fit -m gaussian -p
+
+# Fit Exponential decay using Poisson Maximum Likelihood (MLE)
+cat data.bin | histo fit -m exponential --mle
+```
+
+| Option | Shorthand | Description |
+| :--- | :--- | :--- |
+| `-m <M>`, `--model=<M>` | `-m` | Model: `gaussian` (default), `exponential`, `polynomial`, `breit-wigner`, `power-law` |
+| `--mle` | | Use Poisson Maximum Likelihood Estimation (-2 ln L) |
+| `--unweighted` | | Use Unweighted Least Squares |
+| `-p`, `--plot` | `-p` | Render terminal ASCII curve fit overlay |
+| `-d <D>`, `--degree=<D>` | `-d` | Degree for polynomial model (0 <= d <= 10) |
+| `-j`, `--json` | `-j` | Emit structured JSON fit results |
+| `-q`, `--quiet` | `-q` | Output only optimal parameter values (tab-separated) |
+
+### 7.5 `histo cmp`: Two-Sample Comparison & Hypothesis Testing
+Computes statistical distances (Kolmogorov-Smirnov, Chi-Square, 1-Wasserstein, KL Divergence, Bhattacharyya) between two histograms.
+
+```bash
+# Compare two distributions in table format
+histo cmp background.json data.json
+
+# Compare two distributions and emit JSON output
+histo cmp -f json background.json data.json
+```
+
+| Option | Shorthand | Description |
+| :--- | :--- | :--- |
+| `-f <fmt>`, `--format=<fmt>` | `-f` | Output format: `table` (default), `json`, `tsv` |
+| `-h`, `--help` | `-h` | Show help and available metrics |
+
+### 7.6 `histo top`: Real-Time Interactive Streaming Monitor
+Interactive 60 FPS terminal dashboard with analytical overlays and bivariate heatmaps. See the [Real-Time Interactive Monitor Guide (`histo top`)](top_manual.md).
+
+```bash
+# Real-time 1D telemetry monitor
+python3 -u -c "import random, time; [print(f'{random.gauss(50, 10):.2f}', flush=True) or time.sleep(0.001) for _ in range(50000)]" | histo top
+
+# Real-time 2D bivariate heatmap monitor
+python3 -u -c "import random, time; [print(f'{random.gauss(50, 10):.2f} {random.gauss(50, 10):.2f}', flush=True) or time.sleep(0.001) for _ in range(50000)]" | histo top --2d
+```
+
+---
+
+## 8. Building & Installation
 
 ### CMake Integration (`FetchContent`)
 ```cmake

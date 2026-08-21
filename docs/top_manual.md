@@ -1,36 +1,39 @@
 # Real-Time Interactive Distribution Monitor (`histo top`) {#histo_top_manual}
 
-**`histo top`** is a high-performance, real-time interactive terminal monitor for live streaming distributions. Similar to `top` or `htop` for system processes, `histo top` continuously ingests numeric streams from standard input or files, computes online statistical moments, and renders an interactive 60 FPS terminal dashboard with 1D bar charts, continuous KDE overlays, Gaussian curve fits, statistical error bars, and 24-bit TrueColor 2D bivariate heatmaps.
+**`histo top`** is a high-performance, real-time interactive terminal monitor for live streaming distributions. Similar to `top` or `htop` for system processes, `histo top` continuously ingests numeric streams from standard input, Unix pipes, log streams, or telemetry files, computes online statistical moments, and renders an interactive 60 FPS terminal dashboard with 1D bar charts, continuous KDE overlays, Gaussian curve fits, statistical error bars, and 24-bit TrueColor 2D bivariate heatmaps.
 
 ---
 
 ## 1. Overview & Key Capabilities
 
 ```text
- ┌─────────────────────────── libhisto top ───────────────────────────[LIVE: 12.5k/s | N=45000]┐
- │ Mean: 50.02 ± 9.98 │ Med: 50.01 │ IQR: 13.48 │ P95: 66.45 │ P99: 73.21                     │
- ├─────────────────────────────────────────────────────────────────────────────────────────────┤
- │ Range: [10.00, 90.00] │ Bins: 50 (Δ=1.60) │ Scale: LIN │ Auto: ON │ KDE: Gauss │ Fit: Gauss │
- │ [Count Scale]               0                    1125                  2250                 │
- │                             ├─────────────────────┼──────────────────────┤                  │
- │ [ 40.40,  42.00) │    820 │ ████████████████▋                                ╎±28.6╎        │
- │ [ 42.00,  43.60) │   1105 │ ███████████████████████▍                         ╎±33.2╎        │
- │ [ 43.60,  45.20) │   1450 │ ██████████████████████████████▉                  ╎±38.1╎        │
- │ [ 45.20,  46.80) │   1810 │ █████████████████████████████████████▋           ╎±42.5╎        │
- │ [ 46.80,  48.40) │   2105 │ ███████████████████████████████████████████      ╎±45.9╎        │
- │ [ 48.40,  50.00) │   2245 │ ██████████████████████████████████████████████   ╎±47.4╎        │
- ├─────────────────────────────────────────────────────────────────────────────────────────────┤
- │ [Space] Freeze  [a] Auto  [l] Log  [y] Y-Axis  [k] KDE  [f] Fit  [r/R] Rebin  [:] Cmd  [?]  │
- └─────────────────────────────────────────────────────────────────────────────────────────────┘
+ ┌─ libhisto top ─────────────────────────────────────────── [LIVE: 12.5k/s | N=45000] ─┐
+ │ Mean: 50.02 ± 9.98 │ Med: 50.01 │ IQR: 13.48 │ P95: 66.45 │ P99: 73.21               │
+ ├───────────────────────────────────────────────────────────────────────────────────────┤
+ │ Range: [10.00, 90.00] │ Bins: 50 │ Scale: LIN │ Pal: viridis │ Auto: ON │ KDE: Gauss  │
+ │ [Count Scale]               0                    1125                  2250           │
+ │                             ├─────────────────────┼──────────────────────┤            │
+ │ [ 40.40,  42.00) │    820 │ ████████████████▋                                ╎±28.6╎  │
+ │ [ 42.00,  43.60) │   1105 │ ███████████████████████▍                         ╎±33.2╎  │
+ │ [ 43.60,  45.20) │   1450 │ ██████████████████████████████▉                  ╎±38.1╎  │
+ │ [ 45.20,  46.80) │   1810 │ █████████████████████████████████████▋           ╎±42.5╎  │
+ │ [ 46.80,  48.40) │   2105 │ ███████████████████████████████████████████      ╎±45.9╎  │
+ │ [ 48.40,  50.00) │   2245 │ ██████████████████████████████████████████████   ╎±47.4╎  │
+ ├───────────────────────────────────────────────────────────────────────────────────────┤
+ │ [Space] Freeze  [+/-] Zoom  [Tab] Col  [w] Win  [s] Save  [H] Compact  [:] Cmd  [?]   │
+ └───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Highlights
 - **Two-Thread Lockless Ingestion Architecture**: Producer pipe reads occur on a dedicated background ingestion thread. Pausing the display or resizing your window never blocks upstream data sources.
 - **Micro-Batch Low-Latency Draining**: Ingests samples in 64-item batches with an automatic 50ms time-flush for low-rate streaming sources.
-- **Dynamic Reservoir Rebinning & Outlier-Resistant Auto-Ranging**: Outlier resistance calculates $[P_1, P_{99}]$ percentile spans to dynamically adjust histogram bounds without skew from rogue extreme values.
+- **Dynamic Reservoir Rebinning & Outlier-Resistant Auto-Ranging**: Outlier resistance calculates [P1, P99] percentile spans to dynamically adjust histogram bounds without skew from rogue extreme values.
 - **Rich 1D Analytical Overlays**: Toggle Kernel Density Estimation (`k`), Gaussian parameter fits (`f`), Poisson/SumW2 error whiskers (`e`), and count axis scale rulers (`y`).
 - **Bivariate 2D Heatmap Mode (`--2d`)**: Full 2D interactive grid with 24-bit TrueColor Viridis palettes, Log-Z intensity contrast (`l`), and color range reference bars (`g`).
-- **Weighted Stream Ingestion (`-w`)**: Native support for `<value> <weight>` streaming input.
+- **Multi-Column Live Switching (`Tab`, `1`..`9`, `:col`)**: Ingest multi-column TSV/CSV logs and switch active analysis metric instantaneously without restarting the process.
+- **Rolling Window & Exponential Decay (`w`, `:window`, `:decay`)**: Restrict live computation to the most recent N samples or apply continuous exponential decay fading.
+- **SGR Mouse Interaction**: Zoom dynamically with the mouse wheel and click directly on histogram rows to inspect exact bin boundaries, counts, percentages, and errors.
+- **Instant Snapshots & Exports (`s`, `:save`, `:export`)**: Export live or paused state directly into deterministic binary (`.histo`) or JSON (`.json`) files.
 
 ---
 
@@ -40,7 +43,7 @@
 
 ```bash
 histo top [OPTIONS] [FILE]
-# Or using the direct alias:
+# Or using the direct tool binary alias:
 histo-top [OPTIONS] [FILE]
 ```
 
@@ -50,14 +53,25 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 
 | Option | Shorthand | Description | Default |
 | :--- | :--- | :--- | :--- |
-| `--bins=<N>` | `-n <N>` | Initial number of bins | `50` |
-| `--min=<X>` | | Initial lower range boundary | `0.0` |
-| `--max=<X>` | | Initial upper range boundary | `100.0` |
-| `--2d` | | Enable bivariate 2D heatmap mode (expects `x y` input) | Disabled |
+| `--bins=<N>` | `-n <N>` | Initial number of bins (1D) or X/Y bins (2D) | `50` |
+| `--min=<X>` | | Initial lower range boundary (1D) | `0.0` |
+| `--max=<X>` | | Initial upper range boundary (1D) | `100.0` |
+| `--auto-range` | `-a` | Enable dynamic quantile auto-ranging | Enabled (`ON`) |
+| `--no-auto-range`| | Disable dynamic quantile auto-ranging | Disabled |
+| `--2d` | | Enable bivariate 2D heatmap mode (expects `x y` input) | Disabled (1D) |
+| `--xbins=<N>` | | Number of bins along X axis (2D mode) | `50` |
+| `--xmin=<X>`, `--xmax=<X>` | | Initial X axis bounds (2D mode) | `[0.0, 100.0]` |
+| `--ybins=<N>` | | Number of bins along Y axis (2D mode) | `50` |
+| `--ymin=<Y>`, `--ymax=<Y>` | | Initial Y axis bounds (2D mode) | `[0.0, 100.0]` |
 | `--weights` | `-w` | Input stream contains `value weight` (or `x y weight`) | Disabled |
+| `--value-col=<COL>` | `--val-col=<COL>` | 1-based column for sample coordinate in 1D mode | `1` |
+| `--xcol=<COL>` | | 1-based column for X coordinate in 2D mode | `1` |
+| `--ycol=<COL>` | | 1-based column for Y coordinate in 2D mode | `2` |
+| `--weights-col=<COL>` | | 1-based column for sample weight | `2` (1D) / `3` (2D) |
+| `--delimiter=<CHAR>` | `-d <CHAR>` | Field delimiter character (e.g. `\t`, `,`, ` `) | Whitespace / auto |
 | `--palette=<P>` | `-p <P>` | Color palette: `viridis`, `plasma`, `inferno`, `magma`, `turbo`, `cividis`, `grayscale`, `rainbow` (alias: `--colormap`) | `viridis` |
 | `--mono` | `-M` | Monochrome mode (disable ANSI colors, use ASCII ramps) | Auto (color) |
-| `--help` | `-h` | Display command-line options | |
+| `--help` | `-h` | Display command-line options and exit | |
 
 ### 2.3 Ready-to-Run Quickstart Examples
 
@@ -81,48 +95,60 @@ python3 -u -c "import random, time; [print(f'{random.gauss(50, 15):.2f} {random.
 
 ---
 
-## 3. Interactive Keybindings & Controls
+## 3. Interactive Keybindings Reference
 
 When `histo top` is running, control the display using single-key shortcuts:
 
-### 3.1 Global & Viewport Controls
+### 3.1 Navigation, Zoom & Pan
 
 | Key | Mode | Description |
 | :--- | :--- | :--- |
-| `Space` | 1D / 2D | **Freeze / Resume**: Freezes live UI snapshot for close inspection while background thread continues draining the stream. |
-| `p` / `P` | 1D / 2D | **Cycle Colormaps**: Cycles live between `viridis` → `plasma` → `inferno` → `magma` → `turbo` → `cividis` → `grayscale` → `rainbow`. |
-| `?` | 1D / 2D | **Help Modal**: Opens the interactive cheat sheet modal. Press `Esc`, `?`, or `Space` to dismiss. |
-| `:` | 1D / 2D | **Command Prompt**: Activates the command bar for direct numerical input (e.g. `:bins 80`). |
-| `C` | 1D / 2D | **Monochrome Toggle**: Toggles between 24-bit TrueColor gradients and monochrome ASCII density glyphs. |
-| `c` | 1D / 2D | **Clear**: Clears all accumulated samples, resetting bin counts and reservoir history. |
-| `q` / `Q` | 1D / 2D | **Quit**: Exits cleanly and restores standard terminal modes. |
-| `Ctrl+C` | 1D / 2D | **Interrupt / Quit**: Immediately restores terminal and exits. |
+| `+` / `=` / `z` / `PgUp` | 1D / 2D | **Zoom In (1.25x)**: Shrinks the visible range window by 20% around the center. |
+| `-` / `_` / `Z` / `PgDn` | 1D / 2D | **Zoom Out (0.8x)**: Expands the visible range window by 25% around the center. |
+| `←` / `h` / `[` / `<` | 1D / 2D | **Pan Left (-10%)**: Shifts the visible range window 10% to the left. |
+| `→` / `l` (in nav) / `]` / `>` | 1D / 2D | **Pan Right (+10%)**: Shifts the visible range window 10% to the right. |
+| `↑` | 2D / 1D | **Pan Up (+10%)** in 2D mode / **Zoom In** in 1D mode. |
+| `↓` | 2D / 1D | **Pan Down (-10%)** in 2D mode / **Zoom Out** in 1D mode. |
+| `0` / `Home` | 1D / 2D | **Reset View**: Re-enables dynamic auto-ranging and resets zoom/pan viewport. |
 
-### 3.2 1D Analytical Overlays & Scale Controls
+### 3.2 Display & Analytical Overlays
 
 | Key | Mode | Description |
 | :--- | :--- | :--- |
 | `l` | 1D | **Cycle Log Scales**: Cycles between `Linear` → `Log-Y` (log counts) → `Log-X` (logarithmic bin spacing) → `Log-Log`. |
+| `l` | 2D | **Log-Z Intensity**: Toggles logarithmic color intensity mapping (log10(c + 1)) to highlight faint background details. |
 | `k` | 1D | **KDE Overlay**: Toggles continuous Gaussian Kernel Density Estimation curve (cyan `◆` marks). |
-| `f` | 1D | **Gaussian Fit Overlay**: Toggles real-time Levenberg-Marquardt Gaussian fit curve (magenta `✖` marks; `✦` for overlap). |
-| `e` | 1D | **Error Bars**: Toggles statistical uncertainty whiskers \f$\pm\sqrt{\sum w^2}\f$ (formatted as `╎±err╎`). |
+| `f` | 1D | **Gaussian Fit Overlay**: Toggles real-time Levenberg-Marquardt Gaussian fit curve (magenta `✖` marks; yellow `✦` for overlap). |
+| `e` | 1D | **Error Bars**: Toggles statistical uncertainty whiskers ±sqrt(sum w^2) (formatted as `╎±err╎`). |
 | `y` / `Y` | 1D | **Count Axis Ruler**: Toggles the top count-scale tick ruler (`0 ... MaxCount`). |
-| `a` / `A` | 1D | **Auto-Range**: Toggles dynamic outlier-resistant range detection (\f$P_1\f$ to \f$P_{99}\f$ with 5% margin). |
+| `g` / `G` | 2D | **Color Legend**: Toggles the TrueColor spectrum reference bar showing exact numeric bounds and active palette name. |
+| `p` / `P` | 1D / 2D | **Cycle Colormaps**: Cycles live between `viridis` → `plasma` → `inferno` → `magma` → `turbo` → `cividis` → `grayscale` → `rainbow`. |
+| `C` | 1D / 2D | **Monochrome Toggle**: Toggles between 24-bit TrueColor gradients and monochrome ASCII density glyphs (` .:-=+*#%@`). |
+| `H` | 1D / 2D | **Compact Header**: Toggles between detailed 3-row stats header and compact 1-row header for smaller terminals. |
+| `B` | 1D | **Auto-Fit Bins**: Toggles auto-fitting the bin count to the exact available terminal row height. |
+| `a` / `A` | 1D | **Auto-Range**: Toggles dynamic outlier-resistant range detection (P1 to P99 with 5% margin). |
 | `r` | 1D | **Halve Bins**: Halves bin count and re-aggregates from reservoir cache. |
 | `R` | 1D | **Double Bins**: Doubles bin count and re-aggregates from reservoir cache. |
 
-### 3.3 2D Heatmap Controls (`--2d`)
+### 3.3 Columns, Windowing & Persistence
 
 | Key | Mode | Description |
 | :--- | :--- | :--- |
-| `l` | 2D | **Log-Z Intensity**: Toggles logarithmic color intensity mapping (\f$\log_{10}(c + 1)\f$) to bring out low-count background details. |
-| `g` / `G` | 2D | **Color Legend**: Toggles the TrueColor spectrum reference bar showing exact numeric bounds and active palette name. |
+| `Tab` / `Shift+Tab` | 1D | **Cycle Active Column**: Cycles forward/backward through available data columns (1 to 16). |
+| `1` .. `9` | 1D | **Select Column**: Directly switches to data column 1 through 9. |
+| `w` | 1D / 2D | **Cycle Rolling Window**: Cycles rolling sample buffer: `ALL` → `1,000` → `5,000` → `10,000` → `50,000`. |
+| `Space` | 1D / 2D | **Freeze / Resume**: Freezes live UI snapshot for close inspection while background thread continues draining the stream. |
+| `s` | 1D / 2D | **Save Snapshot**: Exports instantaneous histogram snapshot to `./histo_snapshot_<timestamp>.histo`. |
+| `c` | 1D / 2D | **Clear**: Clears all accumulated samples, resetting bin counts and reservoir history. |
+| `?` | 1D / 2D | **Help Modal**: Opens the interactive cheat sheet modal. Press `Esc`, `?`, or `Space` to dismiss. |
+| `:` | 1D / 2D | **Command Prompt**: Activates the command bar for direct numerical input (e.g. `:bins 80`). |
+| `q` / `Q` / `Ctrl+C` | 1D / 2D | **Quit**: Exits cleanly and restores standard terminal modes. |
 
 ---
 
-## 4. Command Prompt (`:`) Subcommands
+## 4. Interactive Command Prompt (`:`) Reference
 
-Pressing **`:`** opens the command bar at the bottom of the screen.
+Pressing **`:`** opens the interactive command bar at the bottom of the screen.
 
 ```text
 :palette plasma█
@@ -130,12 +156,22 @@ Pressing **`:`** opens the command bar at the bottom of the screen.
 
 | Command | Shorthand | Arguments | Example | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `:palette <P>` | `:p <P>` | Palette name (`viridis`, `plasma`, `inferno`, `magma`, `turbo`, `cividis`, `grayscale`, `rainbow`) | `:palette plasma` | Changes the active colormap. Omit argument to cycle. |
-| `:bins <N>` | `:b <N>` | Number of bins (\f$1 \le N \le 100000\f$) | `:bins 100` | Rebuilds 1D histogram with $N$ bins from reservoir. |
-| `:range <A> <B>` | `:r <A> <B>` | Min and max bounds (\f$A < B\f$) | `:range 20 80` | Zooms viewport into $[A, B]$ and re-aggregates reservoir. |
+| `:bins <N\|auto>` | `:b <N\|auto>` | Number of bins (1 <= N <= 100000) or `auto` | `:bins 100` | Rebuilds 1D histogram with N bins (or auto-fits to rows) from reservoir. |
+| `:range <A> <B>` | `:r <A> <B>` | Min and max bounds (A < B) | `:range 20 80` | Zooms viewport into [A, B] and re-aggregates reservoir. |
+| `:col <N>` | `:c <N>` | Column index (1 <= N <= 16) | `:col 3` | Switches active 1D analysis metric to column N. |
+| `:xcol <N>` | | Column index (1 <= N <= 16) | `:xcol 2` | Switches 2D X-coordinate metric to column N. |
+| `:ycol <N>` | | Column index (1 <= N <= 16) | `:ycol 4` | Switches 2D Y-coordinate metric to column N. |
+| `:window <N>` | `:w <N>` | Window sample size (0 for all) | `:window 5000` | Restricts computation to the most recent N samples. |
+| `:decay <lambda>` | | Decay rate lambda >= 0 (per second) | `:decay 0.1` | Applies exponential decay factor exp(-lambda * dt) to older samples. |
+| `:save [path]` | `:s [path]` | Optional output file path | `:save /tmp/snap.histo` | Exports binary (`.histo`) or JSON (`.json`) snapshot. |
+| `:export [path]` | | Optional output file path | `:export /tmp/snap.json` | Exports snapshot (inferred format by file extension). |
+| `:palette <P>` | `:p <P>` | Palette name (`viridis`, `plasma`, etc.) | `:palette plasma` | Changes the active colormap. Omit argument to cycle. |
 | `:scale <MODE>` | `:sc <MODE>` | `linear`, `logy`, `logx`, `loglog` | `:scale logy` | Sets 1D axis scaling mode. |
-| `:autorange [ARG]`| `:a [ARG]` | `on`, `off`, or threshold (\f$0 < T < 1\f$) | `:autorange 0.05` | Enables/disables auto-ranging with threshold $T$. |
-| `:clear` | | None | `:clear` | Clears all histogram bins and sample cache. |
+| `:autorange [ARG]`| `:a [ARG]` | `on`, `off`, or threshold (0 < T < 1) | `:autorange 0.05` | Enables/disables auto-ranging with quantile margin T. |
+| `:zoom <factor>` | `:z <factor>` | Magnification factor (> 0) | `:zoom 2.0` | Zooms into current center by factor. |
+| `:pan <dx> [dy]` | | Fractional pan offsets | `:pan 0.2` | Pans visible viewport by fractional offset. |
+| `:compact` | `:H` | None | `:compact` | Toggles compact single-row header mode. |
+| `:clear` | `:reset` | None | `:clear` | Clears all histogram bins and sample cache. |
 | `:help` | `:h` | None | `:help` | Opens help cheat sheet modal. |
 | `:quit` | `:q` | None | `:quit` | Exits `histo top`. |
 
@@ -143,57 +179,60 @@ Press **`Enter`** to execute a command or **`Esc`** to cancel.
 
 ---
 
-## 5. In-Depth Feature Walkthrough
+## 5. Mouse Interaction (SGR Mouse Mode)
 
-### 5.1 Real-Time Kernel Density Estimation (KDE) Overlay (`k`)
-When **`k`** is pressed and at least 5 samples have been ingested:
-- A continuous Gaussian KDE is computed over the active range using Silverman's rule-of-thumb bandwidth \f$h = 1.06 \cdot \hat{\sigma} \cdot n^{-1/5}\f$.
-- The continuous density \f$f(x)\f$ is converted to expected bin counts \f$C_i = f(x_i) \cdot W_{\text{tot}} \cdot \Delta x\f$.
-- Overlay markers appear in the terminal:
-  - **Cyan `◆`**: KDE expected density point.
-  - **Yellow `✦`**: Point where both KDE and Gaussian Fit intersect the same column.
-- Subheader displays active bandwidth: `│ KDE: Gauss(h=0.85)`.
+`histo top` automatically enables SGR extended mouse tracking on supported terminals:
 
-### 5.2 Real-Time Gaussian Fit Overlay (`f`)
-When **`f`** is pressed and at least 5 samples have been ingested:
-- `libhisto` runs a Levenberg-Marquardt non-linear regression fitting \f$f(x) = A \cdot \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)\f$.
-- When converged, the predicted curve is rendered across bin rows:
-  - **Magenta `✖`**: Gaussian fit prediction point.
-  - **Yellow `✦`**: Overlap with KDE density marker.
-- Subheader displays fitted parameters: `│ Fit: μ=50.02 σ=9.98`.
-
-### 5.3 Statistical Error Whiskers (`e`)
-When **`e`** is pressed:
-- Statistical error for each bin is calculated via \f$\sigma_i = \sqrt{\sum w^2}\f$ (Poisson uncertainty for unweighted data).
-- The uncertainty is formatted and appended to each row:
-  - TrueColor mode: `╎±14.2╎` in muted gray ANSI.
-  - Monochrome mode: `+-14.2`.
-- Subheader indicates `│ Err: ON`.
-
-### 5.4 Count Axis Ruler (`y`)
-When **`y`** is pressed:
-- A dual-row scale ruler is inserted directly above the histogram bar rows:
+- **Mouse Wheel Scroll Up**: Zooms in by 1.25x (visible range contracts by 20% around viewport midpoint).
+- **Mouse Wheel Scroll Down**: Zooms out by 0.8x (visible range expands by 25% around viewport midpoint).
+- **Left Mouse Click on Histogram Row (1D)**: Inspects the clicked bin row directly. The status bar immediately displays the exact numerical interval, sample count, percentage of total weight, and Poisson/SumW2 uncertainty:
   ```text
-  [Count Scale]               0                    750                   1500
-                              ├─────────────────────┼──────────────────────┤
+  >> Bin 14 [45.20, 46.80): Count=1810.00 (14.2%) ±42.54
   ```
-- Scale numbers are dynamically right-aligned and scaled (0, 50%, 100%) matching linear or logarithmic modes without terminal truncation.
-- Subheader indicates `│ Axis: ON`.
-
-### 5.5 2D Bivariate Heatmap Mode (`--2d`)
-When started with `--2d`:
-- Expects pairs of coordinates (`x y`) per line.
-- Renders a 2D intensity grid where colors represent sample density:
-  - **Viridis TrueColor Palette**: Smooth perceptual colormap transitioning from dark purple (0%) → teal → green → bright yellow (100%).
-  - **Color Range Legend Bar (`g`)**: Displays complete color scale alongside minimum and maximum intensity values.
-  - **Log-Z Intensity (`l`)**: Normalizes bin colors using \f$\log_{10}(c + 1)\f$, making faint structures and background tails visible alongside dense clusters.
 
 ---
 
 ## 6. Real-World Production Recipes
 
-### 6.1 Monitoring Web Server Request Latencies
-Pipe latency metrics directly from production access logs into `histo top`:
+### 6.1 Linux Kernel Interrupt Distribution (`/proc/interrupts`)
+Monitor hardware interrupt rates across CPU cores in real time:
+
+```bash
+# Ingest context switch interrupt counts per second
+while true; do
+  awk 'NR>1 {for(i=2;i<=NF-3;i++) print $i}' /proc/interrupts
+  sleep 1
+done | histo top --bins=40 --palette=turbo
+```
+
+### 6.2 System Context Switches & Block I/O (`vmstat`)
+Monitor distribution of context switches per second:
+
+```bash
+# Ingest context switch column (col 12) from vmstat
+vmstat 1 | awk 'NR>2 {print $12}' | histo top --bins=50 --palette=plasma
+```
+
+### 6.3 Multi-Core CPU Utilization (`mpstat`)
+Inspect the distribution of `%idle` across all CPU cores:
+
+```bash
+# Ingest %idle column (col 12) from mpstat
+mpstat -P ALL 1 | awk 'NR>3 && $3 ~ /^[0-9]+$/ {print $NF}' | histo top --bins=40 --min=0 --max=100
+```
+
+### 6.4 Network Packet Size Distribution (`tcpdump`)
+Monitor packet length distribution on a live network interface:
+
+```bash
+# Ingest IP packet length in bytes
+sudo tcpdump -l -n -e -i eth0 2>/dev/null | \
+  awk '{print $NF}' | grep -E '^[0-9]+$' | \
+  histo top --bins=60 --min=40 --max=1500
+```
+
+### 6.5 Web Server Latency Stream (NGINX / Envoy / Apache)
+Pipe latency metrics directly from production access logs:
 
 ```bash
 # Ingest NGINX / Envoy request durations in milliseconds
@@ -203,16 +242,19 @@ tail -F /var/log/nginx/access.log | \
 ```
 > *Tip*: Press `l` to switch to **Log-Y** mode to easily monitor rare P99/P99.9 latency spikes.
 
-### 6.2 Database Query Execution Times
+### 6.6 Multi-Column Log Ingestion (Switching with `Tab` or `1`..`9`)
+Stream multi-column CSV/TSV data and switch metrics on-the-fly:
+
 ```bash
-# Monitor PostgreSQL slow query durations
-pg_log_stream | awk '/duration:/ {print $NF}' | histo top -n 40
+# Stream: <latency_ms> <bytes_sent> <cpu_pct>
+tail -F /var/log/app/metrics.tsv | histo top --val-col=1
+# Press '1' to inspect Latency, '2' for Bytes, '3' for CPU!
 ```
 
-### 6.3 2D Coordinate Telemetry (Sensor / Simulation)
+### 6.7 2D Coordinate Telemetry (Sensors / Simulation)
 ```bash
-# Monitor bivariate position coordinates from a robotic arm or physics particle sim
-simulation_engine --emit-coords | histo top --2d --bins=40
+# Monitor bivariate position coordinates (X, Y)
+simulation_engine --emit-coords | histo top --2d --bins=40 --palette=inferno
 ```
 
 ---
