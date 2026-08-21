@@ -231,6 +231,18 @@ static void render_2d_heatmap_viewport(tui_frame_t *f, const tui_state_t *st, co
     }
 }
 
+static void format_top_coord(char *buf, size_t sz, double val, bool use_sci) {
+    if (use_sci) {
+        snprintf(buf, sz, "%8.2e", val);
+    } else if (fabs(val) >= 10000.0) {
+        snprintf(buf, sz, "%8.1f", val);
+    } else if (fabs(val) >= 100.0) {
+        snprintf(buf, sz, "%7.2f", val);
+    } else {
+        snprintf(buf, sz, "%6.2f", val);
+    }
+}
+
 static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const histo_t *h, int width, int max_rows) {
     if (!h || max_rows <= 0) {
         for (int r = 0; r < max_rows; ++r) tui_render_row(f, "", width, true);
@@ -268,14 +280,47 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
     if (max_scaled <= 0.0) max_scaled = 1.0;
 
     uint32_t step = (nbins > (uint32_t)max_rows) ? (nbins + (uint32_t)max_rows - 1) / (uint32_t)max_rows : 1;
+
+    double r_min = 0.0, r_max = 0.0;
+    histo_range(h, &r_min, &r_max);
+    bool use_sci = (fabs(r_max) >= 1e5 || fabs(r_min) >= 1e5 || (r_max - r_min > 0.0 && r_max - r_min < 0.001));
+
+    int max_bounds_len = 0;
+    int max_count_len = 0;
+
+    for (uint32_t i = 0; i < nbins; i += step) {
+        double lower = 0.0, upper = 0.0, content = 0.0;
+        histo_bin_bounds(h, i, &lower, &upper);
+        histo_bin_content(h, i, &content);
+
+        char b1[32], b2[32], b_tmp[128], c_tmp[32];
+        format_top_coord(b1, sizeof(b1), lower, use_sci);
+        format_top_coord(b2, sizeof(b2), upper, use_sci);
+        int blen = snprintf(b_tmp, sizeof(b_tmp), "[%s, %s)", b1, b2);
+        if (blen > max_bounds_len) max_bounds_len = blen;
+
+        int clen;
+        if (content == floor(content) && content >= 0.0 && content < 1e9) {
+            clen = snprintf(c_tmp, sizeof(c_tmp), "%7.0f", content);
+        } else if (fabs(content) < 1e6) {
+            clen = snprintf(c_tmp, sizeof(c_tmp), "%7.2f", content);
+        } else {
+            clen = snprintf(c_tmp, sizeof(c_tmp), "%7.2e", content);
+        }
+        if (clen > max_count_len) max_count_len = clen;
+    }
+
+    if (max_bounds_len < 16) max_bounds_len = 16;
+    if (max_count_len < 7) max_count_len = 7;
+
+    int prefix_cols = max_bounds_len + max_count_len + 6; /* "%-*s │ %*s │ " */
+    int bar_max = width - 4 - prefix_cols;
+    if (bar_max < 2) bar_max = 2;
+
     int rows_drawn = 0;
 
     /* Optional Count Axis (Y-Axis) ruler at top of viewport */
     if (st->show_y_axis && max_rows >= 3) {
-        int prefix_cols = 29;
-        int bar_max = width - 4 - prefix_cols;
-        if (bar_max < 2) bar_max = 2;
-
         char label_buf[4096];
         char line_buf[4096];
 
@@ -307,11 +352,11 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
             memcpy(label_bar + max_start, v_max, max_len);
         }
 
-        snprintf(label_buf, sizeof(label_buf), "%-16s │ %6s │ %s", "[Count Scale]", "", label_bar);
+        snprintf(label_buf, sizeof(label_buf), "%-*s │ %*s │ %s", max_bounds_len, "[Count Scale]", max_count_len, "", label_bar);
         tui_render_row(f, label_buf, width, true);
         rows_drawn++;
 
-        int pos = snprintf(line_buf, sizeof(line_buf), "%-16s │ %6s │ ├", "", "");
+        int pos = snprintf(line_buf, sizeof(line_buf), "%-*s │ %*s │ ├", max_bounds_len, "", max_count_len, "");
         for (int k = 1; k < bar_max - 1 && pos + 4 < (int)sizeof(line_buf); ++k) {
             if (k == bar_max / 2) {
                 pos += snprintf(line_buf + pos, sizeof(line_buf) - pos, "┼");
@@ -330,25 +375,21 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         histo_bin_content(h, i, &content);
 
         char row_buf[4096];
-        char bounds_str[32];
-        if (upper >= 10000.0 || (lower > 0.0 && lower < 0.01)) {
-            snprintf(bounds_str, sizeof(bounds_str), "[%6.2g, %6.2g)", lower, upper);
-        } else {
-            snprintf(bounds_str, sizeof(bounds_str), "[%6.2f, %6.2f)", lower, upper);
-        }
+        char b1[32], b2[32];
+        format_top_coord(b1, sizeof(b1), lower, use_sci);
+        format_top_coord(b2, sizeof(b2), upper, use_sci);
+
+        char bounds_str[128];
+        snprintf(bounds_str, sizeof(bounds_str), "[%s, %s)", b1, b2);
 
         char count_str[32];
         if (content == floor(content) && content >= 0.0 && content < 1e9) {
-            snprintf(count_str, sizeof(count_str), "%7.0f", content);
+            snprintf(count_str, sizeof(count_str), "%*.0f", max_count_len, content);
         } else if (fabs(content) < 1e6) {
-            snprintf(count_str, sizeof(count_str), "%7.2f", content);
+            snprintf(count_str, sizeof(count_str), "%*.2f", max_count_len, content);
         } else {
-            snprintf(count_str, sizeof(count_str), "%7.2g", content);
+            snprintf(count_str, sizeof(count_str), "%*.2e", max_count_len, content);
         }
-
-        int prefix_cols = 29;
-        int bar_max = width - 4 - prefix_cols;
-        if (bar_max < 2) bar_max = 2;
 
         double val_scaled = (st->scale_mode == SCALE_LOG_Y || st->scale_mode == SCALE_LOG_LOG) ?
                             log10(content + 1.0) : content;
@@ -401,7 +442,7 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
             histo_palette_sample_ansi_fg(st->palette, frac, color_ansi, sizeof(color_ansi));
         }
 
-        int pos = snprintf(row_buf, sizeof(row_buf), "%-16s │ %6s │ ", bounds_str, count_str);
+        int pos = snprintf(row_buf, sizeof(row_buf), "%-*s │ %*s │ ", max_bounds_len, bounds_str, max_count_len, count_str);
 
         int max_col = full_chars + (rem_eighths > 0 ? 1 : 0);
         if (kde_col >= max_col) max_col = kde_col + 1;

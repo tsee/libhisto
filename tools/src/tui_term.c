@@ -448,6 +448,6 @@ void tui_render_row(tui_frame_t *f, const char *content, int width, bool newline
         for (int i = 0; i < pad; ++i) tui_frame_puts(f, " ");
     }
 
-    tui_frame_puts(f, " │");
+    tui_frame_puts(f, "\033[0m │");
     if (newline) tui_frame_puts(f, "\r\n");
 }
