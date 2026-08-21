@@ -1,3 +1,8 @@
+/**
+ * @file histo.h
+ * @brief Public C API for 1D histograms, moments, and statistical operations.
+ */
+
 #ifndef LIBHISTO_HISTO_H
 #define LIBHISTO_HISTO_H
 

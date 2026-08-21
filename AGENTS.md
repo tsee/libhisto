@@ -69,6 +69,9 @@ This document defines the operational workflow, engineering standards, and commu
 - **Numerical Correctness**:
   - Explicit, deterministic handling of IEEE-754 floating-point edge cases (`NaN`, `+Inf`, `-Inf`, subnormals, negative zero).
   - Numerically stable algorithms for statistical accumulators (e.g., Welford's algorithm for online variance).
+- **Top-of-File Comment & File Cohesion**:
+  - Every C source (`.c`) and header (`.h`) file MUST begin with a concise comment describing its purpose and scope (maximum two 80-character lines).
+  - If a file's scope and purpose cannot be cleanly expressed in a concise 2-line comment due to lack of cohesion, evaluate whether to refactor the file into focused, cohesive units without introducing performance penalties or unwarranted complexity. If in doubt, prompt the user for architectural guidance.
 
 ---
 

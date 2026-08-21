@@ -1,3 +1,7 @@
+/*
+ * LibFuzzer target for raw byte stream sample ingestion into 1D histograms.
+ */
+
 #include "histo/histo.h"
 #include <stdint.h>
 #include <stddef.h>

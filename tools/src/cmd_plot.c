@@ -1,3 +1,7 @@
+/*
+ * CLI subcommand histo plot: terminal histogram and heatmap plots.
+ */
+
 #include "cli_common.h"
 #include "cli_palette.h"
 #include <stdio.h>

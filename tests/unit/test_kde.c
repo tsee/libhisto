@@ -1,3 +1,7 @@
+/*
+ * Unit tests for Kernel Density Estimation: kernels, CDF, and sampling.
+ */
+
 #include "unity.h"
 #include "histo/kde.h"
 #include "histo/histo.h"

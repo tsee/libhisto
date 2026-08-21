@@ -1,3 +1,6 @@
+/*
+ * DDSketch logarithmic bucket quantile sketch with relative error bounds.
+ */
 
 #include "histo/sketch.h"
 #include <stdlib.h>

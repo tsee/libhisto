@@ -1,3 +1,7 @@
+/*
+ * Security audit tests: integer overflows, buffer limits, and corrupt input.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <string.h>

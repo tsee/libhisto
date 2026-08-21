@@ -1,6 +1,5 @@
-/**
- * @file serialize_2d.c
- * @brief Canonical Little-Endian V3 and JSON serialization for 2D histograms.
+/*
+ * Binary wire format and JSON serialization/deserialization for 2D histograms.
  */
 
 #include "histo/histo2d.h"

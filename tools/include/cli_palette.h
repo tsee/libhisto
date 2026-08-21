@@ -1,3 +1,7 @@
+/*
+ * Color palette definitions, RGB gradients, and terminal escape formatters.
+ */
+
 #ifndef HISTO_CLI_PALETTE_H
 #define HISTO_CLI_PALETTE_H
 

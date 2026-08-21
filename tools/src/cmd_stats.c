@@ -1,3 +1,7 @@
+/*
+ * CLI subcommand histo stats: statistical moments, quantiles, and summaries.
+ */
+
 #include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>

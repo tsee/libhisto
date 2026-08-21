@@ -1,3 +1,7 @@
+/*
+ * Integration tests for CLI subcommands, input pipelines, and JSON output.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include "histo/histo2d.h"

@@ -1,3 +1,7 @@
+/*
+ * Low-level terminal raw mode handling, mouse tracking, and screen drawing.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 #define _XOPEN_SOURCE 700

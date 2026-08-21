@@ -1,3 +1,7 @@
+/*
+ * Unit tests for 1D histogram binary and JSON roundtrip serialization.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

@@ -1,3 +1,7 @@
+/*
+ * Comprehensive benchmark suite measuring throughput of libhisto operations.
+ */
+
 #include "histo/histo.h"
 #include "histo/sketch.h"
 #include <stdio.h>

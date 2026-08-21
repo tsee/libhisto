@@ -1,3 +1,7 @@
+/*
+ * CLI subcommand histo fit: parametric curve fitting and ASCII plot overlay.
+ */
+
 #include "cli_common.h"
 #include "histo/fit.h"
 #include <stdio.h>

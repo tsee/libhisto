@@ -1,6 +1,6 @@
 /**
  * @file cli.h
- * @brief Public interface for the libhistocli modular command-line and terminal formatting library.
+ * @brief Public interface for the libhistocli command-line formatting library.
  */
 
 #ifndef HISTO_CLI_H

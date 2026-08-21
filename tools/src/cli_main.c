@@ -1,3 +1,7 @@
+/*
+ * Top-level multi-call CLI dispatcher routing to histo subcommands.
+ */
+
 #include "cli_common.h"
 #include "histo/cli.h"
 #include "histo/version.h"

@@ -1,3 +1,7 @@
+/*
+ * Unit tests for DDSketch quantile streaming sketches and accuracy bounds.
+ */
+
 #include "histo/sketch.h"
 #include "histo/histo.h"
 #include <stdio.h>

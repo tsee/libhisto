@@ -1,3 +1,7 @@
+/*
+ * Unit tests for SIMD vector vs. scalar parity across alignments and buffers.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include "../../src/simd.h"

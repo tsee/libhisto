@@ -1,3 +1,7 @@
+/*
+ * LibFuzzer target for parametric curve fitting optimization on fuzz data.
+ */
+
 #include "histo/histo.h"
 #include "histo/fit.h"
 #include <stdint.h>

@@ -1,3 +1,7 @@
+/*
+ * Corpus generator constructing valid seed inputs for fuzz testing targets.
+ */
+
 #include "histo/histo.h"
 #include "histo/histo2d.h"
 #include "histo/sketch.h"

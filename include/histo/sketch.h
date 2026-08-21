@@ -1,3 +1,8 @@
+/**
+ * @file sketch.h
+ * @brief Public C API for DDSketch online quantile streaming sketches.
+ */
+
 #ifndef LIBHISTO_SKETCH_H
 #define LIBHISTO_SKETCH_H
 

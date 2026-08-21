@@ -1,3 +1,7 @@
+/*
+ * Color palette mapping routines for terminal ANSI 256 and truecolor output.
+ */
+
 #include "cli_palette.h"
 #include <stdio.h>
 #include <string.h>

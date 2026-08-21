@@ -1,3 +1,7 @@
+/*
+ * Unit tests for 2D bivariate histograms: creation, fills, and slicing.
+ */
+
 #include "unity.h"
 #include "histo/histo2d.h"
 #include <math.h>

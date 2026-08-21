@@ -1,3 +1,8 @@
+/**
+ * @file kde.h
+ * @brief Public C API for 1D Kernel Density Estimation and bandwidth rules.
+ */
+
 #ifndef LIBHISTO_KDE_H
 #define LIBHISTO_KDE_H
 

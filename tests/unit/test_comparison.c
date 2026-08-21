@@ -1,3 +1,7 @@
+/*
+ * Unit tests for two-sample comparison metrics (KS, Chi2, Wasserstein, KL).
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

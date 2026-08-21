@@ -1,3 +1,7 @@
+/*
+ * Adversarial tests: fuzz payloads, extreme bounds, and stress data.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include "histo/histo2d.h"

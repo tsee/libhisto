@@ -1,3 +1,7 @@
+/*
+ * End-to-end user workflow integration tests across libhisto pipelines.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

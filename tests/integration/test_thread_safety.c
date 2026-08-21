@@ -1,3 +1,7 @@
+/*
+ * Multi-threaded concurrency and thread safety tests under concurrent access.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <pthread.h>

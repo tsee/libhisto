@@ -1,3 +1,7 @@
+/*
+ * ARM NEON vectorized batch binning implementations for uniform histograms.
+ */
+
 #include "simd.h"
 #include "internal.h"
 #include "internal_2d.h"

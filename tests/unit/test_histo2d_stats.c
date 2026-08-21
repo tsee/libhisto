@@ -1,3 +1,7 @@
+/*
+ * Unit tests for 2D statistics: covariance, correlation, and marginal profiles.
+ */
+
 #include "unity.h"
 #include "histo/histo2d.h"
 #include "histo/histo.h"

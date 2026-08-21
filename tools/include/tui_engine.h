@@ -1,3 +1,7 @@
+/*
+ * Interactive TUI monitoring engine: thread lifecycle, state, and rendering.
+ */
+
 #ifndef HISTO_TUI_ENGINE_H
 #define HISTO_TUI_ENGINE_H
 

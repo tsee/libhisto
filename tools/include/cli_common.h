@@ -1,3 +1,7 @@
+/*
+ * Shared CLI stream readers, file parsers, and string formatting helpers.
+ */
+
 #ifndef HISTO_CLI_COMMON_H
 #define HISTO_CLI_COMMON_H
 

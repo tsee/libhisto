@@ -1,3 +1,7 @@
+/*
+ * Schema migration and backward-compatibility tests across wire formats.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <stdio.h>

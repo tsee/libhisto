@@ -1,3 +1,7 @@
+/*
+ * AVX-512 vectorized batch binning implementations for uniform histograms.
+ */
+
 #include "simd.h"
 #include "internal.h"
 #ifdef LIBHISTO_ENABLE_AVX512

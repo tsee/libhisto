@@ -1,3 +1,7 @@
+/*
+ * Unit tests for 1D histogram lifecycle and handle validation.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

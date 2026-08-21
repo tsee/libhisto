@@ -1,3 +1,7 @@
+/*
+ * AVX2 vectorized batch binning implementations for uniform 1D/2D histograms.
+ */
+
 #include "simd.h"
 #include "internal.h"
 #ifdef LIBHISTO_ENABLE_AVX2

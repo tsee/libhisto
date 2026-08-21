@@ -1,3 +1,8 @@
+/**
+ * @file version.h
+ * @brief Semantic version macros and runtime version queries for libhisto.
+ */
+
 #ifndef LIBHISTO_VERSION_H
 #define LIBHISTO_VERSION_H
 

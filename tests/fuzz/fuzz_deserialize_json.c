@@ -1,3 +1,7 @@
+/*
+ * LibFuzzer target for 1D histogram JSON deserialization robustness.
+ */
+
 #include "histo/histo.h"
 #include <stdint.h>
 #include <stddef.h>

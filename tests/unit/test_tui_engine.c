@@ -1,3 +1,7 @@
+/*
+ * Unit tests for TUI engine: streaming, windowing, zoom/pan, and concurrency.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 #define _XOPEN_SOURCE 700

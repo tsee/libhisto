@@ -1,3 +1,7 @@
+/*
+ * Terminal control, raw mode, ANSI escape parsing, and double-buffered render.
+ */
+
 #ifndef HISTO_TUI_TERM_H
 #define HISTO_TUI_TERM_H
 

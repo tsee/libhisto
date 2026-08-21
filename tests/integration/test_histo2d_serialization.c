@@ -1,3 +1,7 @@
+/*
+ * Integration tests for 2D histogram binary and JSON serialization roundtrips.
+ */
+
 #include "unity.h"
 #include "histo/histo2d.h"
 #include <stdlib.h>

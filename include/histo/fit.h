@@ -1,3 +1,8 @@
+/**
+ * @file fit.h
+ * @brief Non-linear regression, curve fitting engine, and parametric models.
+ */
+
 #ifndef LIBHISTO_FIT_H
 #define LIBHISTO_FIT_H
 

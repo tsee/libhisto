@@ -1,3 +1,7 @@
+/*
+ * CLI subcommand histo fill: ingest data streams and serialize histograms.
+ */
+
 #include "cli_common.h"
 #include "histo/histo2d.h"
 #include <stdio.h>

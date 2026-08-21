@@ -1,3 +1,7 @@
+/*
+ * Unit tests for statistical moment accumulators and robust dispersion metrics.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

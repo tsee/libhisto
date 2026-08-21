@@ -1,6 +1,5 @@
-/**
- * @file fit.c
- * @brief Curve Fitting & Non-Linear Regression implementation for libhisto.
+/*
+ * Non-linear least squares, Poisson MLE, and parametric curve fitting models.
  */
 
 #include "histo/fit.h"

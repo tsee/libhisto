@@ -1,3 +1,7 @@
+/*
+ * Boundary and edge-case unit tests: bin transitions, limits, and extremes.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

@@ -1,3 +1,7 @@
+/*
+ * 1D histogram implementation: creation, weighted filling, moments, and stats.
+ */
+
 #include "internal.h"
 #include "simd.h"
 #include <float.h>

@@ -1,3 +1,7 @@
+/*
+ * Unit tests for automated bin estimation rules (FD, Scott, Sturges, Knuth).
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <stdio.h>

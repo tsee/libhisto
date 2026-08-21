@@ -1,3 +1,7 @@
+/*
+ * Unit tests for colormap palettes, interpolation, and ANSI terminal codes.
+ */
+
 #include "unity.h"
 #include "cli_palette.h"
 #include <string.h>

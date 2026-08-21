@@ -1,3 +1,7 @@
+/*
+ * Declarations for the standalone regression fuzz test runner.
+ */
+
 #ifndef HISTO_STANDALONE_RUNNER_H
 #define HISTO_STANDALONE_RUNNER_H
 

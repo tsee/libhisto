@@ -1,3 +1,7 @@
+/*
+ * Unit tests for 1D scalar, batch, and weighted sample ingestion routines.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

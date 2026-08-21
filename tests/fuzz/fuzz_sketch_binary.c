@@ -1,3 +1,7 @@
+/*
+ * LibFuzzer target for DDSketch binary deserialization and state corruption.
+ */
+
 #include "histo/sketch.h"
 #include <stdint.h>
 #include <stddef.h>

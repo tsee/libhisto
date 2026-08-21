@@ -1,3 +1,7 @@
+/*
+ * Unit tests for histogram arithmetic (+, -, *, /) and scalar linear scaling.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include <math.h>

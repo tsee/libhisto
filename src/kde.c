@@ -1,3 +1,7 @@
+/*
+ * Kernel Density Estimation: kernel evaluators, CDF, quantiles, and sampling.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

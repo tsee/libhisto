@@ -1,3 +1,7 @@
+/*
+ * Unit tests for parametric curve fitting, bounds, MLE, and gradient checks.
+ */
+
 #include "unity.h"
 #include "histo/histo.h"
 #include "histo/fit.h"

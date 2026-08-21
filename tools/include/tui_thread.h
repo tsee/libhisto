@@ -1,3 +1,7 @@
+/*
+ * Cross-platform threading and mutex abstraction for POSIX and Windows.
+ */
+
 #ifndef HISTO_TUI_THREAD_H
 #define HISTO_TUI_THREAD_H
 
