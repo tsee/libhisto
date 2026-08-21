@@ -32,6 +32,12 @@ our %EXPORT_TAGS = (
         HISTO_FIT_POLYNOMIAL
         HISTO_FIT_BREIT_WIGNER
         HISTO_FIT_POWER_LAW
+        HISTO_FIT_LOG_NORMAL
+        HISTO_FIT_GAUSSIAN_PLUS_LINEAR
+        HISTO_FIT_WEIBULL
+        HISTO_FIT_GAMMA
+        HISTO_FIT_POISSON
+        HISTO_FIT_LAPLACE
         HISTO_FIT_CUSTOM
         HISTO_FIT_LOSS_CHI2
         HISTO_FIT_LOSS_POISSON_MLE
@@ -87,7 +93,13 @@ use constant {
     HISTO_FIT_POLYNOMIAL        => 2,
     HISTO_FIT_BREIT_WIGNER      => 3,
     HISTO_FIT_POWER_LAW         => 4,
-    HISTO_FIT_CUSTOM            => 5,
+    HISTO_FIT_LOG_NORMAL        => 5,
+    HISTO_FIT_GAUSSIAN_PLUS_LINEAR => 6,
+    HISTO_FIT_WEIBULL           => 7,
+    HISTO_FIT_GAMMA             => 8,
+    HISTO_FIT_POISSON           => 9,
+    HISTO_FIT_LAPLACE           => 10,
+    HISTO_FIT_CUSTOM            => 11,
 
     HISTO_FIT_LOSS_CHI2         => 0,
     HISTO_FIT_LOSS_POISSON_MLE  => 1,

@@ -163,6 +163,15 @@ sub fit {
         cauchy       => HISTO_FIT_BREIT_WIGNER,
         power_law    => HISTO_FIT_POWER_LAW,
         powerlaw     => HISTO_FIT_POWER_LAW,
+        lognormal    => HISTO_FIT_LOG_NORMAL,
+        log_normal   => HISTO_FIT_LOG_NORMAL,
+        gauss_linear => HISTO_FIT_GAUSSIAN_PLUS_LINEAR,
+        gauss_poly1  => HISTO_FIT_GAUSSIAN_PLUS_LINEAR,
+        weibull      => HISTO_FIT_WEIBULL,
+        gamma        => HISTO_FIT_GAMMA,
+        erlang       => HISTO_FIT_GAMMA,
+        poisson      => HISTO_FIT_POISSON,
+        laplace      => HISTO_FIT_LAPLACE,
     );
 
     die "Math::Histo::fit: unknown model '$model_str'" unless exists $model_map{$model_str};
