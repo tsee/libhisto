@@ -63,35 +63,30 @@ def check_all_versions():
         status = False
 
     # 3. Perl bindings
-    with open(PERL_MATH_HISTO, "r", encoding="utf-8") as f:
-        perl_content = f.read()
-    m = re.search(r'our\s+\$VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', perl_content)
-    if m:
-        perl_ver = m.group(1)
-        print(f"[OK] Perl Math::Histo: {perl_ver}")
-    else:
-        print("[FAIL] Could not find $VERSION in Math::Histo")
-        status = False
+    perl_pm_files = []
+    for root, _, files in os.walk(os.path.join(REPO_ROOT, "bindings", "perl")):
+        if "bundled" in root or "_alien" in root or "blib" in root or ".git" in root:
+            continue
+        for f in files:
+            if f.endswith(".pm"):
+                perl_pm_files.append(os.path.join(root, f))
 
-    with open(PERL_ALIEN_HISTO, "r", encoding="utf-8") as f:
-        alien_content = f.read()
-    m = re.search(r'our\s+\$VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', alien_content)
-    if m:
-        alien_ver = m.group(1)
-        print(f"[OK] Perl Alien::libhisto: {alien_ver}")
-    else:
-        print("[FAIL] Could not find $VERSION in Alien::libhisto")
-        status = False
-
-    with open(PERL_MATH_HISTO_PDL, "r", encoding="utf-8") as f:
-        pdl_content = f.read()
-    m = re.search(r'our\s+\$VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', pdl_content)
-    if m:
-        pdl_ver = m.group(1)
-        print(f"[OK] Perl Math::Histo::PDL: {pdl_ver}")
-    else:
-        print("[FAIL] Could not find $VERSION in Math::Histo::PDL")
-        status = False
+    perl_pm_files.sort()
+    for pm_path in perl_pm_files:
+        rel_path = os.path.relpath(pm_path, REPO_ROOT)
+        with open(pm_path, "r", encoding="utf-8") as f:
+            perl_content = f.read()
+        m = re.search(r'our\s+\$VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', perl_content)
+        if m:
+            perl_ver = m.group(1)
+            if perl_ver != core_ver:
+                print(f"[FAIL] {rel_path} version ({perl_ver}) does not match core ({core_ver})")
+                status = False
+            else:
+                print(f"[OK] {rel_path}: {perl_ver}")
+        else:
+            print(f"[FAIL] Could not find $VERSION in {rel_path}")
+            status = False
 
     return status
 
@@ -131,27 +126,24 @@ def set_version(new_version):
         f.write(content)
     print(f"[UPDATED] {PYPROJECT_TOML}")
 
-    # 4. Perl Math::Histo, Alien::libhisto & Math::Histo::PDL
-    with open(PERL_MATH_HISTO, "r", encoding="utf-8") as f:
-        content = f.read()
-    content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
-    with open(PERL_MATH_HISTO, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"[UPDATED] {PERL_MATH_HISTO}")
+    # 4. Perl bindings
+    perl_pm_files = []
+    for root, _, files in os.walk(os.path.join(REPO_ROOT, "bindings", "perl")):
+        if "bundled" in root or "_alien" in root or "blib" in root or ".git" in root:
+            continue
+        for f in files:
+            if f.endswith(".pm"):
+                perl_pm_files.append(os.path.join(root, f))
 
-    with open(PERL_ALIEN_HISTO, "r", encoding="utf-8") as f:
-        content = f.read()
-    content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
-    with open(PERL_ALIEN_HISTO, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"[UPDATED] {PERL_ALIEN_HISTO}")
-
-    with open(PERL_MATH_HISTO_PDL, "r", encoding="utf-8") as f:
-        content = f.read()
-    content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
-    with open(PERL_MATH_HISTO_PDL, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"[UPDATED] {PERL_MATH_HISTO_PDL}")
+    perl_pm_files.sort()
+    for pm_path in perl_pm_files:
+        rel_path = os.path.relpath(pm_path, REPO_ROOT)
+        with open(pm_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
+        with open(pm_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"[UPDATED] {rel_path}")
 
 
 def main():

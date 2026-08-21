@@ -9,7 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] - 2026-08-21
+
 ### Added
+- **Expanded Curve Fitting Models & Gradient Evaluators** (`include/histo/fit.h`, `src/fit.c`):
+  - Added 6 new built-in parametric models: Log-Normal, Gaussian + Linear Background, Weibull, Gamma (Erlang), Poisson, and Laplace.
+  - Added public analytical Jacobian gradient evaluator `histo_fit_eval_gradient()` and model evaluator `histo_fit_eval()`.
+  - Added Python bindings `histo.fit.eval_model()` and `histo.fit.eval_gradient()`.
+  - Added Perl bindings `Math::Histo::Fit->eval()` and `Math::Histo::Fit->eval_grad()`.
+  - Added ASCII plot overlays and multi-model CLI support in `histo fit`.
+- **Perl Math::Histo::PDL Distribution** (`bindings/perl/Math-Histo-PDL/`):
+  - Zero-copy 1D and 2D piddle ingestion via `get_dataref` directly into C `fill_packed_f64`.
+  - Export 1D/2D histograms to PDL matrices, coordinates, bin edges, bin centers, and error arrays.
+  - High-level builders (`hist1d`, `hist2d`, `pdl_to_histo`, `histo_to_pdl`) and OO methods on `Math::Histo` and `Math::Histo::2D`.
 - **Automated Optimal Bin Width Heuristics** (`include/histo/histo.h`, `src/histo.c`):
   - Freedman-Diaconis rule (`histo_estimate_bins_fd`).
   - Scott's normal reference rule (`histo_estimate_bins_scott`).
@@ -21,25 +35,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Perl binding `Math::Histo->create_auto($data, rule => 'auto')`.
   - CLI `histo-fill --auto-bins[=RULE]` (or `-a`) and auto-binning fallback in `histo plot`.
 - **Real-Time Interactive Terminal Monitor (`histo top` / `histo-top`)** (`tools/src/cmd_top.c`, `tools/src/tui_engine.c`, `tools/src/tui_term.c`):
-    - 2-thread decoupled architecture: unblocked ingestion worker draining `stdin` at wire speed while UI renders off atomic deep-copy snapshots.
-    - View freeze mode (`Space`): freezes display frame for inspection without pipe backpressure or dropped samples.
-    - In-memory rolling reservoir sample cache ($100,000$ samples) for on-the-fly lossless dynamic rebinning (`r`/`R` or `:bins <N>`).
-    - Interactive Command Prompt (`:`): Tab-completion, history navigation (`↑`/`↓`), inline validation for `:bins`, `:range`, `:fit`, `:kde`, `:scale`, `:export`, `:clear`.
-    - Live multi-column switching (`Tab` / `Shift-Tab` / `1..9` / `:col <N>` / `:xcol <N>` / `:ycol <N>`) buffering up to 16 columns per sample.
-    - Rolling sample windowing (`w` / `:window <N>`) and real-time exponential decay attenuation (`:decay <lambda>`).
-    - SGR-1006 mouse protocol support with mouse wheel zoom in/out and click-to-inspect bar tooltips.
-    - Auto-fit bins to terminal height (`B` / `:bins auto`) dynamically maintaining 1 bin per viewport row on terminal resize.
-    - Minimalist compact header mode (`H` / `:compact`) reclaiming terminal rows for maximal bar drawing height.
-    - Interactive snapshot export (`s` / `:save [path]` / `:export [path]`) saving binary `.histo` or formatted `.json` on the fly.
-    - Two-panel interactive online help modal (`?`) with complete keyboard shortcuts and `:command` reference.
-    - Multi-axis logarithmic scaling (`l`/`L`): Log Y (counts), Log X (coordinates), Log-Log, and Log Z (2D TrueColor heatmaps).
-    - High-contrast Monochrome mode (`C` / `-M` / `--mono` / `NO_COLOR`) and 24-bit TrueColor support.
-    - Portable threading abstraction (`tools/include/tui_thread.h`) supporting POSIX `pthread`, Windows Win32 API, and single-threaded fallback.
+  - 2-thread decoupled architecture: unblocked ingestion worker draining `stdin` at wire speed while UI renders off atomic deep-copy snapshots.
+  - View freeze mode (`Space`): freezes display frame for inspection without pipe backpressure or dropped samples.
+  - In-memory rolling reservoir sample cache ($100,000$ samples) for on-the-fly lossless dynamic rebinning (`r`/`R` or `:bins <N>`).
+  - Interactive Command Prompt (`:`): Tab-completion, history navigation (`↑`/`↓`), inline validation for `:bins`, `:range`, `:fit`, `:kde`, `:scale`, `:export`, `:clear`.
+  - Live multi-column switching (`Tab` / `Shift-Tab` / `1..9` / `:col <N>` / `:xcol <N>` / `:ycol <N>`) buffering up to 16 columns per sample.
+  - Rolling sample windowing (`w` / `:window <N>`) and real-time exponential decay attenuation (`:decay <lambda>`).
+  - SGR-1006 mouse protocol support with mouse wheel zoom in/out and click-to-inspect bar tooltips.
+  - Auto-fit bins to terminal height (`B` / `:bins auto`) dynamically maintaining 1 bin per viewport row on terminal resize.
+  - Minimalist compact header mode (`H` / `:compact`) reclaiming terminal rows for maximal bar drawing height.
+  - Interactive snapshot export (`s` / `:save [path]` / `:export [path]`) saving binary `.histo` or formatted `.json` on the fly.
+  - Two-panel interactive online help modal (`?`) with complete keyboard shortcuts and `:command` reference.
+  - Multi-axis logarithmic scaling (`l`/`L`): Log Y (counts), Log X (coordinates), Log-Log, and Log Z (2D TrueColor heatmaps).
+  - High-contrast Monochrome mode (`C` / `-M` / `--mono` / `NO_COLOR`) and 24-bit TrueColor support.
+  - Portable threading abstraction (`tools/include/tui_thread.h`) supporting POSIX `pthread`, Windows Win32 API, and single-threaded fallback.
+- **Top-of-File Comment & File Cohesion Standard** (`AGENTS.md`):
+  - Standardized concise (max 2 lines, $\le 80$ chars) purpose/scope comments across all 80 C source and header files.
 
-
----
-
-## [0.1.0] - 2026-08-20
+### Fixed
+- Fixed Weibull analytical gradient calculation $\partial f/\partial \lambda$ in `src/fit.c`.
+- Synchronized `sum_w2` tracking across AVX2, AVX-512, and NEON SIMD backends with scalar behavior.
+- Fixed ThreadSanitizer data race in TUI background ingestion during dynamic column switching.
+- Fixed Valgrind uninitialized memory check in terminal mouse escape sequence parser.
+- Fixed 2D JSON serialization total entries count preservation in `src/serialize_2d.c`.
+- Fixed POD formatting syntax errors in `Math::Histo::PDL`.
+- Fixed Alien-libhisto in-tree build header synchronization cache.
 
 ### Added
 - Automated version check and bump synchronization script (`tools/scripts/bump_version.py`).
