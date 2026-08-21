@@ -43,6 +43,7 @@ Available Subcommands:
   - C<stats>: Display comprehensive statistical summary, moments, and quantiles.
   - C<fit>: Fit parametric models (Gaussian, Exponential, Polynomial, Breit-Wigner).
   - C<cmp>: Compare two histograms and compute statistical distance metrics.
+  - C<top>: Real-time interactive terminal monitor for streaming 1D/2D metrics.
 
 =head1 METHODS
 

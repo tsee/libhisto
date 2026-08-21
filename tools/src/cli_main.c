@@ -13,13 +13,15 @@ static void print_usage(const char *prog, FILE *out) {
     fprintf(out, "  histo-plot [options] [arguments...]\n");
     fprintf(out, "  histo-stats [options] [arguments...]\n");
     fprintf(out, "  histo-fit [options] [arguments...]\n");
-    fprintf(out, "  histo-cmp [options] [arguments...]\n\n");
+    fprintf(out, "  histo-cmp [options] [arguments...]\n");
+    fprintf(out, "  histo-top [options] [arguments...]\n\n");
     fprintf(out, "Commands:\n");
     fprintf(out, "  fill     Stream data in, aggregate into histogram, and emit binary/JSON/text\n");
     fprintf(out, "  plot     Render histogram as ASCII / Unicode terminal bar chart\n");
     fprintf(out, "  stats    Display detailed statistical metrics and moment analysis\n");
     fprintf(out, "  fit      Fit parametric models (Gaussian, Exponential, Polynomial, Breit-Wigner)\n");
-    fprintf(out, "  cmp      Compare two histograms and compute statistical distance metrics\n\n");
+    fprintf(out, "  cmp      Compare two histograms and compute statistical distance metrics\n");
+    fprintf(out, "  top      Interactive terminal monitor for live 1D/2D data streams\n\n");
     fprintf(out, "Flags:\n");
     fprintf(out, "  -h, --help       Show this help message\n");
     fprintf(out, "  -v, --version    Show version information\n\n");
