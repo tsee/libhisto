@@ -596,6 +596,53 @@ void test_fit_laplace_recovery(void) {
     histo_destroy(h);
 }
 
+void test_fit_new_models_options_and_mle(void) {
+    /* 1. Poisson model fitted with Poisson Maximum Likelihood Estimation */
+    const double p_params[] = {200.0, 6.0};
+    histo_t *h_pois = create_synthetic_histo(30, 0.0, 20.0, HISTO_FIT_MODEL_POISSON, p_params, 2);
+    TEST_ASSERT_NOT_NULL(h_pois);
+
+    histo_fit_options_t opts_mle;
+    histo_fit_options_init(&opts_mle);
+    opts_mle.loss_type = HISTO_FIT_LOSS_POISSON_MLE;
+
+    histo_fit_result_t *res_pois = NULL;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fit_model(h_pois, HISTO_FIT_MODEL_POISSON, NULL, &opts_mle, &res_pois));
+    TEST_ASSERT_NOT_NULL(res_pois);
+    TEST_ASSERT_TRUE(res_pois->converged);
+    TEST_ASSERT_DOUBLE_WITHIN(5.0, p_params[0], res_pois->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.2, p_params[1], res_pois->params[1]);
+    histo_fit_result_destroy(res_pois);
+    histo_destroy(h_pois);
+
+    /* 2. Gauss + Linear with fixed slope c1 = 0 and box constraints */
+    const double g_params[] = {100.0, 5.0, 1.0, 5.0, 0.0};
+    histo_t *h_g = create_synthetic_histo(50, 0.0, 10.0, HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, g_params, 5);
+    TEST_ASSERT_NOT_NULL(h_g);
+
+    histo_fit_options_t opts_fix;
+    histo_fit_options_init(&opts_fix);
+    bool fix_mask[5] = {false, false, false, false, true}; /* Freeze c1 to 0.0 */
+    double lb[5] = {0.0, 0.0, 0.1, 0.0, -10.0};
+    double ub[5] = {1000.0, 10.0, 5.0, 100.0, 10.0};
+    opts_fix.fixed_params = fix_mask;
+    opts_fix.lower_bounds = lb;
+    opts_fix.upper_bounds = ub;
+
+    double p0[5] = {90.0, 5.2, 1.1, 4.0, 0.0};
+    histo_fit_result_t *res_g = NULL;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fit_model(h_g, HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR, p0, &opts_fix, &res_g));
+    TEST_ASSERT_NOT_NULL(res_g);
+    TEST_ASSERT_TRUE(res_g->converged);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, res_g->params[4]); /* Frozen */
+    TEST_ASSERT_DOUBLE_WITHIN(5.0, g_params[0], res_g->params[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, g_params[1], res_g->params[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, g_params[2], res_g->params[2]);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, g_params[3], res_g->params[3]);
+    histo_fit_result_destroy(res_g);
+    histo_destroy(h_g);
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -610,6 +657,7 @@ int main(void) {
     RUN_TEST(test_fit_gamma_recovery);
     RUN_TEST(test_fit_poisson_recovery);
     RUN_TEST(test_fit_laplace_recovery);
+    RUN_TEST(test_fit_new_models_options_and_mle);
     RUN_TEST(test_fit_custom_model);
     RUN_TEST(test_fit_box_constraints);
     RUN_TEST(test_fit_fixed_parameters);

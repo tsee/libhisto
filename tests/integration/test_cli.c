@@ -224,6 +224,24 @@ void test_cli_fit_pipeline(void) {
     char *fit_bw_argv[] = {"histo-fit", "-m", "breit-wigner", (char *)out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_bw_argv));
 
+    char *fit_logn_argv[] = {"histo-fit", "-m", "lognormal", "-j", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(5, fit_logn_argv));
+
+    char *fit_gpoly_argv[] = {"histo-fit", "-m", "gauss+linear", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_gpoly_argv));
+
+    char *fit_weibull_argv[] = {"histo-fit", "-m", "weibull", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_weibull_argv));
+
+    char *fit_gamma_argv[] = {"histo-fit", "-m", "gamma", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_gamma_argv));
+
+    char *fit_poisson_argv[] = {"histo-fit", "-m", "poisson", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_poisson_argv));
+
+    char *fit_laplace_argv[] = {"histo-fit", "-m", "laplace", (char *)out_hist};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_laplace_argv));
+
     char *fit_mle_argv[] = {"histo-fit", "--mle", (char *)out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_mle_argv));
 
