@@ -2,7 +2,7 @@
 Curve fitting and non-linear regression support for libhisto.
 """
 
-from typing import List, Optional, Tuple, Dict, Callable
+from typing import List, Optional, Tuple, Dict, Callable, Sequence
 import _libhisto
 from histo.constants import (
     FIT_GAUSSIAN, FIT_EXPONENTIAL, FIT_POLYNOMIAL,
@@ -115,3 +115,23 @@ class FitResult:
     def __repr__(self) -> str:
         return (f"<FitResult converged={self.converged} chi2/ndf={self.reduced_chi2:.3f} "
                 f"p_value={self.p_value:.4f} params={self.params}>")
+
+
+def eval_model(model: str, params: Sequence[float], x: float) -> float:
+    """
+    Evaluate built-in parametric model at coordinate x.
+    """
+    m_code = MODEL_MAP.get(model.lower())
+    if m_code is None:
+        raise ValueError(f"Unknown model '{model}'. Valid: {list(MODEL_MAP.keys())}")
+    return _libhisto.fit_eval(model=m_code, params=params, x=x)
+
+
+def eval_gradient(model: str, params: Sequence[float], x: float) -> List[float]:
+    """
+    Evaluate built-in parametric model analytical gradient df/dp at coordinate x.
+    """
+    m_code = MODEL_MAP.get(model.lower())
+    if m_code is None:
+        raise ValueError(f"Unknown model '{model}'. Valid: {list(MODEL_MAP.keys())}")
+    return _libhisto.fit_eval_gradient(model=m_code, params=params, x=x)

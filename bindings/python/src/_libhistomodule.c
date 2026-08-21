@@ -2343,6 +2343,132 @@ static PyObject *py_cli_run(PyObject *self, PyObject *args) {
     return Py_BuildValue("(iOO)", ret, out_str, err_str);
 }
 
+static PyObject *py_fit_eval(PyObject *self, PyObject *args, PyObject *kwargs) {
+    (void)self;
+    int model = 0;
+    PyObject *params_obj = NULL;
+    double x = 0.0;
+    static char *kwlist[] = {"model", "params", "x", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "iOd", kwlist, &model, &params_obj, &x)) {
+        return NULL;
+    }
+    Py_buffer view;
+    double stack_buf[16];
+    double *buf = stack_buf;
+    size_t n = 0;
+    if (PyObject_GetBuffer(params_obj, &view, PyBUF_SIMPLE) == 0) {
+        n = (size_t)(view.len / sizeof(double));
+        buf = (double *)view.buf;
+    } else {
+        PyErr_Clear();
+        if (PySequence_Check(params_obj)) {
+            Py_ssize_t seq_len = PySequence_Size(params_obj);
+            if (seq_len < 0) return NULL;
+            n = (size_t)seq_len;
+            if (n > 16) {
+                buf = (double *)malloc(n * sizeof(double));
+                if (!buf) return PyErr_NoMemory();
+            }
+            for (size_t i = 0; i < n; ++i) {
+                PyObject *item = PySequence_GetItem(params_obj, (Py_ssize_t)i);
+                if (!item) {
+                    if (buf != stack_buf) free(buf);
+                    return NULL;
+                }
+                buf[i] = PyFloat_AsDouble(item);
+                Py_DECREF(item);
+                if (PyErr_Occurred()) {
+                    if (buf != stack_buf) free(buf);
+                    return NULL;
+                }
+            }
+        } else {
+            PyErr_SetString(PyExc_TypeError, "params must be a sequence of floats or buffer of doubles");
+            return NULL;
+        }
+    }
+    double result = histo_fit_eval((histo_fit_model_t)model, buf, n, x);
+    if (buf == (double *)view.buf) {
+        PyBuffer_Release(&view);
+    } else if (buf != stack_buf) {
+        free(buf);
+    }
+    return PyFloat_FromDouble(result);
+}
+
+static PyObject *py_fit_eval_gradient(PyObject *self, PyObject *args, PyObject *kwargs) {
+    (void)self;
+    int model = 0;
+    PyObject *params_obj = NULL;
+    double x = 0.0;
+    static char *kwlist[] = {"model", "params", "x", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "iOd", kwlist, &model, &params_obj, &x)) {
+        return NULL;
+    }
+    Py_buffer view;
+    double stack_buf[16];
+    double *buf = stack_buf;
+    size_t n = 0;
+    if (PyObject_GetBuffer(params_obj, &view, PyBUF_SIMPLE) == 0) {
+        n = (size_t)(view.len / sizeof(double));
+        buf = (double *)view.buf;
+    } else {
+        PyErr_Clear();
+        if (PySequence_Check(params_obj)) {
+            Py_ssize_t seq_len = PySequence_Size(params_obj);
+            if (seq_len < 0) return NULL;
+            n = (size_t)seq_len;
+            if (n > 16) {
+                buf = (double *)malloc(n * sizeof(double));
+                if (!buf) return PyErr_NoMemory();
+            }
+            for (size_t i = 0; i < n; ++i) {
+                PyObject *item = PySequence_GetItem(params_obj, (Py_ssize_t)i);
+                if (!item) {
+                    if (buf != stack_buf) free(buf);
+                    return NULL;
+                }
+                buf[i] = PyFloat_AsDouble(item);
+                Py_DECREF(item);
+                if (PyErr_Occurred()) {
+                    if (buf != stack_buf) free(buf);
+                    return NULL;
+                }
+            }
+        } else {
+            PyErr_SetString(PyExc_TypeError, "params must be a sequence of floats or buffer of doubles");
+            return NULL;
+        }
+    }
+    double *grad = (double *)malloc(n * sizeof(double));
+    if (!grad) {
+        if (buf == (double *)view.buf) PyBuffer_Release(&view);
+        else if (buf != stack_buf) free(buf);
+        return PyErr_NoMemory();
+    }
+    histo_status_t st = histo_fit_eval_gradient((histo_fit_model_t)model, buf, n, x, grad);
+    if (buf == (double *)view.buf) {
+        PyBuffer_Release(&view);
+    } else if (buf != stack_buf) {
+        free(buf);
+    }
+    if (st != HISTO_OK) {
+        free(grad);
+        PyErr_SetString(HistoError, "Failed to evaluate gradient");
+        return NULL;
+    }
+    PyObject *res_list = PyList_New((Py_ssize_t)n);
+    if (!res_list) {
+        free(grad);
+        return NULL;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        PyList_SET_ITEM(res_list, (Py_ssize_t)i, PyFloat_FromDouble(grad[i]));
+    }
+    free(grad);
+    return res_list;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Module initialization                                                     */
 /* ------------------------------------------------------------------------- */
@@ -2350,6 +2476,8 @@ static PyMethodDef LibhistoModuleMethods[] = {
     {"estimate_bins", (PyCFunction)(void(*)(void))py_estimate_bins, METH_VARARGS | METH_KEYWORDS, "Estimate optimal uniform bins (nbins, min, max) for samples"},
     {"create_auto", (PyCFunction)(void(*)(void))py_create_auto, METH_VARARGS | METH_KEYWORDS, "Create automatically sized and filled 1D histogram"},
     {"cli_run", (PyCFunction)(void(*)(void))py_cli_run, METH_VARARGS, "Run libhistocli command in-process returning (exit_code, stdout, stderr)"},
+    {"fit_eval", (PyCFunction)(void(*)(void))py_fit_eval, METH_VARARGS | METH_KEYWORDS, "Evaluate built-in fit model at x"},
+    {"fit_eval_gradient", (PyCFunction)(void(*)(void))py_fit_eval_gradient, METH_VARARGS | METH_KEYWORDS, "Evaluate built-in fit model gradient df/dp at x"},
     {NULL, NULL, 0, NULL}
 };
 

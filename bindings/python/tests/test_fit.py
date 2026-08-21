@@ -87,5 +87,18 @@ class TestFit(unittest.TestCase):
         self.assertAlmostEqual(res.params[2], 1.2, delta=0.2)
 
 
+    def test_eval_model_and_gradient(self):
+        from histo.fit import eval_model, eval_gradient
+        # Gaussian: f(x) = A * exp(-(x - mu)^2 / (2 * sigma^2))
+        params = [100.0, 5.0, 2.0]
+        val = eval_model("gaussian", params, 5.0)
+        self.assertAlmostEqual(val, 100.0, places=6)
+
+        grad = eval_gradient("gaussian", params, 5.0)
+        self.assertEqual(len(grad), 3)
+        self.assertAlmostEqual(grad[0], 1.0, places=6)  # df/dA = exp(0) = 1
+        self.assertAlmostEqual(grad[1], 0.0, places=6)  # df/dmu = 0 at x = mu
+
+
 if __name__ == "__main__":
     unittest.main()
