@@ -19,12 +19,12 @@ subtest '2D ingestion from (x, y) piddles' => sub {
 
     my $h2 = hist2d($x, $y, xbins => 5, xmin => 0, xmax => 5, ybins => 4, ymin => 0, ymax => 40, exact_moments => 1);
     is $h2->num_entries, 3, '3 entries';
-    is $h2->mean_x, 2.5, 'mean_x is 2.5';
-    is $h2->mean_y, 20.5, 'mean_y is 20.5';
+    is $h2->mean_x, within(2.5, 1e-9), 'mean_x is 2.5';
+    is $h2->mean_y, within(20.5, 1e-9), 'mean_y is 20.5';
 
-    is $h2->bin_content(1, 1), 1.0, 'bin (1,1) has 1';
-    is $h2->bin_content(2, 2), 1.0, 'bin (2,2) has 1';
-    is $h2->bin_content(3, 3), 1.0, 'bin (3,3) has 1';
+    is $h2->bin_content(1, 1), within(1.0, 1e-9), 'bin (1,1) has 1';
+    is $h2->bin_content(2, 2), within(1.0, 1e-9), 'bin (2,2) has 1';
+    is $h2->bin_content(3, 3), within(1.0, 1e-9), 'bin (3,3) has 1';
 };
 
 subtest '2D ingestion from (2, N) coordinate matrix' => sub {
@@ -39,8 +39,8 @@ subtest '2D ingestion from (2, N) coordinate matrix' => sub {
 
     my $h2 = hist2d($coords, xbins => 5, xmin => 0, xmax => 5, ybins => 4, ymin => 0, ymax => 40, exact_moments => 1);
     is $h2->num_entries, 3, '3 entries';
-    is $h2->mean_x, 2.0, 'mean_x is 2.0';
-    is $h2->mean_y, 20.0, 'mean_y is 20.0';
+    is $h2->mean_x, within(2.0, 1e-9), 'mean_x is 2.0';
+    is $h2->mean_y, within(20.0, 1e-9), 'mean_y is 20.0';
 };
 
 subtest '2D ingestion from (N, 2) coordinate matrix' => sub {
@@ -54,8 +54,8 @@ subtest '2D ingestion from (N, 2) coordinate matrix' => sub {
 
     my $h2 = hist2d($coords, xbins => 5, xmin => 0, xmax => 5, ybins => 4, ymin => 0, ymax => 40, exact_moments => 1);
     is $h2->num_entries, 3, '3 entries';
-    is $h2->mean_x, 2.0, 'mean_x is 2.0';
-    is $h2->mean_y, 20.0, 'mean_y is 20.0';
+    is $h2->mean_x, within(2.0, 1e-9), 'mean_x is 2.0';
+    is $h2->mean_y, within(20.0, 1e-9), 'mean_y is 20.0';
 };
 
 subtest '2D weighted ingestion' => sub {

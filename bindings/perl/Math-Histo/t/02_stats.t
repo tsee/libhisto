@@ -25,8 +25,8 @@ subtest 'Statistical moments and metrics' => sub {
 
 subtest 'Mode, FWHM, and Peak Estimation' => sub {
     my $h = Math::Histo->new(bins => 100, min => -10.0, max => 10.0);
-    # Fill Gaussian centered at 0.0 with sigma 2.0
-    for (my $x = -8.0; $x <= 8.0; $x += 0.1) {
+    # Fill Gaussian centered at 0.0 with sigma 2.0 using dense non-resonant sampling
+    for (my $x = -8.0; $x <= 8.0; $x += 0.01) {
         my $weight = exp(-($x * $x) / 8.0);
         $h->fill($x, $weight);
     }

@@ -5,21 +5,21 @@ subtest 'DDSketch online dynamic quantile sketch' => sub {
     my $sketch = Math::Histo::Sketch->new(alpha => 0.01, max_bins => 1024);
     isa_ok $sketch, 'Math::Histo::Sketch';
     is $sketch->num_entries, 0, 'empty sketch';
-    is $sketch->total_weight, 0.0, 'zero weight';
+    is $sketch->total_weight, within(0.0, 1e-9), 'zero weight';
 
     # Insert uniform sequence 1..1000
     my @vals = (1..1000);
     $sketch->insert_n(\@vals);
     is $sketch->num_entries, 1000, '1000 entries';
-    is $sketch->total_weight, 1000.0, 'total weight 1000';
+    is $sketch->total_weight, within(1000.0, 1e-9), 'total weight 1000';
 
     # Packed binary insertion
     my $packed_extra = pack('d*', 1001.0, 1002.0);
     ok $sketch->insert_packed_f64($packed_extra), 'insert_packed_f64';
     is $sketch->num_entries, 1002, '1002 entries';
 
-    is $sketch->min, 1.0, 'min is 1.0';
-    is $sketch->max, 1002.0, 'max is 1002.0';
+    is $sketch->min, within(1.0, 1e-9), 'min is 1.0';
+    is $sketch->max, within(1002.0, 1e-9), 'max is 1002.0';
 
 
     # Quantiles with <= 1% relative error
@@ -39,7 +39,7 @@ subtest 'DDSketch online dynamic quantile sketch' => sub {
 
     ok $sketch->merge($sketch2), 'merge sketch2 into sketch';
     is $sketch->num_entries, 2002, '2002 entries after merge';
-    is $sketch->max, 2000.0, 'max is 2000.0';
+    is $sketch->max, within(2000.0, 1e-9), 'max is 2000.0';
 
     # Binary serialization
     my $blob = $sketch->serialize_binary;

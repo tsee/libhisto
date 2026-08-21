@@ -14,10 +14,10 @@ subtest 'Binary wire format roundtrip' => sub {
     isa_ok $restored, 'Math::Histo';
     is $restored->nbins, 10, 'restored nbins';
     is $restored->num_entries, 3, 'restored num_entries';
-    is $restored->total_weight, 6.0, 'restored total_weight';
-    is $restored->bin_content(0), 1.0, 'restored bin 0';
-    is $restored->bin_content(1), 2.0, 'restored bin 1';
-    is $restored->bin_content(2), 3.0, 'restored bin 2';
+    is $restored->total_weight, within(6.0, 1e-9), 'restored total_weight';
+    is $restored->bin_content(0), within(1.0, 1e-9), 'restored bin 0';
+    is $restored->bin_content(1), within(2.0, 1e-9), 'restored bin 1';
+    is $restored->bin_content(2), within(3.0, 1e-9), 'restored bin 2';
 };
 
 

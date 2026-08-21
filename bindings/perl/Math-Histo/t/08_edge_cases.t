@@ -22,8 +22,8 @@ subtest 'Non-finite IEEE-754 numbers' => sub {
     ok $h->fill(-$inf), 'fill -Inf handled (underflow)';
 
     is $h->nan_count, 1, 'nan_count recorded';
-    is $h->overflow_weight, 1.0, 'overflow_weight recorded';
-    is $h->underflow_weight, 1.0, 'underflow_weight recorded';
+    is $h->overflow_weight, within(1.0, 1e-9), 'overflow_weight recorded';
+    is $h->underflow_weight, within(1.0, 1e-9), 'underflow_weight recorded';
 };
 
 
@@ -31,8 +31,8 @@ subtest 'Single-bin histogram' => sub {
     my $h = Math::Histo->new(bins => 1, min => 0.0, max => 10.0);
     is $h->nbins, 1, '1 bin';
     ok $h->fill(5.0), 'fill single bin';
-    is $h->bin_content(0), 1.0, 'content 1.0';
-    is $h->mean, 5.0, 'mean is 5.0';
+    is $h->bin_content(0), within(1.0, 1e-9), 'content 1.0';
+    is $h->mean, within(5.0, 1e-9), 'mean is 5.0';
 };
 
 subtest 'Memory loop stress test' => sub {

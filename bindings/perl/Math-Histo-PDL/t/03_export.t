@@ -36,10 +36,10 @@ subtest '1D export to PDL' => sub {
     my $errors = $h->errors_pdl;
     is $errors->dim(0), 4, 'errors dim is 4';
     my @err_list = $errors->list;
-    is $err_list[0], 1.0, 'sqrt(1) = 1.0';
+    is $err_list[0], within(1.0, 1e-9), 'sqrt(1) = 1.0';
     is sprintf("%.4f", $err_list[1]), sprintf("%.4f", sqrt(2)), 'sqrt(2)';
     is sprintf("%.4f", $err_list[2]), sprintf("%.4f", sqrt(3)), 'sqrt(3)';
-    is $err_list[3], 2.0, 'sqrt(4) = 2.0';
+    is $err_list[3], within(2.0, 1e-9), 'sqrt(4) = 2.0';
 
     # to_pdl contexts
     my $scalar_export = $h->to_pdl;

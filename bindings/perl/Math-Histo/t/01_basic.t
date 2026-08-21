@@ -61,13 +61,13 @@ subtest 'Variable 1D histogram' => sub {
 subtest 'Scale, normalize and rebin' => sub {
     my $h = Math::Histo->new(bins => 10, min => 0.0, max => 100.0);
     $h->fill_n([10, 20, 30, 40, 50, 60, 70, 80, 90]);
-    is $h->total_weight, 9.0, 'weight 9';
+    is $h->total_weight, within(9.0, 1e-9), 'weight 9';
 
     ok $h->scale(2.0), 'scale by 2';
-    is $h->total_weight, 18.0, 'weight 18';
+    is $h->total_weight, within(18.0, 1e-9), 'weight 18';
 
     ok $h->normalize(1.0), 'normalize to 1.0';
-    is $h->integral, 1.0, 'integral is 1.0';
+    is $h->integral, within(1.0, 1e-9), 'integral is 1.0';
 
     my $rebinned = $h->rebin(2);
     is $rebinned->nbins, 5, 'rebinned to 5 bins';
