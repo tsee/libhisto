@@ -1,3 +1,7 @@
+/*
+ * Perl XS extension module bridging libhisto C APIs to Perl Math::Histo.
+ */
+
 #define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
