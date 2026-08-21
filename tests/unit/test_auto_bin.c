@@ -90,9 +90,129 @@ void test_auto_bin_edge_cases(void) {
     TEST_ASSERT_NULL(histo_create_auto(0, NULL, HISTO_BIN_RULE_AUTO, 0));
 }
 
+void test_auto_bin_all_rules_adversarial_matrix(void) {
+    histo_bin_rule_t rules[] = {
+        HISTO_BIN_RULE_AUTO,
+        HISTO_BIN_RULE_FD,
+        HISTO_BIN_RULE_SCOTT,
+        HISTO_BIN_RULE_STURGES,
+        HISTO_BIN_RULE_DOANE,
+        HISTO_BIN_RULE_KNUTH
+    };
+    size_t n_rules = sizeof(rules) / sizeof(rules[0]);
+
+    /* 1. All rules on N = 0 / NULL */
+    for (size_t r = 0; r < n_rules; ++r) {
+        uint32_t nb = 0;
+        double rmin = 0, rmax = 0;
+        TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_estimate_bins(0, NULL, rules[r], &nb, &rmin, &rmax));
+        TEST_ASSERT_NULL(histo_create_auto(0, NULL, rules[r], HISTO_FLAG_NONE));
+    }
+
+    /* 2. All rules on single element N = 1 */
+    double single[1] = { 123.456 };
+    for (size_t r = 0; r < n_rules; ++r) {
+        uint32_t nb = 0;
+        double rmin = 0, rmax = 0;
+        TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins(1, single, rules[r], &nb, &rmin, &rmax));
+        TEST_ASSERT_EQUAL_UINT32(1, nb);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-9, 122.956, rmin);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-9, 123.956, rmax);
+
+        histo_t *h = histo_create_auto(1, single, rules[r], HISTO_FLAG_TRACK_SUMW2);
+        TEST_ASSERT_NOT_NULL(h);
+        TEST_ASSERT_EQUAL_UINT32(1, histo_nbins(h));
+        TEST_ASSERT_EQUAL_UINT64(1, histo_num_entries(h));
+        histo_destroy(h);
+    }
+
+    /* 3. All rules on N = 500 identical elements (zero-variance) */
+    double identical[500];
+    for (int i = 0; i < 500; ++i) identical[i] = -77.0;
+    for (size_t r = 0; r < n_rules; ++r) {
+        uint32_t nb = 0;
+        double rmin = 0, rmax = 0;
+        TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins(500, identical, rules[r], &nb, &rmin, &rmax));
+        TEST_ASSERT_EQUAL_UINT32(1, nb);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-9, -77.5, rmin);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-9, -76.5, rmax);
+
+        histo_t *h = histo_create_auto(500, identical, rules[r], HISTO_FLAG_NONE);
+        TEST_ASSERT_NOT_NULL(h);
+        TEST_ASSERT_EQUAL_UINT32(1, histo_nbins(h));
+        TEST_ASSERT_EQUAL_UINT64(500, histo_num_entries(h));
+        histo_destroy(h);
+    }
+
+    /* 4. All rules on all-NaN array */
+    double all_nans[10] = { NAN, NAN, NAN, INFINITY, -INFINITY, NAN, NAN, INFINITY, -INFINITY, NAN };
+    for (size_t r = 0; r < n_rules; ++r) {
+        uint32_t nb = 0;
+        double rmin = 0, rmax = 0;
+        TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo_estimate_bins(10, all_nans, rules[r], &nb, &rmin, &rmax));
+        TEST_ASSERT_NULL(histo_create_auto(10, all_nans, rules[r], HISTO_FLAG_NONE));
+    }
+}
+
+void test_auto_bin_negative_and_subnormal(void) {
+    /* Negative range with subnormals */
+    double data[100];
+    for (int i = 0; i < 100; ++i) {
+        data[i] = -500.0 + (double)i * 4.0;
+    }
+    data[50] = -1e-315; /* Subnormal */
+
+    uint32_t nb_fd = 0, nb_scott = 0, nb_doane = 0, nb_sturges = 0, nb_knuth = 0;
+    double rmin = 0, rmax = 0;
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_fd(100, data, &nb_fd, &rmin, &rmax));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_scott(100, data, &nb_scott, &rmin, &rmax));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_doane(100, data, &nb_doane, &rmin, &rmax));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_sturges(100, data, &nb_sturges, &rmin, &rmax));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_knuth(100, data, &nb_knuth, &rmin, &rmax));
+
+    TEST_ASSERT_TRUE(nb_fd >= 3 && nb_fd <= 50);
+    TEST_ASSERT_TRUE(nb_scott >= 3 && nb_scott <= 50);
+    TEST_ASSERT_TRUE(nb_doane >= 3 && nb_doane <= 50);
+    TEST_ASSERT_TRUE(nb_sturges >= 3 && nb_sturges <= 50);
+    TEST_ASSERT_TRUE(nb_knuth >= 3 && nb_knuth <= 50);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, -500.0, rmin);
+}
+
+void test_auto_bin_massive_dataset(void) {
+    const size_t n = 100000;
+    double *data = (double *)malloc(n * sizeof(double));
+    TEST_ASSERT_NOT_NULL(data);
+
+    for (size_t i = 0; i < n; ++i) {
+        data[i] = (double)(i % 1000) * 0.1;
+    }
+
+    uint32_t nb = 0;
+    double rmin = 0, rmax = 0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_fd(n, data, &nb, &rmin, &rmax));
+    TEST_ASSERT_TRUE(nb >= 10 && nb <= 2000);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_scott(n, data, &nb, &rmin, &rmax));
+    TEST_ASSERT_TRUE(nb >= 10 && nb <= 2000);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_sturges(n, data, &nb, &rmin, &rmax));
+    /* ceil(log2(100000) + 1) = 18 */
+    TEST_ASSERT_EQUAL_UINT32(18, nb);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_estimate_bins_doane(n, data, &nb, &rmin, &rmax));
+    TEST_ASSERT_TRUE(nb >= 10 && nb <= 50);
+
+    free(data);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_auto_bin_normal);
     RUN_TEST(test_auto_bin_edge_cases);
+    RUN_TEST(test_auto_bin_all_rules_adversarial_matrix);
+    RUN_TEST(test_auto_bin_negative_and_subnormal);
+    RUN_TEST(test_auto_bin_massive_dataset);
     return UNITY_END();
 }
+

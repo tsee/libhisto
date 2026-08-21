@@ -434,6 +434,53 @@ void test_fit_edge_cases_and_errors(void) {
     histo_destroy(h);
 }
 
+void test_fit_adversarial_and_pathological(void) {
+    /* 1. Model evaluation on special IEEE numbers and invalid models */
+    double pars[] = { 100.0, 5.0, 1.0 };
+    double ev_nan = histo_fit_eval(HISTO_FIT_MODEL_GAUSSIAN, pars, 3, NAN);
+    TEST_ASSERT_TRUE(isnan(ev_nan) || ev_nan == 0.0);
+
+    double ev_inf = histo_fit_eval(HISTO_FIT_MODEL_GAUSSIAN, pars, 3, INFINITY);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, ev_inf);
+
+    double ev_inv = histo_fit_eval((histo_fit_model_t)999, pars, 3, 5.0);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, ev_inv);
+
+    /* 2. Fit on 3 bins with 3 parameters (NDF = 0) */
+    histo_t *h3 = histo_create_uniform(3, 0.0, 3.0, HISTO_FLAG_TRACK_SUMW2);
+    TEST_ASSERT_NOT_NULL(h3);
+    histo_fill_w(h3, 0.5, 10.0);
+    histo_fill_w(h3, 1.5, 50.0);
+    histo_fill_w(h3, 2.5, 10.0);
+
+    histo_fit_result_t *res3 = NULL;
+    histo_status_t st = histo_fit_model(h3, HISTO_FIT_MODEL_GAUSSIAN, NULL, NULL, &res3);
+    if (st == HISTO_OK && res3 != NULL) {
+        TEST_ASSERT_EQUAL_INT(0, res3->ndf);
+        histo_fit_result_destroy(res3);
+    }
+    histo_destroy(h3);
+
+    /* 3. Inverted bounds lb > ub */
+    histo_t *h_bnd = histo_create_uniform(20, 0.0, 20.0, HISTO_FLAG_TRACK_SUMW2);
+    for (int i = 0; i < 20; ++i) histo_fill(h_bnd, (double)i);
+
+    double lb[] = { 100.0, 10.0, 5.0 };
+    double ub[] = { 10.0, 1.0, 1.0 }; /* Inverted */
+    histo_fit_options_t opts;
+    histo_fit_options_init(&opts);
+    opts.lower_bounds = lb;
+    opts.upper_bounds = ub;
+
+    histo_fit_result_t *res_bnd = NULL;
+    /* Must not crash */
+    histo_status_t st_bnd = histo_fit_model(h_bnd, HISTO_FIT_MODEL_GAUSSIAN, NULL, &opts, &res_bnd);
+    if (st_bnd == HISTO_OK && res_bnd) {
+        histo_fit_result_destroy(res_bnd);
+    }
+    histo_destroy(h_bnd);
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -449,6 +496,8 @@ int main(void) {
     RUN_TEST(test_fit_sub_range);
     RUN_TEST(test_fit_p_value_math);
     RUN_TEST(test_fit_edge_cases_and_errors);
+    RUN_TEST(test_fit_adversarial_and_pathological);
 
     return UNITY_END();
 }
+

@@ -286,6 +286,91 @@ void test_histo2d_arithmetic(void) {
     histo2d_destroy(h2);
 }
 
+void test_histo2d_degenerate_and_boundary_stats(void) {
+    /* 1. Empty 2D histogram */
+    histo2d_t *h_empty = histo2d_create_uniform(5, 0.0, 10.0, 5, 0.0, 10.0, HISTO_FLAG_TRACK_SUMW2);
+    TEST_ASSERT_NOT_NULL(h_empty);
+
+    double val = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo2d_mean_x(h_empty, &val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo2d_mean_y(h_empty, &val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo2d_variance_x(h_empty, &val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo2d_variance_y(h_empty, &val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo2d_covariance(h_empty, &val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_EMPTY, histo2d_correlation(h_empty, &val));
+
+    /* NULL inputs check */
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo2d_mean_x(NULL, &val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo2d_mean_x(h_empty, NULL));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo2d_get_stats(NULL, NULL));
+
+    histo2d_destroy(h_empty);
+
+    /* 2. Single sample 2D histogram */
+    histo2d_t *h_single = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0,
+                                                 HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+    TEST_ASSERT_NOT_NULL(h_single);
+    histo2d_fill(h_single, 50.0, 75.0);
+
+    double mx = 0, my = 0, vx = 0, vy = 0, cov = 0, rho = 0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_mean_x(h_single, &mx));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_mean_y(h_single, &my));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_variance_x(h_single, &vx));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_variance_y(h_single, &vy));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_covariance(h_single, &cov));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_correlation(h_single, &rho));
+
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 50.0, mx);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 75.0, my);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, vx);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, vy);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, cov);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, rho);
+
+    histo2d_destroy(h_single);
+
+    /* 3. Constant X, varying Y (zero variance on X axis) */
+    histo2d_t *h_const_x = histo2d_create_uniform(10, 0.0, 100.0, 10, 0.0, 100.0,
+                                                  HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+    TEST_ASSERT_NOT_NULL(h_const_x);
+    for (int i = 0; i < 50; ++i) {
+        histo2d_fill(h_const_x, 42.0, (double)i * 2.0);
+    }
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_variance_x(h_const_x, &vx));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, vx);
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_correlation(h_const_x, &rho));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, rho);
+    histo2d_destroy(h_const_x);
+
+    /* 4. Perfect diagonal correlation (+1.0) and anti-correlation (-1.0) */
+    histo2d_t *h_diag = histo2d_create_uniform(100, 0.0, 100.0, 100, 0.0, 100.0,
+                                               HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+    histo2d_t *h_antidiag = histo2d_create_uniform(100, 0.0, 100.0, 100, 0.0, 100.0,
+                                                   HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
+    for (int i = 1; i <= 90; ++i) {
+        histo2d_fill(h_diag, (double)i, (double)i);
+        histo2d_fill(h_antidiag, (double)i, 100.0 - (double)i);
+    }
+    double rho_pos = 0, rho_neg = 0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_correlation(h_diag, &rho_pos));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 1.0, rho_pos);
+
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_correlation(h_antidiag, &rho_neg));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, -1.0, rho_neg);
+
+    histo2d_destroy(h_diag);
+    histo2d_destroy(h_antidiag);
+
+    /* 5. Out of range integral bounds */
+    histo2d_t *h_grid = histo2d_create_uniform(5, 0.0, 10.0, 5, 0.0, 10.0, HISTO_FLAG_NONE);
+    double integ = 0;
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo2d_integral_range(h_grid, 3, 1, 0, 2, &integ));
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo2d_integral_range(h_grid, 0, 5, 0, 2, &integ));
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo2d_integral_range(h_grid, 0, 2, 4, 1, &integ));
+    TEST_ASSERT_EQUAL(HISTO_ERR_OUT_OF_RANGE, histo2d_integral_range(h_grid, 0, 2, 0, 5, &integ));
+    histo2d_destroy(h_grid);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_histo2d_online_welford_correlation);
@@ -295,5 +380,7 @@ int main(void) {
     RUN_TEST(test_histo2d_scaling_and_normalization);
     RUN_TEST(test_histo2d_rebinning);
     RUN_TEST(test_histo2d_arithmetic);
+    RUN_TEST(test_histo2d_degenerate_and_boundary_stats);
     return UNITY_END();
 }
+

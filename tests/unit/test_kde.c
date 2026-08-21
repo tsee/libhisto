@@ -164,11 +164,69 @@ void test_kde_edge_cases(void) {
     histo_kde_destroy(kde_nan);
 }
 
+void test_kde_adversarial_datasets(void) {
+    /* 1. All identical samples (zero variance) */
+    double ident[100];
+    for (int i = 0; i < 100; ++i) ident[i] = 42.0;
+    histo_kde_t *kde_ident = histo_kde_create(100, ident, NULL, NULL);
+    TEST_ASSERT_NOT_NULL(kde_ident);
+    TEST_ASSERT_TRUE(histo_kde_get_bandwidth(kde_ident) > 0.0);
+    double pdf_at_val = histo_kde_eval(kde_ident, 42.0);
+    TEST_ASSERT_TRUE(pdf_at_val > 0.0);
+    double cdf_at_val = histo_kde_cdf(kde_ident, 42.0);
+    TEST_ASSERT_DOUBLE_WITHIN(0.05, 0.50, cdf_at_val);
+    histo_kde_destroy(kde_ident);
+
+    /* 2. Subnormal samples */
+    double subn[10];
+    for (int i = 0; i < 10; ++i) subn[i] = (double)(i + 1) * 1e-315;
+    histo_kde_t *kde_subn = histo_kde_create(10, subn, NULL, NULL);
+    TEST_ASSERT_NOT_NULL(kde_subn);
+    TEST_ASSERT_TRUE(histo_kde_get_bandwidth(kde_subn) > 0.0);
+    histo_kde_destroy(kde_subn);
+
+    /* 3. Quantile boundary and error inputs */
+    double normal_data[50];
+    for (int i = 0; i < 50; ++i) normal_data[i] = (double)i;
+    histo_kde_t *kde_norm = histo_kde_create(50, normal_data, NULL, NULL);
+    TEST_ASSERT_NOT_NULL(kde_norm);
+
+    double q_val = 0;
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_quantile(NULL, 0.5, &q_val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_quantile(kde_norm, -0.01, &q_val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_quantile(kde_norm, 1.01, &q_val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_quantile(kde_norm, NAN, &q_val));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_quantile(kde_norm, 0.5, NULL));
+
+    /* q = 0.0 and q = 1.0 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_kde_quantile(kde_norm, 0.0, &q_val));
+    TEST_ASSERT_TRUE(q_val < 0.0);
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_kde_quantile(kde_norm, 1.0, &q_val));
+    TEST_ASSERT_TRUE(q_val > 49.0);
+
+    /* 4. Batch evaluation invalid args */
+    double out_eval[5];
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_eval_n(NULL, 5, normal_data, out_eval));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_eval_n(kde_norm, 5, NULL, out_eval));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_eval_n(kde_norm, 5, normal_data, NULL));
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_kde_eval_n(kde_norm, 0, normal_data, out_eval));
+
+    /* 5. Sampling invalid args */
+    double smp[10];
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_sample(NULL, 10, smp, 123));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_sample(kde_norm, 10, NULL, 123));
+    TEST_ASSERT_EQUAL(HISTO_ERR_INVALID_ARG, histo_kde_sample(kde_norm, 0, smp, 123));
+
+    histo_kde_destroy(kde_norm);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_kde_gaussian_pdf_cdf);
     RUN_TEST(test_kde_all_kernels);
     RUN_TEST(test_kde_from_histogram);
     RUN_TEST(test_kde_edge_cases);
+    RUN_TEST(test_kde_adversarial_datasets);
     return UNITY_END();
 }
+

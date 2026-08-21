@@ -634,6 +634,259 @@ void test_tui_engine_snapshot_export_roundtrip(void) {
     fclose(in_fp);
 }
 
+void test_tui_engine_delimiter_variations(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 50, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Stream diverse delimiter patterns, comments, blanks, malformed tokens */
+    const char *lines = 
+        "# Initial comment line\n"
+        "   \n"  /* Blank line */
+        "10.0, 20.0, 30.0\n"               /* Commas */
+        "15.0; 25.0; 35.0\n"               /* Semicolons */
+        "20.0\t30.0\t40.0\n"               /* Tabs */
+        "  25.0    35.0    45.0  \n"       /* Multiple spaces with leading/trailing */
+        "30.0,  40.0; \t 50.0  # mixed\n"  /* Mixed delimiters and inline comment */
+        "35.0, corrupt_text, 55.0\n"       /* Mid-line non-numeric token */
+        "40.0\n";                          /* Single column line */
+
+    TEST_ASSERT_EQUAL((int)strlen(lines), write(fds[1], lines, strlen(lines)));
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    histo_t *snap1 = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(snap1);
+    /* There should be 7 valid sample lines parsed */
+    TEST_ASSERT_EQUAL_UINT64(7, histo_num_entries(snap1));
+    histo_destroy(snap1);
+
+    /* Switch to column 2 */
+    histo_t *snap2 = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_column(&eng, 2, 0, 0, &snap2, NULL));
+    TEST_ASSERT_NOT_NULL(snap2);
+    /* For column 2:
+     * Line 1: 20
+     * Line 2: 25
+     * Line 3: 30
+     * Line 4: 35
+     * Line 5: 40
+     * Line 6: 0.0 (corrupt_text terminated parsing, fallback/zero padded)
+     * Line 7: 40.0 (single col falls back to col 1)
+     */
+    TEST_ASSERT_EQUAL_UINT64(7, histo_num_entries(snap2));
+    histo_destroy(snap2);
+
+    /* Out of bounds column selection (e.g. column 10 -> fallback to column 1) */
+    histo_t *snap_fallback = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_column(&eng, 10, 0, 0, &snap_fallback, NULL));
+    TEST_ASSERT_NOT_NULL(snap_fallback);
+    TEST_ASSERT_EQUAL_UINT64(7, histo_num_entries(snap_fallback));
+    histo_destroy(snap_fallback);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_windowing_extremes(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 50, 0.0, 3000.0, HISTO_FLAG_EXACT_MOMENTS, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Ingest 2,500 samples */
+    const int total_samples = 2500;
+    for (int i = 1; i <= total_samples; i++) {
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "%d\n", i);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 3000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* 1. Window size = 1 (only the very latest sample: 2500) */
+    histo_t *win1 = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_window(&eng, 1, &win1, NULL));
+    TEST_ASSERT_NOT_NULL(win1);
+    TEST_ASSERT_EQUAL_UINT64(1, histo_num_entries(win1));
+    double m1 = 0;
+    histo_mean(win1, &m1);
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 2500.0, m1);
+    histo_destroy(win1);
+
+    /* 2. Window size = 100 (samples 2401 to 2500, mean = 2450.5) */
+    histo_t *win100 = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_window(&eng, 100, &win100, NULL));
+    TEST_ASSERT_NOT_NULL(win100);
+    TEST_ASSERT_EQUAL_UINT64(100, histo_num_entries(win100));
+    double m100 = 0;
+    histo_mean(win100, &m100);
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, 2450.5, m100);
+    histo_destroy(win100);
+
+    /* 3. Window size exceeding total sample count (e.g. 50000 -> clamps to total samples 2500) */
+    histo_t *win_excess = NULL;
+    TEST_ASSERT_TRUE(tui_engine_set_window(&eng, 50000, &win_excess, NULL));
+    TEST_ASSERT_NOT_NULL(win_excess);
+    TEST_ASSERT_EQUAL_UINT64(2500, histo_num_entries(win_excess));
+    double m_excess = 0;
+    histo_mean(win_excess, &m_excess);
+    TEST_ASSERT_DOUBLE_WITHIN(5.0, 1250.5, m_excess);
+    histo_destroy(win_excess);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_2d_snapshot_export_roundtrip(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, true, 20, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    for (int i = 1; i <= 40; i++) {
+        char buf[64];
+        int len = snprintf(buf, sizeof(buf), "%d %d\n", i * 2, i * 2);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+    }
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    /* Export 2D binary snapshot */
+    const char *bin_path = "/tmp/test_2d_snapshot.histo";
+    TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, bin_path, false));
+
+    FILE *bfp = fopen(bin_path, "rb");
+    TEST_ASSERT_NOT_NULL(bfp);
+    fseek(bfp, 0, SEEK_END);
+    long sz = ftell(bfp);
+    fseek(bfp, 0, SEEK_SET);
+    void *buf = malloc((size_t)sz);
+    TEST_ASSERT_EQUAL((size_t)sz, fread(buf, 1, (size_t)sz, bfp));
+    fclose(bfp);
+
+    histo2d_t *deser2d = NULL;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_deserialize_binary(buf, (size_t)sz, &deser2d));
+    TEST_ASSERT_NOT_NULL(deser2d);
+    TEST_ASSERT_EQUAL_UINT64(40, histo2d_num_entries(deser2d));
+    TEST_ASSERT_EQUAL_UINT32(20, histo2d_nbins_x(deser2d));
+    TEST_ASSERT_EQUAL_UINT32(20, histo2d_nbins_y(deser2d));
+    histo2d_destroy(deser2d);
+    free(buf);
+    unlink(bin_path);
+
+    /* Export 2D JSON snapshot */
+    const char *json_path = "/tmp/test_2d_snapshot.json";
+    TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, json_path, true));
+
+    FILE *jfp = fopen(json_path, "r");
+    TEST_ASSERT_NOT_NULL(jfp);
+    fseek(jfp, 0, SEEK_END);
+    long jsz = ftell(jfp);
+    fseek(jfp, 0, SEEK_SET);
+    char *jbuf = (char *)malloc((size_t)jsz + 1);
+    TEST_ASSERT_EQUAL((size_t)jsz, fread(jbuf, 1, (size_t)jsz, jfp));
+    jbuf[jsz] = '\0';
+    fclose(jfp);
+
+    histo2d_t *j_deser2d = NULL;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo2d_deserialize_json(jbuf, &j_deser2d));
+    TEST_ASSERT_NOT_NULL(j_deser2d);
+    TEST_ASSERT_EQUAL_UINT64(40, histo2d_num_entries(j_deser2d));
+    histo2d_destroy(j_deser2d);
+    free(jbuf);
+    unlink(json_path);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
+void test_tui_engine_stress_concurrent_ops(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "r");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 50, 0.0, 1000.0, 0, false));
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Concurrently write to pipe while driving TUI operations */
+    for (int iter = 0; iter < 500; iter++) {
+        char buf[64];
+        int len = snprintf(buf, sizeof(buf), "%d  %d  %d\n", iter, iter * 2, iter * 3);
+        TEST_ASSERT_EQUAL(len, write(fds[1], buf, len));
+
+        if (iter % 25 == 0) {
+            histo_t *snap = NULL;
+            tui_engine_zoom_1d(&eng, 0.9, &snap);
+            if (snap) histo_destroy(snap);
+
+            tui_engine_pan_1d(&eng, 0.05, &snap);
+            if (snap) histo_destroy(snap);
+
+            tui_engine_set_column(&eng, (iter % 3) + 1, 0, 0, &snap, NULL);
+            if (snap) histo_destroy(snap);
+
+            tui_engine_set_window(&eng, 50, &snap, NULL);
+            if (snap) histo_destroy(snap);
+
+            tui_engine_set_decay(&eng, 0.01);
+        }
+    }
+    close(fds[1]);
+
+    int timeout_ms = 2000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    histo_t *final_snap = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(final_snap);
+    TEST_ASSERT_TRUE(histo_num_entries(final_snap) > 0);
+    histo_destroy(final_snap);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
@@ -650,5 +903,10 @@ int main(void) {
     RUN_TEST(test_tui_engine_rolling_window);
     RUN_TEST(test_tui_engine_exponential_decay);
     RUN_TEST(test_tui_engine_snapshot_export_roundtrip);
+    RUN_TEST(test_tui_engine_delimiter_variations);
+    RUN_TEST(test_tui_engine_windowing_extremes);
+    RUN_TEST(test_tui_engine_2d_snapshot_export_roundtrip);
+    RUN_TEST(test_tui_engine_stress_concurrent_ops);
     return UNITY_END();
 }
+
