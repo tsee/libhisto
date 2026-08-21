@@ -12,7 +12,7 @@ static void print_plot_usage(FILE *out) {
     if (!out) out = stdout;
     fprintf(out, "Usage: histo-plot [OPTIONS] [HISTOGRAM_FILE...]\n");
     fprintf(out, "       histo plot [OPTIONS] [HISTOGRAM_FILE...]\n\n");
-    fprintf(out, "Renders 1D histograms as beautiful ASCII / Unicode terminal charts.\n\n");
+    fprintf(out, "Renders 1D distributions and 2D bivariate heatmaps as ASCII / Unicode terminal charts.\n\n");
     fprintf(out, "Display Options:\n");
     fprintf(out, "  -W, --width=<COLS>       Plot width in characters (default: auto terminal width)\n");
     fprintf(out, "  -s, --style=<STYLE>      Glyph style: blocks (default), ascii, shaded, sparkline\n");
@@ -20,8 +20,9 @@ static void print_plot_usage(FILE *out) {
     fprintf(out, "  -c, --color=<MODE>       Color mode: auto (default), always, never\n");
     fprintf(out, "  -p, --palette=<NAME>     Color palette: viridis (default), plasma, inferno, magma,\n");
     fprintf(out, "                           turbo, cividis, grayscale, rainbow (alias: --colormap)\n");
-    fprintf(out, "  -l, --log                Use logarithmic scale for bar lengths\n");
-    fprintf(out, "  -e, --errors             Display error bars (when sum_w2 is tracked)\n");
+    fprintf(out, "  -l, --log                Use logarithmic scale for bar lengths / 2D intensity\n");
+    fprintf(out, "  -e, --errors             Display error bars (1D mode when sum_w2 is tracked)\n");
+    fprintf(out, "      --2d                 Render in 2D bivariate heatmap mode\n");
     fprintf(out, "      --stats              Show full statistical summary header/footer (default: ON)\n");
     fprintf(out, "      --no-stats           Suppress statistical summary header\n");
     fprintf(out, "      --title=<TITLE>      Set custom plot title\n\n");
