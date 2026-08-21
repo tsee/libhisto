@@ -92,6 +92,12 @@ Supported Built-in Models:
   - 'polynomial': f(x) = c0 + c1*x + c2*x^2 + ... (direct Linear LS)
   - 'breit_wigner': Breit-Wigner / Cauchy-Lorentz resonance peak
   - 'power_law': f(x) = A * (x - x0)^k
+  - 'lognormal': f(x) = (A / (x*sigma*sqrt(2*pi))) * exp(-(ln(x) - mu)^2 / (2*sigma^2))
+  - 'gauss_linear': f(x) = A * exp(-(x - mu)^2 / (2*sigma^2)) + c0 + c1*x
+  - 'weibull': f(x) = A * (k/lambda) * (x/lambda)^(k-1) * exp(-(x/lambda)^k)
+  - 'gamma': f(x) = A * (x^(k-1) * exp(-x/theta)) / (Gamma(k) * theta^k)
+  - 'poisson': f(x) = A * (lambda^x * exp(-lambda)) / Gamma(x + 1)
+  - 'laplace': f(x) = (A / (2*b)) * exp(-|x - mu| / b)
 
 =head1 Math::Histo::Fit::Result METHODS
 

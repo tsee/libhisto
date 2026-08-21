@@ -531,19 +531,17 @@ C<Math::Histo::PDL> provides seamless, bidirectional integration between L<PDL> 
 and L<Math::Histo> / L<Math::Histo::2D>.
 
 It is designed for maximum numerical throughput:
+
 =over 4
 
-=item *
-B<Zero-Copy Ingestion>: For double-precision contiguous piddles, C<Math::Histo::PDL> leverages
+=item * B<Zero-Copy Ingestion>: For double-precision contiguous piddles, C<Math::Histo::PDL> leverages
 C<$pdl->get_dataref> to pass underlying C buffers directly into C<Math::Histo>'s SIMD-accelerated C core
 (C<fill_packed_f64>).
 
-=item *
-B<Transparent Coercion>: Non-double data types (e.g. C<long>, C<float>) or non-contiguous slices
+=item * B<Transparent Coercion>: Non-double data types (e.g. C<long>, C<float>) or non-contiguous slices
 (e.g. strided or transposed piddles) are automatically and cleanly converted to physical double buffers.
 
-=item *
-B<Idiomatic OO and Functional APIs>: When loaded, C<Math::Histo::PDL> automatically attaches C<to_pdl>,
+=item * B<Idiomatic OO and Functional APIs>: When loaded, C<Math::Histo::PDL> automatically attaches C<to_pdl>,
 C<fill_pdl>, and axis export methods directly onto L<Math::Histo> and L<Math::Histo::2D>, alongside
 convenience builder functions (C<hist1d>, C<hist2d>, C<pdl_to_histo>, C<histo_to_pdl>).
 
@@ -560,13 +558,21 @@ convenience builder functions (C<hist1d>, C<hist2d>, C<pdl_to_histo>, C<histo_to
 Creates and fills a L<Math::Histo> 1D histogram from a PDL piddle C<$data>.
 
 Options:
+
 =over 8
+
 =item * C<bins> / C<nbins>: Number of bins (default: 50).
+
 =item * C<min>, C<max>: Range minimum and maximum. Defaults to data min/max if omitted.
+
 =item * C<edges>: Arrayref or 1D piddle of custom variable bin edges.
+
 =item * C<rule> / C<auto>: Automatic bin estimation rule (C<'fd'>, C<'scott'>, C<'sturges'>, C<'doane'>, C<'knuth'>, C<'auto'>).
+
 =item * C<weights>: Optional 1D weights piddle of matching length.
+
 =item * C<sumw2> / C<track_sumw2>: Track sum of squared weights for error propagation.
+
 =back
 
 =item B<fill_pdl($h, $data, [$weights])>
@@ -608,11 +614,17 @@ Creates and fills a L<Math::Histo::2D> histogram from coordinate piddles C<($x, 
 C<$coords> (having shape C<(2, N)> or C<(N, 2)>).
 
 Options:
+
 =over 8
+
 =item * C<xbins>, C<ybins> (or C<< bins => [$nx, $ny] >> or C<< bins => $n >>): Bin counts per axis.
+
 =item * C<xmin>, C<xmax>, C<ymin>, C<ymax>: Axis bounds. Defaults to data min/max if omitted.
+
 =item * C<xedges>, C<yedges>: Custom variable bin edges per axis.
+
 =item * C<weights>: Optional weights piddle.
+
 =back
 
 =item B<fill2d_pdl($h2d, $x, $y, [$weights])> or B<fill2d_pdl($h2d, $coords, [$weights])>
@@ -650,31 +662,49 @@ When C<Math::Histo::PDL> is loaded, the following methods are added:
 =head2 Methods on L<Math::Histo>
 
 =over 4
+
 =item * C<< $h->fill_pdl($data, [$weights]) >>
+
 =item * C<< $h->to_pdl(%opts) >>
+
 =item * C<< $h->counts_pdl >>
+
 =item * C<< $h->edges_pdl >>
+
 =item * C<< $h->centers_pdl >>
+
 =item * C<< $h->errors_pdl >>
+
 =back
 
 =head2 Methods on L<Math::Histo::2D>
 
 =over 4
+
 =item * C<< $h2d->fill_pdl($x, $y, [$weights]) >> / C<< $h2d->fill_pdl($coords, [$weights]) >>
+
 =item * C<< $h2d->to_pdl(%opts) >>
+
 =item * C<< $h2d->matrix_pdl >> / C<< $h2d->counts_pdl >>
+
 =item * C<< $h2d->x_edges_pdl >> / C<< $h2d->y_edges_pdl >>
+
 =item * C<< $h2d->x_centers_pdl >> / C<< $h2d->y_centers_pdl >>
+
 =item * C<< $h2d->errors_pdl >>
+
 =back
 
 =head1 PERFORMANCE CONSIDERATIONS
 
 To achieve zero-copy filling into C<libhisto>:
+
 =over 4
+
 =item 1. Ensure your input piddle is of type C<double> (e.g. C<< $pdl->double >> or created as C<< zeros(double, ...) >>).
+
 =item 2. Avoid passing deeply sliced non-physical views directly in hot loops if maximum throughput is required; C<Math::Histo::PDL> will automatically call C<make_physical> when needed.
+
 =back
 
 =head1 SEE ALSO
