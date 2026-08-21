@@ -1257,6 +1257,168 @@ serialize_json(histo2d_t *self, int pretty=0)
     OUTPUT:
         RETVAL
 
+double
+std_dev_x(histo2d_t *self)
+    CODE:
+        double out = 0.0;
+        if (histo2d_std_dev_x(self, &out) != HISTO_OK) XSRETURN_UNDEF;
+        RETVAL = out;
+    OUTPUT:
+        RETVAL
+
+double
+std_dev_y(histo2d_t *self)
+    CODE:
+        double out = 0.0;
+        if (histo2d_std_dev_y(self, &out) != HISTO_OK) XSRETURN_UNDEF;
+        RETVAL = out;
+    OUTPUT:
+        RETVAL
+
+void
+bin_bounds(histo2d_t *self, int ix, int iy)
+    PPCODE:
+        if (!self) XSRETURN_EMPTY;
+        double xmin = 0, xmax = 0, ymin = 0, ymax = 0;
+        if (histo2d_bin_bounds(self, (uint32_t)ix, (uint32_t)iy, &xmin, &xmax, &ymin, &ymax) != HISTO_OK) {
+            XSRETURN_EMPTY;
+        }
+        EXTEND(SP, 4);
+        PUSHs(sv_2mortal(newSVnv(xmin)));
+        PUSHs(sv_2mortal(newSVnv(xmax)));
+        PUSHs(sv_2mortal(newSVnv(ymin)));
+        PUSHs(sv_2mortal(newSVnv(ymax)));
+
+void
+bin_center(histo2d_t *self, int ix, int iy)
+    PPCODE:
+        if (!self) XSRETURN_EMPTY;
+        double cx = 0, cy = 0;
+        if (histo2d_bin_center(self, (uint32_t)ix, (uint32_t)iy, &cx, &cy) != HISTO_OK) {
+            XSRETURN_EMPTY;
+        }
+        EXTEND(SP, 2);
+        PUSHs(sv_2mortal(newSVnv(cx)));
+        PUSHs(sv_2mortal(newSVnv(cy)));
+
+void
+find_bin(histo2d_t *self, double x, double y)
+    PPCODE:
+        if (!self) XSRETURN_EMPTY;
+        int64_t ix = 0, iy = 0;
+        if (histo2d_find_bin(self, x, y, &ix, &iy) != HISTO_OK) {
+            XSRETURN_EMPTY;
+        }
+        EXTEND(SP, 2);
+        PUSHs(sv_2mortal(newSViv((IV)ix)));
+        PUSHs(sv_2mortal(newSViv((IV)iy)));
+
+int
+find_region(histo2d_t *self, double x, double y)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        histo2d_region_t reg = HISTO2D_REGION_CENTER;
+        if (histo2d_find_region(self, x, y, &reg) != HISTO_OK) XSRETURN_UNDEF;
+        RETVAL = (int)reg;
+    OUTPUT:
+        RETVAL
+
+double
+integral(histo2d_t *self)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        double out = 0.0;
+        if (histo2d_integral(self, &out) != HISTO_OK) XSRETURN_UNDEF;
+        RETVAL = out;
+    OUTPUT:
+        RETVAL
+
+double
+integral_range(histo2d_t *self, int ix_min, int ix_max, int iy_min, int iy_max)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        double out = 0.0;
+        if (histo2d_integral_range(self, (uint32_t)ix_min, (uint32_t)ix_max, (uint32_t)iy_min, (uint32_t)iy_max, &out) != HISTO_OK) XSRETURN_UNDEF;
+        RETVAL = out;
+    OUTPUT:
+        RETVAL
+
+int
+scale(histo2d_t *self, double factor)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_scale(self, factor);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
+int
+normalize(histo2d_t *self, double target=1.0)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_normalize(self, target);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
+histo2d_t *
+rebin(histo2d_t *self, int fx, int fy)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        histo2d_t *rebinned = NULL;
+        histo_status_t st = histo2d_rebin(self, (uint32_t)fx, (uint32_t)fy, &rebinned);
+        if (st != HISTO_OK || !rebinned) {
+            croak("Math::Histo::2D::rebin failed");
+        }
+        RETVAL = rebinned;
+    OUTPUT:
+        RETVAL
+
+int
+add(histo2d_t *self, histo2d_t *other, double scale=1.0)
+    CODE:
+        if (!self || !other) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_add(self, other, scale);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
+int
+subtract(histo2d_t *self, histo2d_t *other)
+    CODE:
+        if (!self || !other) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_subtract(self, other);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
+int
+multiply(histo2d_t *self, histo2d_t *other)
+    CODE:
+        if (!self || !other) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_multiply(self, other);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
+int
+divide(histo2d_t *self, histo2d_t *other)
+    CODE:
+        if (!self || !other) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_divide(self, other);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
+int
+reset(histo2d_t *self)
+    CODE:
+        if (!self) XSRETURN_UNDEF;
+        histo_status_t st = histo2d_reset(self);
+        RETVAL = (st == HISTO_OK) ? 1 : 0;
+    OUTPUT:
+        RETVAL
+
 
 MODULE = Math::Histo    PACKAGE = Math::Histo::Fit    PREFIX = histo_fit_xs_
 
@@ -1831,6 +1993,57 @@ run(...)
         }
     OUTPUT:
         RETVAL
+
+void
+capture(...)
+    PROTOTYPE: @
+    PPCODE:
+        int start = 0;
+        if (items > 0 && SvPOK(ST(0)) && strcmp(SvPV_nolen(ST(0)), "Math::Histo::CLI") == 0) {
+            start = 1;
+        }
+        int argc = items - start;
+        char *out_buf = NULL;
+        size_t out_sz = 0;
+        char *err_buf = NULL;
+        size_t err_sz = 0;
+        FILE *out_f = open_memstream(&out_buf, &out_sz);
+        FILE *err_f = open_memstream(&err_buf, &err_sz);
+
+        if (!out_f || !err_f) {
+            if (out_f) fclose(out_f);
+            if (err_f) fclose(err_f);
+            croak("Math::Histo::CLI::capture: open_memstream failed");
+        }
+
+        int code = 0;
+        if (argc == 0) {
+            char *default_argv[] = { "phisto", NULL };
+            code = histo_cli_main(1, default_argv, out_f, err_f);
+        } else {
+            char **argv = (char **)malloc(((size_t)argc + 2) * sizeof(char *));
+            if (!argv) {
+                fclose(out_f); fclose(err_f);
+                free(out_buf); free(err_buf);
+                croak("Math::Histo::CLI::capture: out of memory");
+            }
+            argv[0] = (char *)"phisto";
+            for (int i = 0; i < argc; ++i) {
+                argv[i + 1] = SvPV_nolen(ST(start + i));
+            }
+            argv[argc + 1] = NULL;
+            code = histo_cli_main(argc + 1, argv, out_f, err_f);
+            free(argv);
+        }
+        fclose(out_f);
+        fclose(err_f);
+
+        EXTEND(SP, 3);
+        PUSHs(sv_2mortal(newSViv(code)));
+        PUSHs(sv_2mortal(out_buf ? newSVpvn(out_buf, out_sz) : newSVpvn("", 0)));
+        PUSHs(sv_2mortal(err_buf ? newSVpvn(err_buf, err_sz) : newSVpvn("", 0)));
+        free(out_buf);
+        free(err_buf);
 
 
 int

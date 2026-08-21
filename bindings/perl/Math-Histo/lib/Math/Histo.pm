@@ -107,6 +107,48 @@ sub write_file {
     return 1;
 }
 
+sub plot {
+    my ($self, %opts) = @_;
+    require Math::Histo::CLI;
+    require File::Temp;
+
+    my @cmd = ('plot');
+    push @cmd, "--style=$opts{style}" if defined $opts{style};
+    if (exists $opts{color}) {
+        push @cmd, $opts{color} ? '--color=always' : '--color=never';
+    }
+    push @cmd, "--palette=$opts{palette}" if defined $opts{palette};
+    push @cmd, '-S' if $opts{sparkline};
+    push @cmd, "-w=$opts{width}" if defined $opts{width};
+    push @cmd, "-H=$opts{height}" if defined $opts{height};
+    push @cmd, '-l' if $opts{log};
+    push @cmd, '-e' if $opts{errors};
+    push @cmd, "--fit=$opts{fit}" if defined $opts{fit};
+    push @cmd, '--kde' if $opts{kde};
+    push @cmd, '--cdf' if $opts{cdf};
+
+    my $tf = File::Temp->new(SUFFIX => '.json', UNLINK => 1);
+    print $tf $self->serialize_json;
+    close $tf;
+    push @cmd, $tf->filename;
+
+    my ($code, $out, $err) = Math::Histo::CLI->capture(@cmd);
+    die "Math::Histo::plot failed: $err" if $code != 0 && $err;
+    print $out if !defined $opts{show} || $opts{show};
+    return $out;
+}
+
+sub sparkline {
+    my ($self, %opts) = @_;
+    return $self->plot(%opts, sparkline => 1);
+}
+
+sub top {
+    my ($self, @args) = @_;
+    require Math::Histo::CLI;
+    return Math::Histo::CLI->run('top', @args);
+}
+
 sub fit {
     my ($self, %args) = @_;
     my $model_str = lc($args{model} // 'gaussian');

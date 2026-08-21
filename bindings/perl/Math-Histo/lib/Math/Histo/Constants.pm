@@ -55,10 +55,15 @@ our %EXPORT_TAGS = (
         HISTO_KDE_BW_SCOTT
         HISTO_KDE_BW_MANUAL
     )],
+    palettes => [qw(
+        @PALETTES
+    )],
 );
 
+our @PALETTES = qw(viridis plasma inferno magma turbo cividis grayscale rainbow);
+
 $EXPORT_TAGS{all} = [ map { @$_ } values %EXPORT_TAGS ];
-our @EXPORT_OK = @{ $EXPORT_TAGS{all} };
+our @EXPORT_OK = ( @{ $EXPORT_TAGS{all} }, '@PALETTES' );
 
 use constant {
     HISTO_FLAG_NONE             => 0,
