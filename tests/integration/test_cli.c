@@ -404,8 +404,18 @@ void test_cli_top_help(void) {
     char *top_help_argv[] = {"histo-top", "--help"};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main(2, top_help_argv));
 
-    char *top_bins_help_argv[] = {"histo-top", "--bins", "50", "--min", "0", "--max", "100", "--help"};
+    char *top_bins_help_argv[] = {
+        "histo-top", "--bins", "50", "--min", "0", "--max", "100",
+        "--window", "100000", "--decay", "0.05", "--compact",
+        "--autorange-threshold", "0.01", "--scale-input", "0.001",
+        "--help"
+    };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main((int)(sizeof(top_bins_help_argv)/sizeof(top_bins_help_argv[0])), top_bins_help_argv));
+
+    char *top_reservoir_argv[] = {
+        "histo-top", "-n50", "--reservoir=50000", "-H", "-S1e-3", "--threshold=0.02", "--help"
+    };
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main((int)(sizeof(top_reservoir_argv)/sizeof(top_reservoir_argv[0])), top_reservoir_argv));
 }
 
 void test_cli_space_separated_args(void) {

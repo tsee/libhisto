@@ -54,12 +54,16 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 | Option | Shorthand | Description | Default |
 | :--- | :--- | :--- | :--- |
 | `--bins=<N>` | `-n <N>` | Initial number of bins (1D) or X/Y bins (2D) | `50` |
+| `--window=<N>` | `--reservoir=<N>` | Rolling window size (retain last N samples in reservoir cache) | All (`0`) |
+| `--decay=<LAMBDA>` | | Exponential decay rate per second (e.g. `0.05`) | `0.0` (off) |
 | `--scale-input=<FACTOR>` | `-S <FACTOR>` | Multiply incoming measurements by scale factor (e.g. `1e-3` for ns->us) | `1.0` |
 | `--shm=<PATH>` | | Attach to POSIX/Win32 shared memory binary ring buffer (e.g. `/histo_shm`) | `NULL` |
 | `--min=<X>` | | Initial lower range boundary (1D) | `0.0` |
 | `--max=<X>` | | Initial upper range boundary (1D) | `100.0` |
 | `--auto-range` | `-a` | Enable dynamic quantile auto-ranging | Enabled (`ON`) |
 | `--no-auto-range`| | Disable dynamic quantile auto-ranging | Disabled |
+| `--autorange-threshold=<F>` | `--threshold=<F>` | Quantile margin threshold for dynamic auto-ranging | `0.05` |
+| `--compact` | `-H` | Start in compact single-row header mode | Multi-row |
 | `--2d` | | Enable bivariate 2D heatmap mode (expects `x y` input) | Disabled (1D) |
 | `--xbins=<N>` | | Number of bins along X axis (2D mode) | `50` |
 | `--xmin=<X>`, `--xmax=<X>` | | Initial X axis bounds (2D mode) | `[0.0, 100.0]` |

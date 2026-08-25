@@ -746,6 +746,10 @@ int cmd_top_main(int argc, char **argv) {
     double ymin = NAN, ymax = NAN;
     bool auto_range = true;
     bool no_autorange = false;
+    double auto_range_threshold = 0.05;
+    uint64_t window_size = 0;
+    double decay_lambda = 0.0;
+    bool compact_header = false;
     bool monochrome = false;
     bool has_weights = false;
     char delim = ' ';
@@ -764,6 +768,10 @@ int cmd_top_main(int argc, char **argv) {
          "Multiply incoming measurements by scale factor (e.g. 1e-3 for ns->us)", "1.0"},
         {0, "shm", NULL, CLI_OPT_TYPE_STRING, &shm_path, NULL, 0, "PATH",
          "Attach to memory-mapped shared memory ring buffer (e.g. /histo_shm)", NULL},
+        {0, "window", "reservoir", CLI_OPT_TYPE_UINT64, &window_size, NULL, 0, "N",
+         "Rolling window size (last N samples in reservoir cache, default: all)", NULL},
+        {0, "decay", NULL, CLI_OPT_TYPE_DOUBLE, &decay_lambda, NULL, 0, "LAMBDA",
+         "Exponential decay rate per second (default: 0.0, no decay)", "0.0"},
         {0, "min", NULL, CLI_OPT_TYPE_DOUBLE, &rmin, NULL, 0, "X",
          "Lower boundary", "0.0"},
         {0, "max", NULL, CLI_OPT_TYPE_DOUBLE, &rmax, NULL, 0, "X",
@@ -772,6 +780,8 @@ int cmd_top_main(int argc, char **argv) {
          "Automatically adjust bin ranges to live data bounds", NULL},
         {0, "no-autorange", "no-auto-range", CLI_OPT_TYPE_BOOL, &no_autorange, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
          "Disable automatic dynamic range scaling", NULL},
+        {0, "autorange-threshold", "threshold", CLI_OPT_TYPE_DOUBLE, &auto_range_threshold, NULL, 0, "FRAC",
+         "Quantile margin threshold for dynamic auto-ranging (default: 0.05)", "0.05"},
         {0, "2d", NULL, CLI_OPT_TYPE_BOOL, &is_2d, NULL, 0, NULL,
          "Enable 2D bivariate live monitor mode", NULL},
         {0, "xbins", NULL, CLI_OPT_TYPE_UINT32, &xbins, NULL, 0, "N",
@@ -800,6 +810,8 @@ int cmd_top_main(int argc, char **argv) {
          "1-based column for sample weight", "2"},
         {'p', "palette", "colormap", CLI_OPT_TYPE_STRING, &palette_name, NULL, 0, "NAME",
          "Color palette for terminal rendering", "viridis"},
+        {'H', "compact", NULL, CLI_OPT_TYPE_BOOL, &compact_header, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Start in compact single-line header mode", NULL},
         {'M', "mono", NULL, CLI_OPT_TYPE_BOOL, &monochrome, NULL, 0, NULL,
          "Monochrome mode without ANSI color escapes", NULL}
     };
@@ -884,6 +896,13 @@ int cmd_top_main(int argc, char **argv) {
     tui_engine_set_scale_input(&eng, scale_input);
 
     eng.auto_range = auto_range;
+    eng.auto_range_threshold = auto_range_threshold;
+    if (window_size > 0) {
+        tui_engine_set_window(&eng, (size_t)window_size, NULL, NULL);
+    }
+    if (decay_lambda > 0.0) {
+        tui_engine_set_decay(&eng, decay_lambda);
+    }
     eng.delim = delim;
     eng.val_col = val_col;
     eng.x_col = x_col;
@@ -901,6 +920,7 @@ int cmd_top_main(int argc, char **argv) {
     memset(&st, 0, sizeof(st));
     st.monochrome = monochrome;
     st.palette = palette;
+    st.compact_header = compact_header;
     st.view_mode = is_2d ? VIEW_2D_HEATMAP : VIEW_1D_BARS;
 
     tui_engine_start(&eng);
