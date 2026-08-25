@@ -10,16 +10,7 @@
 #include <math.h>
 #include <unistd.h>
 
-static void print_stats_usage(FILE *out) {
-    if (!out) out = stdout;
-    fprintf(out, "Usage: histo-stats [OPTIONS] [HISTOGRAM_FILE...]\n");
-    fprintf(out, "       histo stats [OPTIONS] [HISTOGRAM_FILE...]\n\n");
-    fprintf(out, "Displays comprehensive statistical summary, moments, and robust metrics for 1D and 2D histograms.\n\n");
-    fprintf(out, "Options:\n");
-    fprintf(out, "  -f, --format=<FMT>       Output format: table (default), json, tsv\n");
-    fprintf(out, "  -a, --all                Compute all extended higher moments and peak metrics\n");
-    fprintf(out, "  -h, --help               Show this help message\n");
-}
+
 
 static void print_histogram_stats(const histo_t *h, const char *fmt, FILE *out) {
     if (!h) return;
@@ -201,39 +192,42 @@ static void print_histo2d_stats(const histo2d_t *h, const char *fmt, FILE *out) 
     }
 }
 
+#include "cli_opt.h"
+
 int histo_cli_stats(int argc, char **argv, FILE *out, FILE *err) {
     if (!out) out = stdout;
     if (!err) err = stderr;
-    optind = 1;
 
     const char *fmt = "table";
-    int file_start = argc;
+    bool all_metrics = true;
 
-    for (int i = 1; i < argc; ++i) {
-        const char *arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_stats_usage(out);
-            return 0;
-        } else if (strncmp(arg, "-f=", 3) == 0 || strncmp(arg, "--format=", 9) == 0 || strcmp(arg, "-f") == 0 || strcmp(arg, "--format") == 0) {
-            const char *val = (arg[1] == 'f' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--format=", 9) == 0) ? arg + 9 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) fmt = val;
-        } else if (strcmp(arg, "-a") == 0 || strcmp(arg, "--all") == 0) {
-            /* all is default */
-        } else if (arg[0] == '-' && arg[1] != '\0') {
-            fprintf(err, "Unknown option '%s'. Run 'histo-stats --help' for usage.\n", arg);
-            return 1;
-        } else {
-            file_start = i;
-            break;
-        }
+    const cli_opt_spec_t specs[] = {
+        {'f', "format", NULL, CLI_OPT_TYPE_STRING, &fmt, NULL, 0, "FMT",
+         "Output format: table (default), json, tsv", "table"},
+        {'a', "all", NULL, CLI_OPT_TYPE_BOOL, &all_metrics, NULL, 0, NULL,
+         "Compute all extended higher moments and peak metrics", NULL}
+    };
+
+    cli_opt_parser_t parser;
+    cli_opt_init(&parser, specs, sizeof(specs) / sizeof(specs[0]),
+                 "histo-stats", "[OPTIONS] [HISTOGRAM_FILE...]",
+                 "Displays comprehensive statistical summary, moments, and robust metrics for 1D and 2D histograms.");
+
+    int rc = cli_opt_parse(&parser, argc, argv, 1);
+    if (rc < 0) {
+        cli_opt_print_help(&parser, out);
+        cli_opt_free(&parser);
+        return 0;
+    }
+    if (rc > 0) {
+        fprintf(err, "%s\n", cli_opt_error(&parser));
+        cli_opt_free(&parser);
+        return 1;
     }
 
-    int num_files = argc - file_start;
     const char *default_files[] = {"-"};
-    const char **files = (num_files > 0) ? (const char **)(argv + file_start) : default_files;
-    int nfiles = (num_files > 0) ? num_files : 1;
+    const char **files = (parser.num_positionals > 0) ? parser.positionals : default_files;
+    int nfiles = (parser.num_positionals > 0) ? parser.num_positionals : 1;
 
     int status = 0;
     for (int f = 0; f < nfiles; ++f) {
@@ -253,5 +247,6 @@ int histo_cli_stats(int argc, char **argv, FILE *out, FILE *err) {
         }
     }
 
+    cli_opt_free(&parser);
     return status;
 }

@@ -12,28 +12,7 @@
 #include <math.h>
 #include <unistd.h>
 
-static void print_fit_usage(FILE *out) {
-    if (!out) out = stdout;
-    fprintf(out, "Usage: histo-fit [OPTIONS] [HISTOGRAM_FILE...]\n");
-    fprintf(out, "       histo fit [OPTIONS] [HISTOGRAM_FILE...]\n\n");
-    fprintf(out, "Fits parametric models to 1D histograms using non-linear least squares / Poisson MLE.\n\n");
-    fprintf(out, "Model & Optimization Options:\n");
-    fprintf(out, "  -m, --model=<TYPE>       Model: gaussian (default), exponential, polynomial, breit-wigner,\n");
-    fprintf(out, "                           power-law, lognormal, gauss+linear, weibull, gamma, poisson, laplace\n");
-    fprintf(out, "  -d, --degree=<N>         Degree for polynomial model (default: 1, range: 0..10)\n");
-    fprintf(out, "      --mle                Use Poisson Maximum Likelihood Estimation (-2 ln L) instead of Chi-Square\n");
-    fprintf(out, "      --unweighted         Use Unweighted Least Squares\n");
-    fprintf(out, "  -b, --bounds=<IDX=MIN:MAX> Set parameter lower and upper bounds (e.g. --bounds=2=0.1:10.0)\n");
-    fprintf(out, "  -f, --fix-param=<IDX=VAL>  Freeze parameter to constant value (e.g. --fix-param=1=0.0)\n");
-    fprintf(out, "      --range=<MIN:MAX>    Sub-range window for fitting [MIN, MAX]\n");
-    fprintf(out, "      --confidence=<LEV>   Confidence interval level (default: 0.95)\n\n");
-    fprintf(out, "Output & Display Options:\n");
-    fprintf(out, "  -j, --json               Emit structured JSON fit results\n");
-    fprintf(out, "  -q, --quiet              Output only optimal parameter values (tab-separated)\n");
-    fprintf(out, "  -p, --plot               Render optional ASCII curve overlay above parameter table\n");
-    fprintf(out, "  -i, --input=<FILE>       Input histogram or raw sample stream file (default: stdin)\n");
-    fprintf(out, "  -h, --help               Show this help message\n");
-}
+
 
 static const char *get_param_name(histo_fit_model_t model, size_t idx, uint32_t poly_degree, char *buf, size_t buf_size) {
     switch (model) {
@@ -299,121 +278,151 @@ static void print_fit_results_json(histo_fit_model_t model, uint32_t poly_degree
     fprintf(out, "}\n");
 }
 
+#include "cli_opt.h"
+
+typedef struct {
+    double lower_bounds[16];
+    double upper_bounds[16];
+    bool fixed_params[16];
+    bool has_lower;
+    bool has_upper;
+    bool has_fixed;
+    double range_min;
+    double range_max;
+} fit_bounds_ctx_t;
+
+static int cb_parse_bounds(const char *opt_name, const char *val, void *data, char *err_buf, size_t err_size) {
+    (void)opt_name;
+    fit_bounds_ctx_t *ctx = (fit_bounds_ctx_t *)data;
+    int pidx = 0;
+    double bmin = 0.0, bmax = 0.0;
+    if (!val || sscanf(val, "%d=%lf:%lf", &pidx, &bmin, &bmax) != 3 || pidx < 0 || pidx >= 16) {
+        snprintf(err_buf, err_size, "Bounds must be in IDX=MIN:MAX format (e.g. --bounds=2=0.1:10.0)");
+        return 1;
+    }
+    ctx->lower_bounds[pidx] = bmin;
+    ctx->upper_bounds[pidx] = bmax;
+    ctx->has_lower = true;
+    ctx->has_upper = true;
+    return 0;
+}
+
+static int cb_parse_fix_param(const char *opt_name, const char *val, void *data, char *err_buf, size_t err_size) {
+    (void)opt_name;
+    fit_bounds_ctx_t *ctx = (fit_bounds_ctx_t *)data;
+    int pidx = 0;
+    double fval = 0.0;
+    if (!val || sscanf(val, "%d=%lf", &pidx, &fval) != 2 || pidx < 0 || pidx >= 16) {
+        snprintf(err_buf, err_size, "Fix-param must be in IDX=VAL format (e.g. --fix-param=1=0.0)");
+        return 1;
+    }
+    ctx->lower_bounds[pidx] = fval;
+    ctx->upper_bounds[pidx] = fval;
+    ctx->fixed_params[pidx] = true;
+    ctx->has_fixed = true;
+    return 0;
+}
+
+static int cb_parse_range(const char *opt_name, const char *val, void *data, char *err_buf, size_t err_size) {
+    (void)opt_name;
+    fit_bounds_ctx_t *ctx = (fit_bounds_ctx_t *)data;
+    if (!val || sscanf(val, "%lf:%lf", &ctx->range_min, &ctx->range_max) != 2) {
+        snprintf(err_buf, err_size, "Range must be in MIN:MAX format (e.g. --range=0:100)");
+        return 1;
+    }
+    return 0;
+}
+
 int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
     if (!out) out = stdout;
     if (!err) err = stderr;
-    optind = 1;
 
-    histo_fit_model_t model = HISTO_FIT_MODEL_GAUSSIAN;
+    const char *model_str = "gaussian";
     uint32_t poly_degree = 1;
-    histo_fit_loss_t loss_type = HISTO_FIT_LOSS_CHI2;
-    double range_min = 0.0, range_max = 0.0;
+    bool use_mle = false;
+    bool use_unweighted = false;
     double confidence = 0.95;
     bool do_json = false;
     bool do_quiet = false;
     bool do_plot = false;
     const char *input_file = NULL;
 
-    double lower_bounds_arr[16];
-    double upper_bounds_arr[16];
-    bool fixed_params_arr[16];
-    bool has_lower = false, has_upper = false, has_fixed = false;
-
+    fit_bounds_ctx_t bctx;
+    memset(&bctx, 0, sizeof(bctx));
     for (int i = 0; i < 16; ++i) {
-        lower_bounds_arr[i] = -INFINITY;
-        upper_bounds_arr[i] = INFINITY;
-        fixed_params_arr[i] = false;
+        bctx.lower_bounds[i] = -INFINITY;
+        bctx.upper_bounds[i] = INFINITY;
     }
 
-    for (int i = 1; i < argc; ++i) {
-        const char *arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_fit_usage(out);
-            return 0;
-        } else if (strcmp(arg, "-j") == 0 || strcmp(arg, "--json") == 0) {
-            do_json = true;
-        } else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quiet") == 0) {
-            do_quiet = true;
-        } else if (strcmp(arg, "-p") == 0 || strcmp(arg, "--plot") == 0) {
-            do_plot = true;
-        } else if (strcmp(arg, "--mle") == 0) {
-            loss_type = HISTO_FIT_LOSS_POISSON_MLE;
-        } else if (strcmp(arg, "--unweighted") == 0) {
-            loss_type = HISTO_FIT_LOSS_UNWEIGHTED_LS;
-        } else if (strncmp(arg, "-m=", 3) == 0 || strncmp(arg, "--model=", 8) == 0 || strcmp(arg, "-m") == 0 || strcmp(arg, "--model") == 0) {
-            const char *val = NULL;
-            if (arg[1] == 'm' && arg[2] == '=') val = arg + 3;
-            else if (strncmp(arg, "--model=", 8) == 0) val = arg + 8;
-            else if (i + 1 < argc) val = argv[++i];
+    const cli_opt_spec_t specs[] = {
+        {'m', "model", NULL, CLI_OPT_TYPE_STRING, &model_str, NULL, 0, "TYPE",
+         "Model: gaussian (default), exponential, polynomial, breit-wigner, power-law, lognormal, gauss+linear, weibull, gamma, poisson, laplace", "gaussian"},
+        {'d', "degree", NULL, CLI_OPT_TYPE_UINT32, &poly_degree, NULL, 0, "N",
+         "Degree for polynomial model (default: 1, range: 0..10)", "1"},
+        {0, "mle", NULL, CLI_OPT_TYPE_BOOL, &use_mle, NULL, 0, NULL,
+         "Use Poisson Maximum Likelihood Estimation instead of Chi-Square", NULL},
+        {0, "unweighted", NULL, CLI_OPT_TYPE_BOOL, &use_unweighted, NULL, 0, NULL,
+         "Use Unweighted Least Squares", NULL},
+        {'b', "bounds", NULL, CLI_OPT_TYPE_CALLBACK, &bctx, cb_parse_bounds, 0, "IDX=MIN:MAX",
+         "Set parameter lower and upper bounds (e.g. --bounds=2=0.1:10.0)", NULL},
+        {'f', "fix-param", NULL, CLI_OPT_TYPE_CALLBACK, &bctx, cb_parse_fix_param, 0, "IDX=VAL",
+         "Freeze parameter to constant value (e.g. --fix-param=1=0.0)", NULL},
+        {0, "range", NULL, CLI_OPT_TYPE_CALLBACK, &bctx, cb_parse_range, 0, "MIN:MAX",
+         "Sub-range window for fitting [MIN, MAX]", NULL},
+        {'c', "confidence", NULL, CLI_OPT_TYPE_DOUBLE, &confidence, NULL, 0, "LEV",
+         "Confidence interval level (default: 0.95)", "0.95"},
+        {'j', "json", NULL, CLI_OPT_TYPE_BOOL, &do_json, NULL, 0, NULL,
+         "Emit structured JSON fit results", NULL},
+        {'q', "quiet", NULL, CLI_OPT_TYPE_BOOL, &do_quiet, NULL, 0, NULL,
+         "Output only optimal parameter values (tab-separated)", NULL},
+        {'p', "plot", NULL, CLI_OPT_TYPE_BOOL, &do_plot, NULL, 0, NULL,
+         "Render optional ASCII curve overlay above parameter table", NULL},
+        {'i', "input", NULL, CLI_OPT_TYPE_STRING, &input_file, NULL, 0, "FILE",
+         "Input histogram or raw sample stream file (default: stdin)", NULL}
+    };
 
-            if (val) {
-                if (strcmp(val, "gaussian") == 0 || strcmp(val, "gauss") == 0) model = HISTO_FIT_MODEL_GAUSSIAN;
-                else if (strcmp(val, "exponential") == 0 || strcmp(val, "exp") == 0) model = HISTO_FIT_MODEL_EXPONENTIAL;
-                else if (strcmp(val, "polynomial") == 0 || strcmp(val, "poly") == 0) model = HISTO_FIT_MODEL_POLYNOMIAL;
-                else if (strcmp(val, "breit-wigner") == 0 || strcmp(val, "bw") == 0 || strcmp(val, "cauchy") == 0) model = HISTO_FIT_MODEL_BREIT_WIGNER;
-                else if (strcmp(val, "power-law") == 0 || strcmp(val, "power") == 0) model = HISTO_FIT_MODEL_POWER_LAW;
-                else if (strcmp(val, "lognormal") == 0 || strcmp(val, "log-normal") == 0 || strcmp(val, "log_normal") == 0) model = HISTO_FIT_MODEL_LOG_NORMAL;
-                else if (strcmp(val, "gauss+linear") == 0 || strcmp(val, "gauss_linear") == 0 || strcmp(val, "gauss+poly1") == 0) model = HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR;
-                else if (strcmp(val, "weibull") == 0) model = HISTO_FIT_MODEL_WEIBULL;
-                else if (strcmp(val, "gamma") == 0 || strcmp(val, "erlang") == 0) model = HISTO_FIT_MODEL_GAMMA;
-                else if (strcmp(val, "poisson") == 0) model = HISTO_FIT_MODEL_POISSON;
-                else if (strcmp(val, "laplace") == 0 || strcmp(val, "double-exponential") == 0) model = HISTO_FIT_MODEL_LAPLACE;
-                else {
-                    fprintf(err, "Error: Unknown model '%s'\n", val);
-                    return 1;
-                }
-            }
-        } else if (strncmp(arg, "-d=", 3) == 0 || strncmp(arg, "--degree=", 9) == 0 || strcmp(arg, "-d") == 0 || strcmp(arg, "--degree") == 0) {
-            const char *val = (arg[1] == 'd' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--degree=", 9) == 0) ? arg + 9 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) poly_degree = (uint32_t)atoi(val);
-        } else if (strncmp(arg, "-c=", 3) == 0 || strncmp(arg, "--confidence=", 13) == 0 || strcmp(arg, "-c") == 0 || strcmp(arg, "--confidence") == 0) {
-            const char *val = (arg[1] == 'c' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--confidence=", 13) == 0) ? arg + 13 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) confidence = atof(val);
-        } else if (strncmp(arg, "-b=", 3) == 0 || strncmp(arg, "--bounds=", 9) == 0 || strcmp(arg, "-b") == 0 || strcmp(arg, "--bounds") == 0) {
-            const char *val = (arg[1] == 'b' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--bounds=", 9) == 0) ? arg + 9 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                int pidx = 0;
-                double bmin = 0.0, bmax = 0.0;
-                if (sscanf(val, "%d=%lf:%lf", &pidx, &bmin, &bmax) == 3 && pidx >= 0 && pidx < 16) {
-                    lower_bounds_arr[pidx] = bmin;
-                    upper_bounds_arr[pidx] = bmax;
-                    has_lower = true;
-                    has_upper = true;
-                }
-            }
-        } else if (strncmp(arg, "-f=", 3) == 0 || strncmp(arg, "--fix-param=", 12) == 0 || strcmp(arg, "-f") == 0 || strcmp(arg, "--fix-param") == 0) {
-            const char *val = (arg[1] == 'f' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--fix-param=", 12) == 0) ? arg + 12 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                int pidx = 0;
-                double fval = 0.0;
-                if (sscanf(val, "%d=%lf", &pidx, &fval) == 2 && pidx >= 0 && pidx < 16) {
-                    lower_bounds_arr[pidx] = fval;
-                    upper_bounds_arr[pidx] = fval;
-                    fixed_params_arr[pidx] = true;
-                    has_fixed = true;
-                }
-            }
-        } else if (strncmp(arg, "--range=", 8) == 0) {
-            sscanf(arg + 8, "%lf:%lf", &range_min, &range_max);
-        } else if (strncmp(arg, "-i=", 3) == 0 || strncmp(arg, "--input=", 8) == 0 || strcmp(arg, "-i") == 0 || strcmp(arg, "--input") == 0) {
-            input_file = (arg[1] == 'i' && arg[2] == '=') ? arg + 3 :
-                         (strncmp(arg, "--input=", 8) == 0) ? arg + 8 :
-                         (i + 1 < argc) ? argv[++i] : NULL;
-        } else if (arg[0] == '-' && arg[1] != '\0') {
-            fprintf(err, "Unknown option '%s'. Run 'histo-fit --help' for usage.\n", arg);
-            return 1;
-        } else {
-            if (!input_file) input_file = arg;
-        }
+    cli_opt_parser_t parser;
+    cli_opt_init(&parser, specs, sizeof(specs) / sizeof(specs[0]),
+                 "histo-fit", "[OPTIONS] [HISTOGRAM_FILE...]",
+                 "Fits parametric models to 1D histograms using non-linear least squares / Poisson MLE.");
+
+    int rc = cli_opt_parse(&parser, argc, argv, 1);
+    if (rc < 0) {
+        cli_opt_print_help(&parser, out);
+        cli_opt_free(&parser);
+        return 0;
     }
+    if (rc > 0) {
+        fprintf(err, "%s\n", cli_opt_error(&parser));
+        cli_opt_free(&parser);
+        return 1;
+    }
+
+    if (!input_file && parser.num_positionals > 0) {
+        input_file = parser.positionals[0];
+    }
+
+    histo_fit_model_t model = HISTO_FIT_MODEL_GAUSSIAN;
+    if (strcmp(model_str, "gaussian") == 0 || strcmp(model_str, "gauss") == 0) model = HISTO_FIT_MODEL_GAUSSIAN;
+    else if (strcmp(model_str, "exponential") == 0 || strcmp(model_str, "exp") == 0) model = HISTO_FIT_MODEL_EXPONENTIAL;
+    else if (strcmp(model_str, "polynomial") == 0 || strcmp(model_str, "poly") == 0) model = HISTO_FIT_MODEL_POLYNOMIAL;
+    else if (strcmp(model_str, "breit-wigner") == 0 || strcmp(model_str, "bw") == 0 || strcmp(model_str, "cauchy") == 0) model = HISTO_FIT_MODEL_BREIT_WIGNER;
+    else if (strcmp(model_str, "power-law") == 0 || strcmp(model_str, "power") == 0) model = HISTO_FIT_MODEL_POWER_LAW;
+    else if (strcmp(model_str, "lognormal") == 0 || strcmp(model_str, "log-normal") == 0 || strcmp(model_str, "log_normal") == 0) model = HISTO_FIT_MODEL_LOG_NORMAL;
+    else if (strcmp(model_str, "gauss+linear") == 0 || strcmp(model_str, "gauss_linear") == 0 || strcmp(model_str, "gauss+poly1") == 0) model = HISTO_FIT_MODEL_GAUSSIAN_PLUS_LINEAR;
+    else if (strcmp(model_str, "weibull") == 0) model = HISTO_FIT_MODEL_WEIBULL;
+    else if (strcmp(model_str, "gamma") == 0 || strcmp(model_str, "erlang") == 0) model = HISTO_FIT_MODEL_GAMMA;
+    else if (strcmp(model_str, "poisson") == 0) model = HISTO_FIT_MODEL_POISSON;
+    else if (strcmp(model_str, "laplace") == 0 || strcmp(model_str, "double-exponential") == 0) model = HISTO_FIT_MODEL_LAPLACE;
+    else {
+        fprintf(err, "Error: Unknown model '%s'\n", model_str);
+        cli_opt_free(&parser);
+        return 1;
+    }
+
+    histo_fit_loss_t loss_type = HISTO_FIT_LOSS_CHI2;
+    if (use_mle) loss_type = HISTO_FIT_LOSS_POISSON_MLE;
+    else if (use_unweighted) loss_type = HISTO_FIT_LOSS_UNWEIGHTED_LS;
 
     histo_t *h = NULL;
     FILE *fp = stdin;
@@ -421,6 +430,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
         fp = fopen(input_file, "rb");
         if (!fp) {
             fprintf(err, "Error: Cannot open input file '%s'\n", input_file);
+            cli_opt_free(&parser);
             return 1;
         }
     }
@@ -430,6 +440,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
         if (cli_read_histogram_from_stream(fp, &h) != HISTO_OK) {
             fprintf(err, "Error: Failed to deserialize input histogram\n");
             if (fp != stdin) fclose(fp);
+            cli_opt_free(&parser);
             return 1;
         }
     } else {
@@ -437,6 +448,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
         double *buf = (double *)malloc(cap * sizeof(double));
         if (!buf) {
             if (fp != stdin) fclose(fp);
+            cli_opt_free(&parser);
             return 1;
         }
         double v = 0.0;
@@ -444,7 +456,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
             if (count >= cap) {
                 cap *= 2;
                 double *nb = (double *)realloc(buf, cap * sizeof(double));
-                if (!nb) { free(buf); if (fp != stdin) fclose(fp); return 1; }
+                if (!nb) { free(buf); if (fp != stdin) fclose(fp); cli_opt_free(&parser); return 1; }
                 buf = nb;
             }
             buf[count++] = v;
@@ -453,6 +465,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
             fprintf(err, "Error: Insufficient samples in stream to fit (got %zu, need >= 5)\n", count);
             free(buf);
             if (fp != stdin) fclose(fp);
+            cli_opt_free(&parser);
             return 1;
         }
         double s_min = buf[0], s_max = buf[0];
@@ -466,7 +479,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
         }
         double pad = (s_max - s_min) * 0.05;
         h = histo_create_uniform(50, s_min - pad, s_max + pad, HISTO_FLAG_TRACK_SUMW2);
-        if (!h) { free(buf); if (fp != stdin) fclose(fp); return 1; }
+        if (!h) { free(buf); if (fp != stdin) fclose(fp); cli_opt_free(&parser); return 1; }
         for (size_t k = 0; k < count; ++k) {
             histo_fill(h, buf[k]);
         }
@@ -479,11 +492,11 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
     histo_fit_options_init(&opts);
     opts.loss_type = loss_type;
     opts.poly_degree = poly_degree;
-    opts.range_min = range_min;
-    opts.range_max = range_max;
-    if (has_lower) opts.lower_bounds = lower_bounds_arr;
-    if (has_upper) opts.upper_bounds = upper_bounds_arr;
-    if (has_fixed) opts.fixed_params = fixed_params_arr;
+    opts.range_min = bctx.range_min;
+    opts.range_max = bctx.range_max;
+    if (bctx.has_lower) opts.lower_bounds = bctx.lower_bounds;
+    if (bctx.has_upper) opts.upper_bounds = bctx.upper_bounds;
+    if (bctx.has_fixed) opts.fixed_params = bctx.fixed_params;
 
     histo_fit_result_t *res = NULL;
     histo_status_t fit_st = histo_fit_model(h, model, NULL, &opts, &res);
@@ -492,6 +505,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
                 (int)fit_st, res && res->stop_reason ? res->stop_reason : "unspecified error");
         if (res) histo_fit_result_destroy(res);
         histo_destroy(h);
+        cli_opt_free(&parser);
         return 1;
     }
 
@@ -507,5 +521,6 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
 
     histo_fit_result_destroy(res);
     histo_destroy(h);
+    cli_opt_free(&parser);
     return 0;
 }

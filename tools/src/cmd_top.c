@@ -733,178 +733,105 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
     }
 }
 
-static void print_top_usage(FILE *out) {
-    if (!out) out = stdout;
-    fprintf(out, "Usage: histo-top [OPTIONS] [FILE]\n");
-    fprintf(out, "       histo top [OPTIONS] [FILE]\n\n");
-    fprintf(out, "Real-time interactive terminal monitor for streaming 1D/2D distributions.\n\n");
-    fprintf(out, "1D Geometry Options:\n");
-    fprintf(out, "  -n, --bins=<N>           Initial number of bins (default: 50)\n");
-    fprintf(out, "      --min=<X>            Initial lower boundary (default: 0.0)\n");
-    fprintf(out, "      --max=<X>            Initial upper boundary (default: 100.0)\n");
-    fprintf(out, "  -a, --auto-range         Enable dynamic quantile auto-ranging (default: ON)\n");
-    fprintf(out, "      --no-auto-range      Disable dynamic auto-ranging\n\n");
-    fprintf(out, "2D Geometry Options:\n");
-    fprintf(out, "      --2d                 Enable 2D bivariate heatmap mode\n");
-    fprintf(out, "      --xbins=<N>          Number of bins along X axis (default: 50)\n");
-    fprintf(out, "      --xmin=<X>, --xmax=<X> Initial X axis bounds (default: [0, 100])\n");
-    fprintf(out, "      --ybins=<N>          Number of bins along Y axis (default: 50)\n");
-    fprintf(out, "      --ymin=<Y>, --ymax=<Y> Initial Y axis bounds (default: [0, 100])\n\n");
-    fprintf(out, "Input Parsing & Columns:\n");
-    fprintf(out, "  -w, --weights            Input stream contains weights: 'x weight' or 'x y weight'\n");
-    fprintf(out, "      --value-col=<COL>    1-based column for sample coordinate in 1D mode (default: 1)\n");
-    fprintf(out, "      --xcol=<COL>         1-based column for X coordinate in 2D mode (default: 1)\n");
-    fprintf(out, "      --ycol=<COL>         1-based column for Y coordinate in 2D mode (default: 2)\n");
-    fprintf(out, "      --weights-col=<COL>  1-based column for sample weight (default: 2 for 1D, 3 for 2D)\n");
-    fprintf(out, "  -d, --delimiter=<CHAR>   Field delimiter character (default: whitespace/auto)\n\n");
-    fprintf(out, "Display & Styling:\n");
-    fprintf(out, "  -p, --palette=<NAME>     Color palette: viridis (default), plasma, inferno, magma,\n");
-    fprintf(out, "                           turbo, cividis, grayscale, rainbow (alias: --colormap)\n");
-    fprintf(out, "  -M, --mono               Monochrome mode (disable ANSI colors)\n");
-    fprintf(out, "  -h, --help               Show this help message\n\n");
-    fprintf(out, "Interactive Keyboard Controls:\n");
-    fprintf(out, "  [Space]  Freeze / resume live ingestion snapshot\n");
-    fprintf(out, "  [a]      Toggle dynamic auto-ranging\n");
-    fprintf(out, "  [l]      Cycle count scale (Linear -> Log-Y -> Log-X -> Log-Log in 1D; Log-Z in 2D)\n");
-    fprintf(out, "  [p]      Cycle color palette preset\n");
-    fprintf(out, "  [k]      Toggle real-time Gaussian Kernel Density Estimation (KDE) overlay (1D)\n");
-    fprintf(out, "  [f]      Toggle online Gaussian parametric curve fit overlay (1D)\n");
-    fprintf(out, "  [e]      Toggle error bars (1D)\n");
-    fprintf(out, "  [y]      Toggle vertical count axis scale ruler (1D)\n");
-    fprintf(out, "  [g]      Toggle color reference legend bar (2D)\n");
-    fprintf(out, "  [r / R]  Increase / decrease bin resolution\n");
-    fprintf(out, "  [c]      Clear / reset accumulated histogram data\n");
-    fprintf(out, "  [:]      Open interactive command prompt (:help, :autorange, :rebin, :save, :quit)\n");
-    fprintf(out, "  [?]      Show full in-app help modal\n");
-    fprintf(out, "  [q]      Quit monitor\n");
-}
+
+
+#include "cli_opt.h"
 
 int cmd_top_main(int argc, char **argv) {
     bool is_2d = false;
     uint32_t nbins = 50;
-    uint32_t xbins = 50, ybins = 50;
+    uint32_t xbins = 0, ybins = 0;
     double rmin = 0.0, rmax = 100.0;
-    double xmin = 0.0, xmax = 100.0;
-    double ymin = 0.0, ymax = 100.0;
+    double xmin = NAN, xmax = NAN;
+    double ymin = NAN, ymax = NAN;
     bool auto_range = true;
+    bool no_autorange = false;
     bool monochrome = false;
     bool has_weights = false;
     char delim = ' ';
     int val_col = 1, x_col = 1, y_col = 2, w_col = 2;
+    const char *palette_name = NULL;
     histo_palette_t palette = HISTO_PALETTE_VIRIDIS;
     uint32_t flags = HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS;
     const char *file_arg = NULL;
 
-    for (int i = 1; i < argc; ++i) {
-        const char *arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_top_usage(stdout);
-            return 0;
-        } else if (strncmp(arg, "-n=", 3) == 0 || strncmp(arg, "--bins=", 7) == 0 || strcmp(arg, "-n") == 0 || strcmp(arg, "--bins") == 0) {
-            const char *val = (arg[1] == 'n' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--bins=", 7) == 0) ? arg + 7 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                nbins = (uint32_t)atoi(val);
-                xbins = ybins = nbins;
-            }
-        } else if (strncmp(arg, "--min=", 6) == 0 || strcmp(arg, "--min") == 0) {
-            const char *val = (strncmp(arg, "--min=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                rmin = atof(val);
-                xmin = ymin = rmin;
-            }
-        } else if (strncmp(arg, "--max=", 6) == 0 || strcmp(arg, "--max") == 0) {
-            const char *val = (strncmp(arg, "--max=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                rmax = atof(val);
-                xmax = ymax = rmax;
-            }
-        } else if (strcmp(arg, "-a") == 0 || strcmp(arg, "--autorange") == 0 || strcmp(arg, "--auto-range") == 0) {
-            auto_range = true;
-        } else if (strcmp(arg, "--no-autorange") == 0 || strcmp(arg, "--no-auto-range") == 0) {
-            auto_range = false;
-        } else if (strcmp(arg, "--2d") == 0) {
-            is_2d = true;
-        } else if (strncmp(arg, "--xbins=", 8) == 0 || strcmp(arg, "--xbins") == 0) {
-            const char *val = (strncmp(arg, "--xbins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                xbins = (uint32_t)atoi(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--ybins=", 8) == 0 || strcmp(arg, "--ybins") == 0) {
-            const char *val = (strncmp(arg, "--ybins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                ybins = (uint32_t)atoi(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--xmin=", 7) == 0 || strcmp(arg, "--xmin") == 0) {
-            const char *val = (strncmp(arg, "--xmin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                xmin = atof(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--xmax=", 7) == 0 || strcmp(arg, "--xmax") == 0) {
-            const char *val = (strncmp(arg, "--xmax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                xmax = atof(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--ymin=", 7) == 0 || strcmp(arg, "--ymin") == 0) {
-            const char *val = (strncmp(arg, "--ymin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                ymin = atof(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--ymax=", 7) == 0 || strcmp(arg, "--ymax") == 0) {
-            const char *val = (strncmp(arg, "--ymax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                ymax = atof(val);
-                is_2d = true;
-            }
-        } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--weights") == 0) {
-            has_weights = true;
-        } else if (strncmp(arg, "-d=", 3) == 0 || strncmp(arg, "--delimiter=", 12) == 0 || strcmp(arg, "-d") == 0 || strcmp(arg, "--delimiter") == 0) {
-            const char *val = (arg[1] == 'd' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--delimiter=", 12) == 0) ? arg + 12 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val && *val) delim = val[0];
-        } else if (strncmp(arg, "--value-col=", 12) == 0 || strcmp(arg, "--value-col") == 0 || strncmp(arg, "--val-col=", 10) == 0 || strcmp(arg, "--val-col") == 0) {
-            const char *val = (strncmp(arg, "--value-col=", 12) == 0) ? arg + 12 :
-                              (strncmp(arg, "--val-col=", 10) == 0) ? arg + 10 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) val_col = atoi(val);
-        } else if (strncmp(arg, "--xcol=", 7) == 0 || strcmp(arg, "--xcol") == 0) {
-            const char *val = (strncmp(arg, "--xcol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                x_col = atoi(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--ycol=", 7) == 0 || strcmp(arg, "--ycol") == 0) {
-            const char *val = (strncmp(arg, "--ycol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                y_col = atoi(val);
-                is_2d = true;
-            }
-        } else if (strncmp(arg, "--weights-col=", 14) == 0 || strcmp(arg, "--weights-col") == 0) {
-            const char *val = (strncmp(arg, "--weights-col=", 14) == 0) ? arg + 14 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) {
-                w_col = atoi(val);
-                has_weights = true;
-            }
-        } else if (strncmp(arg, "-p=", 3) == 0 || strncmp(arg, "--palette=", 10) == 0 || strncmp(arg, "--colormap=", 11) == 0 ||
-                   strcmp(arg, "-p") == 0 || strcmp(arg, "--palette") == 0 || strcmp(arg, "--colormap") == 0) {
-            const char *val = (arg[1] == 'p' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--palette=", 10) == 0) ? arg + 10 :
-                              (strncmp(arg, "--colormap=", 11) == 0) ? arg + 11 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) palette = histo_palette_from_name(val);
-        } else if (strcmp(arg, "-M") == 0 || strcmp(arg, "--mono") == 0) {
-            monochrome = true;
-        } else if (arg[0] != '-') {
-            file_arg = arg;
-        }
+    const cli_opt_spec_t specs[] = {
+        {'n', "bins", NULL, CLI_OPT_TYPE_UINT32, &nbins, NULL, 0, "N",
+         "Number of uniform bins (default: 50)", "50"},
+        {0, "min", NULL, CLI_OPT_TYPE_DOUBLE, &rmin, NULL, 0, "X",
+         "Lower boundary", "0.0"},
+        {0, "max", NULL, CLI_OPT_TYPE_DOUBLE, &rmax, NULL, 0, "X",
+         "Upper boundary", "100.0"},
+        {'a', "autorange", "auto-range", CLI_OPT_TYPE_BOOL, &auto_range, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Automatically adjust bin ranges to live data bounds", NULL},
+        {0, "no-autorange", "no-auto-range", CLI_OPT_TYPE_BOOL, &no_autorange, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Disable automatic dynamic range scaling", NULL},
+        {0, "2d", NULL, CLI_OPT_TYPE_BOOL, &is_2d, NULL, 0, NULL,
+         "Enable 2D bivariate live monitor mode", NULL},
+        {0, "xbins", NULL, CLI_OPT_TYPE_UINT32, &xbins, NULL, 0, "N",
+         "Number of bins along X axis in 2D mode", NULL},
+        {0, "ybins", NULL, CLI_OPT_TYPE_UINT32, &ybins, NULL, 0, "N",
+         "Number of bins along Y axis in 2D mode", NULL},
+        {0, "xmin", NULL, CLI_OPT_TYPE_DOUBLE, &xmin, NULL, 0, "X",
+         "X axis lower bound in 2D mode", NULL},
+        {0, "xmax", NULL, CLI_OPT_TYPE_DOUBLE, &xmax, NULL, 0, "X",
+         "X axis upper bound in 2D mode", NULL},
+        {0, "ymin", NULL, CLI_OPT_TYPE_DOUBLE, &ymin, NULL, 0, "Y",
+         "Y axis lower bound in 2D mode", NULL},
+        {0, "ymax", NULL, CLI_OPT_TYPE_DOUBLE, &ymax, NULL, 0, "Y",
+         "Y axis upper bound in 2D mode", NULL},
+        {'w', "weights", NULL, CLI_OPT_TYPE_BOOL, &has_weights, NULL, 0, NULL,
+         "Input stream contains sample weights", NULL},
+        {'d', "delimiter", NULL, CLI_OPT_TYPE_CHAR, &delim, NULL, 0, "CHAR",
+         "Field delimiter character", "space"},
+        {0, "value-col", "val-col", CLI_OPT_TYPE_INT, &val_col, NULL, 0, "COL",
+         "1-based column for sample value (1D mode)", "1"},
+        {0, "xcol", NULL, CLI_OPT_TYPE_INT, &x_col, NULL, 0, "COL",
+         "1-based column for X coordinate in 2D mode", "1"},
+        {0, "ycol", NULL, CLI_OPT_TYPE_INT, &y_col, NULL, 0, "COL",
+         "1-based column for Y coordinate in 2D mode", "2"},
+        {0, "weights-col", NULL, CLI_OPT_TYPE_INT, &w_col, NULL, 0, "COL",
+         "1-based column for sample weight", "2"},
+        {'p', "palette", "colormap", CLI_OPT_TYPE_STRING, &palette_name, NULL, 0, "NAME",
+         "Color palette for terminal rendering", "viridis"},
+        {'M', "mono", NULL, CLI_OPT_TYPE_BOOL, &monochrome, NULL, 0, NULL,
+         "Monochrome mode without ANSI color escapes", NULL}
+    };
+
+    cli_opt_parser_t parser;
+    cli_opt_init(&parser, specs, sizeof(specs) / sizeof(specs[0]),
+                 "histo-top", "[OPTIONS] [FILE]",
+                 "Interactive terminal monitor for live 1D/2D data streams.");
+
+    int rc = cli_opt_parse(&parser, argc, argv, 1);
+    if (rc < 0) {
+        cli_opt_print_help(&parser, stdout);
+        cli_opt_free(&parser);
+        return 0;
     }
+    if (rc > 0) {
+        fprintf(stderr, "%s\n", cli_opt_error(&parser));
+        cli_opt_free(&parser);
+        return 1;
+    }
+
+    if (no_autorange) auto_range = false;
+
+    if (xbins == 0) xbins = nbins;
+    if (ybins == 0) ybins = nbins;
+    if (isnan(xmin)) xmin = rmin;
+    if (isnan(xmax)) xmax = rmax;
+    if (isnan(ymin)) ymin = rmin;
+    if (isnan(ymax)) ymax = rmax;
+
+    if (palette_name) {
+        palette = histo_palette_from_name(palette_name);
+    }
+
+    if (parser.num_positionals > 0) {
+        file_arg = parser.positionals[0];
+    }
+    cli_opt_free(&parser);
 
     FILE *in_fp = stdin;
     if (file_arg && strcmp(file_arg, "-") != 0) {

@@ -116,3 +116,11 @@ add_executable(test_palette
 )
 target_link_libraries(test_palette PRIVATE histocli histo unity)
 add_test(NAME test_palette COMMAND test_palette)
+
+# Unit Test: Declarative CLI Option Parsing Framework
+add_executable(test_cli_opt
+    test_cli_opt.c
+)
+target_link_libraries(test_cli_opt PRIVATE histocli histo unity)
+add_test(NAME test_cli_opt COMMAND test_cli_opt)
+

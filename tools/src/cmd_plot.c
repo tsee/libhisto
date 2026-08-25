@@ -12,29 +12,7 @@
 #include <unistd.h>
 #include <ctype.h>
 
-static void print_plot_usage(FILE *out) {
-    if (!out) out = stdout;
-    fprintf(out, "Usage: histo-plot [OPTIONS] [HISTOGRAM_FILE...]\n");
-    fprintf(out, "       histo plot [OPTIONS] [HISTOGRAM_FILE...]\n\n");
-    fprintf(out, "Renders 1D distributions and 2D bivariate heatmaps as ASCII / Unicode terminal charts.\n\n");
-    fprintf(out, "Display Options:\n");
-    fprintf(out, "  -W, --width=<COLS>       Plot width in characters (default: auto terminal width)\n");
-    fprintf(out, "  -s, --style=<STYLE>      Glyph style: blocks (default), ascii, shaded, sparkline\n");
-    fprintf(out, "  -S, --sparkline          Render compact single-line sparkline (e.g.  ▂▃▅██▆▃▂ )\n");
-    fprintf(out, "  -c, --color=<MODE>       Color mode: auto (default), always, never\n");
-    fprintf(out, "  -p, --palette=<NAME>     Color palette: viridis (default), plasma, inferno, magma,\n");
-    fprintf(out, "                           turbo, cividis, grayscale, rainbow (alias: --colormap)\n");
-    fprintf(out, "  -l, --log                Use logarithmic scale for bar lengths / 2D intensity\n");
-    fprintf(out, "  -e, --errors             Display error bars (1D mode when sum_w2 is tracked)\n");
-    fprintf(out, "      --2d                 Render in 2D bivariate heatmap mode\n");
-    fprintf(out, "      --stats              Show full statistical summary header/footer (default: ON)\n");
-    fprintf(out, "      --no-stats           Suppress statistical summary header\n");
-    fprintf(out, "      --title=<TITLE>      Set custom plot title\n\n");
-    fprintf(out, "Live Streaming / Watch Mode:\n");
-    fprintf(out, "  -w, --watch              Continuously render incoming snapshots from stream\n");
-    fprintf(out, "      --clear              Clear entire screen between updates\n");
-    fprintf(out, "  -h, --help               Show this help message\n");
-}
+
 
 /* Unicode horizontal sub-bin fractions (1/8ths) */
 static const char *const UNICODE_BLOCKS[9] = {
@@ -391,14 +369,16 @@ static void render_histogram_dispatch(const histo_t *h, int term_width, const ch
     }
 }
 
+#include "cli_opt.h"
+
 int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
     if (!out) out = stdout;
     if (!err) err = stderr;
-    optind = 1;
 
     int term_width = cli_get_terminal_width(80);
     const char *style = "blocks";
     const char *color_mode = "auto";
+    const char *palette_name = NULL;
     histo_palette_t palette = HISTO_PALETTE_VIRIDIS;
     bool log_scale = false;
     bool show_errors = false;
@@ -406,65 +386,58 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
     bool sparkline = false;
     bool watch_mode = false;
     bool clear_screen = false;
+    bool mode_2d = false;
     const char *title = NULL;
 
-    int file_start = argc;
-    for (int i = 1; i < argc; ++i) {
-        const char *arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_plot_usage(out);
-            return 0;
-        } else if (strncmp(arg, "-W=", 3) == 0 || strncmp(arg, "--width=", 8) == 0 || strcmp(arg, "-W") == 0 || strcmp(arg, "--width") == 0) {
-            const char *val = (arg[1] == 'W' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--width=", 8) == 0) ? arg + 8 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) term_width = atoi(val);
-        } else if (strncmp(arg, "-s=", 3) == 0 || strncmp(arg, "--style=", 8) == 0 || strcmp(arg, "-s") == 0 || strcmp(arg, "--style") == 0) {
-            const char *val = (arg[1] == 's' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--style=", 8) == 0) ? arg + 8 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) style = val;
-        } else if (strcmp(arg, "-S") == 0 || strcmp(arg, "--sparkline") == 0) {
-            sparkline = true;
-        } else if (strncmp(arg, "-c=", 3) == 0 || strncmp(arg, "--color=", 8) == 0 || strcmp(arg, "-c") == 0 || strcmp(arg, "--color") == 0) {
-            const char *val = (arg[1] == 'c' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--color=", 8) == 0) ? arg + 8 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) color_mode = val;
-        } else if (strncmp(arg, "-p=", 3) == 0 || strncmp(arg, "--palette=", 10) == 0 || strncmp(arg, "--colormap=", 11) == 0 ||
-                   strcmp(arg, "-p") == 0 || strcmp(arg, "--palette") == 0 || strcmp(arg, "--colormap") == 0) {
-            const char *val = (arg[1] == 'p' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--palette=", 10) == 0) ? arg + 10 :
-                              (strncmp(arg, "--colormap=", 11) == 0) ? arg + 11 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) palette = histo_palette_from_name(val);
-        } else if (strcmp(arg, "-l") == 0 || strcmp(arg, "--log") == 0) {
-            log_scale = true;
-        } else if (strcmp(arg, "-e") == 0 || strcmp(arg, "--errors") == 0) {
-            show_errors = true;
-        } else if (strcmp(arg, "--stats") == 0) {
-            show_stats = true;
-        } else if (strcmp(arg, "--no-stats") == 0) {
-            show_stats = false;
-        } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--watch") == 0) {
-            watch_mode = true;
-        } else if (strcmp(arg, "--clear") == 0) {
-            clear_screen = true;
-        } else if (strcmp(arg, "--2d") == 0) {
-            /* 2D stream plotting is auto-detected */
-        } else if (strncmp(arg, "--title=", 8) == 0) {
-            title = arg + 8;
-        } else if (strcmp(arg, "--title") == 0 && i + 1 < argc) {
-            title = argv[++i];
-        } else if (arg[0] == '-' && arg[1] != '\0') {
-            fprintf(err, "Unknown option '%s'. Run 'histo-plot --help' for usage.\n", arg);
-            return 1;
-        } else {
-            file_start = i;
-            break;
-        }
+    const cli_opt_spec_t specs[] = {
+        {'W', "width", NULL, CLI_OPT_TYPE_INT, &term_width, NULL, 0, "COLS",
+         "Plot width in characters (default: auto terminal width)", NULL},
+        {'s', "style", NULL, CLI_OPT_TYPE_STRING, &style, NULL, 0, "STYLE",
+         "Glyph style: blocks (default), ascii, shaded, sparkline", "blocks"},
+        {'S', "sparkline", NULL, CLI_OPT_TYPE_BOOL, &sparkline, NULL, 0, NULL,
+         "Render compact single-line sparkline", NULL},
+        {'c', "color", NULL, CLI_OPT_TYPE_STRING, &color_mode, NULL, 0, "MODE",
+         "Color mode: auto (default), always, never", "auto"},
+        {'p', "palette", "colormap", CLI_OPT_TYPE_STRING, &palette_name, NULL, 0, "NAME",
+         "Color palette: viridis (default), plasma, inferno, magma, turbo, cividis, grayscale, rainbow", "viridis"},
+        {'l', "log", NULL, CLI_OPT_TYPE_BOOL, &log_scale, NULL, 0, NULL,
+         "Use logarithmic scale for bar lengths / 2D intensity", NULL},
+        {'e', "errors", NULL, CLI_OPT_TYPE_BOOL, &show_errors, NULL, 0, NULL,
+         "Display error bars (1D mode when sum_w2 is tracked)", NULL},
+        {0, "2d", NULL, CLI_OPT_TYPE_BOOL, &mode_2d, NULL, 0, NULL,
+         "Render in 2D bivariate heatmap mode", NULL},
+        {0, "stats", NULL, CLI_OPT_TYPE_BOOL, &show_stats, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Show full statistical summary header/footer (default: ON)", NULL},
+        {0, "no-stats", NULL, CLI_OPT_TYPE_BOOL, &show_stats, NULL, CLI_OPT_FLAG_SET_FALSE, NULL,
+         "Suppress statistical summary header", NULL},
+        {0, "title", NULL, CLI_OPT_TYPE_STRING, &title, NULL, 0, "TITLE",
+         "Set custom plot title", NULL},
+        {'w', "watch", NULL, CLI_OPT_TYPE_BOOL, &watch_mode, NULL, 0, NULL,
+         "Continuously render incoming snapshots from stream", NULL},
+        {0, "clear", NULL, CLI_OPT_TYPE_BOOL, &clear_screen, NULL, 0, NULL,
+         "Clear entire screen between updates", NULL}
+    };
+
+    cli_opt_parser_t parser;
+    cli_opt_init(&parser, specs, sizeof(specs) / sizeof(specs[0]),
+                 "histo-plot", "[OPTIONS] [HISTOGRAM_FILE...]",
+                 "Renders 1D distributions and 2D bivariate heatmaps as ASCII / Unicode terminal charts.");
+
+    int rc = cli_opt_parse(&parser, argc, argv, 1);
+    if (rc < 0) {
+        cli_opt_print_help(&parser, out);
+        cli_opt_free(&parser);
+        return 0;
+    }
+    if (rc > 0) {
+        fprintf(err, "%s\n", cli_opt_error(&parser));
+        cli_opt_free(&parser);
+        return 1;
     }
 
+    if (palette_name) {
+        palette = histo_palette_from_name(palette_name);
+    }
     if (strcmp(style, "sparkline") == 0) {
         sparkline = true;
     }
@@ -478,10 +451,9 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
         use_color = (out == stdout) && cli_is_stdout_tty();
     }
 
-    int num_files = argc - file_start;
     const char *default_files[] = {"-"};
-    const char **files = (num_files > 0) ? (const char **)(argv + file_start) : default_files;
-    int nfiles = (num_files > 0) ? num_files : 1;
+    const char **files = (parser.num_positionals > 0) ? parser.positionals : default_files;
+    int nfiles = (parser.num_positionals > 0) ? parser.num_positionals : 1;
 
     for (int f = 0; f < nfiles; ++f) {
         FILE *in_fp = NULL;
@@ -571,5 +543,6 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
         if (in_fp != stdin) fclose(in_fp);
     }
 
+    cli_opt_free(&parser);
     return 0;
 }

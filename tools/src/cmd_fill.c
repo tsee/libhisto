@@ -14,48 +14,7 @@
 #include <unistd.h>
 
 
-static void print_fill_usage(FILE *out) {
-    if (!out) out = stdout;
-    fprintf(out, "Usage: histo-fill [OPTIONS] [FILE...]\n");
-    fprintf(out, "       histo fill [OPTIONS] [FILE...]\n\n");
-    fprintf(out, "Reads streaming data, aggregates into a histogram (1D or 2D), and emits the serialized result.\n\n");
-    fprintf(out, "1D Geometry Options:\n");
-    fprintf(out, "  -n, --bins=<N>           Number of uniform bins (default: 50)\n");
-    fprintf(out, "      --min=<X>            Lower boundary (required unless --auto-range)\n");
-    fprintf(out, "      --max=<X>            Upper boundary (required unless --auto-range)\n");
-    fprintf(out, "      --edges=<E0,E1,...>  Variable bin edges (comma-separated)\n");
-    fprintf(out, "      --auto-range         Buffer input to determine min/max automatically\n");
-    fprintf(out, "  -a, --auto-bins[=RULE]   Buffer input and estimate optimal bins (fd, scott, sturges, doane, knuth)\n\n");
-    fprintf(out, "2D Geometry Options:\n");
-    fprintf(out, "      --2d                 Enable 2D bivariate histogramming mode\n");
-    fprintf(out, "      --xbins=<N>          Number of bins along X axis (default: 50)\n");
-    fprintf(out, "      --xmin=<X>, --xmax=<X> X axis bounds\n");
-    fprintf(out, "      --ybins=<N>          Number of bins along Y axis (default: 50)\n");
-    fprintf(out, "      --ymin=<Y>, --ymax=<Y> Y axis bounds\n\n");
-    fprintf(out, "Input Parsing & Columns:\n");
-    fprintf(out, "  -w, --weights            Input contains weights: reads 'x weight' pairs\n");
-    fprintf(out, "      --value-col=<COL>    1-based column for sample coordinate (default: 1)\n");
-    fprintf(out, "      --xcol=<COL>         1-based column for X coordinate in 2D mode (default: 1)\n");
-    fprintf(out, "      --ycol=<COL>         1-based column for Y coordinate in 2D mode (default: 2)\n");
-    fprintf(out, "      --weights-col=<COL>  1-based column for sample weight (default: 2 for 1D, 3 for 2D)\n");
-    fprintf(out, "  -d, --delimiter=<CHAR>   Field delimiter character (default: auto-detect comma/tab/semicolon/space)\n");
-    fprintf(out, "      --binary-f64         Read raw Little-Endian double binary stream\n");
-    fprintf(out, "      --merge              Read and add/merge incoming serialized histograms\n\n");
-    fprintf(out, "Histogram Features & Transformations:\n");
-    fprintf(out, "      --sumw2              Enable sum_w2 error tracking (default: ON)\n");
-    fprintf(out, "      --no-sumw2           Disable sum_w2 error tracking\n");
-    fprintf(out, "      --exact-moments      Enable online exact Welford moments\n");
-    fprintf(out, "      --rebin=<FACTOR>     Rebin uniform histogram by integer factor (1D only)\n");
-    fprintf(out, "      --slice=<MIN:MAX>    Slice bin sub-range [MIN, MAX]\n");
-    fprintf(out, "      --cdf                Generate Cumulative Distribution Function (CDF)\n");
-    fprintf(out, "      --normalize=<AREA>   Scale histogram total weight to target area\n\n");
-    fprintf(out, "Output & Streaming Options:\n");
-    fprintf(out, "  -o, --output=<FORMAT>    Output format: binary (default for pipes), json, tsv, table\n");
-    fprintf(out, "  -f, --output-file=<FILE> Output destination (default: stdout)\n");
-    fprintf(out, "      --emit-every=<N>     Emit intermediate snapshot every N samples\n");
-    fprintf(out, "      --emit-interval=<S>  Emit intermediate snapshot every S seconds\n");
-    fprintf(out, "  -h, --help               Show this help message\n");
-}
+
 
 
 static char auto_detect_delimiter(const char *line) {
@@ -199,32 +158,62 @@ static histo_status_t emit_histo2d(const histo2d_t *h2, const char *fmt, FILE *o
     return status;
 }
 
+#include "cli_opt.h"
+
+typedef struct {
+    double *var_edges;
+    size_t n_edges;
+} fill_edges_ctx_t;
+
+static int cb_parse_edges(const char *opt_name, const char *val, void *data, char *err_buf, size_t err_size) {
+    (void)opt_name;
+    fill_edges_ctx_t *ctx = (fill_edges_ctx_t *)data;
+    if (!val || !*val) {
+        snprintf(err_buf, err_size, "Option '--edges' requires comma-separated numbers");
+        return 1;
+    }
+    const char *p = val;
+    size_t edge_cap = 16;
+    ctx->var_edges = (double *)malloc(edge_cap * sizeof(double));
+    ctx->n_edges = 0;
+    while (*p) {
+        if (ctx->n_edges >= edge_cap) {
+            edge_cap *= 2;
+            ctx->var_edges = (double *)realloc(ctx->var_edges, edge_cap * sizeof(double));
+        }
+        char *endp = NULL;
+        ctx->var_edges[ctx->n_edges++] = strtod(p, &endp);
+        if (endp == p) break;
+        if (*endp == ',') p = endp + 1;
+        else p = endp;
+    }
+    return 0;
+}
+
 int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
     if (!out) out = stdout;
     if (!err) err = stderr;
-    optind = 1;
 
     bool is_2d = false;
     uint32_t nbins = 50;
-    double range_min = 0.0, range_max = 0.0;
-    bool has_min = false, has_max = false;
+    double range_min = NAN, range_max = NAN;
     bool auto_range = false;
+    const char *auto_bins_rule_str = NULL;
     int auto_bins_rule = -1;
 
-    uint32_t xbins = 50, ybins = 50;
-    double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0;
-    bool has_xmin = false, has_xmax = false, has_ymin = false, has_ymax = false;
+    uint32_t xbins = 0, ybins = 0;
+    double xmin = NAN, xmax = NAN, ymin = NAN, ymax = NAN;
 
-    double *var_edges = NULL;
-    size_t n_edges = 0;
+    fill_edges_ctx_t edges_ctx = {NULL, 0};
     bool has_weights = false;
     int val_col = 1;
     int x_col = 1, y_col = 2;
-    int w_col = 2;
-    bool w_col_set = false;
+    int w_col = 0;
     char delim = '\0';
     bool binary_input = false;
     bool merge_mode = false;
+    bool flag_no_sumw2 = false;
+    bool flag_exact_moments = false;
     uint32_t flags = HISTO_FLAG_TRACK_SUMW2;
     uint32_t rebin_factor = 1;
     bool do_cdf = false;
@@ -234,144 +223,123 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
     uint64_t emit_every = 0;
     double emit_interval = 0.0;
 
-    int file_start = argc;
+    const cli_opt_spec_t specs[] = {
+        {'n', "bins", NULL, CLI_OPT_TYPE_UINT32, &nbins, NULL, 0, "N",
+         "Number of uniform bins (default: 50)", "50"},
+        {0, "min", NULL, CLI_OPT_TYPE_DOUBLE, &range_min, NULL, 0, "X",
+         "Lower boundary (required unless --auto-range)", NULL},
+        {0, "max", NULL, CLI_OPT_TYPE_DOUBLE, &range_max, NULL, 0, "X",
+         "Upper boundary (required unless --auto-range)", NULL},
+        {0, "edges", NULL, CLI_OPT_TYPE_CALLBACK, &edges_ctx, cb_parse_edges, 0, "E0,E1,...",
+         "Variable bin edges (comma-separated)", NULL},
+        {0, "auto-range", NULL, CLI_OPT_TYPE_BOOL, &auto_range, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Buffer input to determine min/max automatically", NULL},
+        {'a', "auto-bins", NULL, CLI_OPT_TYPE_STRING, &auto_bins_rule_str, NULL, CLI_OPT_FLAG_OPTIONAL_ARG, "RULE",
+         "Buffer input and estimate optimal bins (fd, scott, sturges, doane, knuth)", "auto"},
+        {0, "2d", NULL, CLI_OPT_TYPE_BOOL, &is_2d, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Enable 2D bivariate histogramming mode", NULL},
+        {0, "xbins", NULL, CLI_OPT_TYPE_UINT32, &xbins, NULL, 0, "N",
+         "Number of bins along X axis (default: 50)", "50"},
+        {0, "ybins", NULL, CLI_OPT_TYPE_UINT32, &ybins, NULL, 0, "N",
+         "Number of bins along Y axis (default: 50)", "50"},
+        {0, "xmin", NULL, CLI_OPT_TYPE_DOUBLE, &xmin, NULL, 0, "X",
+         "X axis lower bound", NULL},
+        {0, "xmax", NULL, CLI_OPT_TYPE_DOUBLE, &xmax, NULL, 0, "X",
+         "X axis upper bound", NULL},
+        {0, "ymin", NULL, CLI_OPT_TYPE_DOUBLE, &ymin, NULL, 0, "Y",
+         "Y axis lower bound", NULL},
+        {0, "ymax", NULL, CLI_OPT_TYPE_DOUBLE, &ymax, NULL, 0, "Y",
+         "Y axis upper bound", NULL},
+        {'w', "weights", NULL, CLI_OPT_TYPE_BOOL, &has_weights, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Input contains weights: reads 'x weight' pairs", NULL},
+        {0, "value-col", NULL, CLI_OPT_TYPE_INT, &val_col, NULL, 0, "COL",
+         "1-based column for sample coordinate (default: 1)", "1"},
+        {0, "xcol", NULL, CLI_OPT_TYPE_INT, &x_col, NULL, 0, "COL",
+         "1-based column for X coordinate in 2D mode (default: 1)", "1"},
+        {0, "ycol", NULL, CLI_OPT_TYPE_INT, &y_col, NULL, 0, "COL",
+         "1-based column for Y coordinate in 2D mode (default: 2)", "2"},
+        {0, "weights-col", NULL, CLI_OPT_TYPE_INT, &w_col, NULL, 0, "COL",
+         "1-based column for sample weight (default: 2 for 1D, 3 for 2D)", NULL},
+        {'d', "delimiter", NULL, CLI_OPT_TYPE_CHAR, &delim, NULL, 0, "CHAR",
+         "Field delimiter character (default: auto-detect)", NULL},
+        {0, "binary-f64", NULL, CLI_OPT_TYPE_BOOL, &binary_input, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Read raw Little-Endian double binary stream", NULL},
+        {0, "merge", NULL, CLI_OPT_TYPE_BOOL, &merge_mode, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Read and add/merge incoming serialized histograms", NULL},
+        {0, "sumw2", NULL, CLI_OPT_TYPE_BOOL, &flags, NULL, CLI_OPT_FLAG_HIDDEN, NULL, NULL, NULL},
+        {0, "no-sumw2", NULL, CLI_OPT_TYPE_BOOL, &flag_no_sumw2, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Disable sum_w2 error tracking", NULL},
+        {0, "exact-moments", NULL, CLI_OPT_TYPE_BOOL, &flag_exact_moments, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Enable online exact Welford moments", NULL},
+        {0, "rebin", NULL, CLI_OPT_TYPE_UINT32, &rebin_factor, NULL, 0, "FACTOR",
+         "Rebin uniform histogram by integer factor (1D only)", NULL},
+        {0, "cdf", NULL, CLI_OPT_TYPE_BOOL, &do_cdf, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Generate Cumulative Distribution Function (CDF)", NULL},
+        {0, "normalize", NULL, CLI_OPT_TYPE_DOUBLE, &norm_area, NULL, 0, "AREA",
+         "Scale histogram total weight to target area", NULL},
+        {'o', "output", NULL, CLI_OPT_TYPE_STRING, &out_format, NULL, 0, "FORMAT",
+         "Output format: binary (default for pipes), json, tsv, table", NULL},
+        {'f', "output-file", "file", CLI_OPT_TYPE_STRING, &out_file, NULL, 0, "FILE",
+         "Output destination (default: stdout)", NULL},
+        {0, "emit-every", NULL, CLI_OPT_TYPE_UINT64, &emit_every, NULL, 0, "N",
+         "Emit intermediate snapshot every N samples", NULL},
+        {0, "emit-interval", NULL, CLI_OPT_TYPE_DOUBLE, &emit_interval, NULL, 0, "S",
+         "Emit intermediate snapshot every S seconds", NULL}
+    };
 
-    for (int i = 1; i < argc; ++i) {
-        const char *arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_fill_usage(out);
-            if (var_edges) free(var_edges);
-            return 0;
-        } else if (strcmp(arg, "--2d") == 0) {
-            is_2d = true;
-            if (!w_col_set) w_col = 3;
-        }
- else if (strncmp(arg, "-n=", 3) == 0 || strncmp(arg, "--bins=", 7) == 0 || strcmp(arg, "-n") == 0 || strcmp(arg, "--bins") == 0) {
-            const char *val = (arg[1] == 'n' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--bins=", 7) == 0) ? arg + 7 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) nbins = (uint32_t)atoi(val);
-        } else if (strncmp(arg, "--xbins=", 8) == 0 || strcmp(arg, "--xbins") == 0) {
-            const char *val = (strncmp(arg, "--xbins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) xbins = (uint32_t)atoi(val);
-            is_2d = true;
-        } else if (strncmp(arg, "--ybins=", 8) == 0 || strcmp(arg, "--ybins") == 0) {
-            const char *val = (strncmp(arg, "--ybins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) ybins = (uint32_t)atoi(val);
-            is_2d = true;
-        } else if (strncmp(arg, "--xmin=", 7) == 0 || strcmp(arg, "--xmin") == 0) {
-            const char *val = (strncmp(arg, "--xmin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { xmin = atof(val); has_xmin = true; is_2d = true; }
-        } else if (strncmp(arg, "--xmax=", 7) == 0 || strcmp(arg, "--xmax") == 0) {
-            const char *val = (strncmp(arg, "--xmax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { xmax = atof(val); has_xmax = true; is_2d = true; }
-        } else if (strncmp(arg, "--ymin=", 7) == 0 || strcmp(arg, "--ymin") == 0) {
-            const char *val = (strncmp(arg, "--ymin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { ymin = atof(val); has_ymin = true; is_2d = true; }
-        } else if (strncmp(arg, "--ymax=", 7) == 0 || strcmp(arg, "--ymax") == 0) {
-            const char *val = (strncmp(arg, "--ymax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { ymax = atof(val); has_ymax = true; is_2d = true; }
-        } else if (strncmp(arg, "--min=", 6) == 0 || strcmp(arg, "--min") == 0) {
-            const char *val = (strncmp(arg, "--min=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { range_min = atof(val); has_min = true; }
-        } else if (strncmp(arg, "--max=", 6) == 0 || strcmp(arg, "--max") == 0) {
-            const char *val = (strncmp(arg, "--max=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { range_max = atof(val); has_max = true; }
-        } else if (strcmp(arg, "--auto-range") == 0) {
-            auto_range = true;
-        } else if (strncmp(arg, "--auto-bins=", 12) == 0 || strcmp(arg, "--auto-bins") == 0 || strcmp(arg, "-a") == 0) {
-            auto_range = true;
-            const char *val = (strncmp(arg, "--auto-bins=", 12) == 0) ? arg + 12 :
-                              (strcmp(arg, "--auto-bins") == 0 || strcmp(arg, "-a") == 0) ?
-                              ((i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : "auto") : "auto";
-            if (val) {
-                if (strcasecmp(val, "fd") == 0) auto_bins_rule = HISTO_BIN_RULE_FD;
-                else if (strcasecmp(val, "scott") == 0) auto_bins_rule = HISTO_BIN_RULE_SCOTT;
-                else if (strcasecmp(val, "sturges") == 0) auto_bins_rule = HISTO_BIN_RULE_STURGES;
-                else if (strcasecmp(val, "doane") == 0) auto_bins_rule = HISTO_BIN_RULE_DOANE;
-                else if (strcasecmp(val, "knuth") == 0) auto_bins_rule = HISTO_BIN_RULE_KNUTH;
-                else auto_bins_rule = HISTO_BIN_RULE_AUTO;
-            }
-        } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--weights") == 0) {
-            has_weights = true;
-        } else if (strncmp(arg, "--value-col=", 12) == 0 || strcmp(arg, "--value-col") == 0) {
-            const char *val = (strncmp(arg, "--value-col=", 12) == 0) ? arg + 12 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) val_col = atoi(val);
-        } else if (strncmp(arg, "--xcol=", 7) == 0 || strcmp(arg, "--xcol") == 0) {
-            const char *val = (strncmp(arg, "--xcol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { x_col = atoi(val); is_2d = true; }
-        } else if (strncmp(arg, "--ycol=", 7) == 0 || strcmp(arg, "--ycol") == 0) {
-            const char *val = (strncmp(arg, "--ycol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { y_col = atoi(val); is_2d = true; }
-        } else if (strncmp(arg, "--weights-col=", 14) == 0 || strcmp(arg, "--weights-col") == 0) {
-            const char *val = (strncmp(arg, "--weights-col=", 14) == 0) ? arg + 14 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) { w_col = atoi(val); has_weights = true; w_col_set = true; }
+    cli_opt_parser_t parser;
+    cli_opt_init(&parser, specs, sizeof(specs) / sizeof(specs[0]),
+                 "histo-fill", "[OPTIONS] [FILE...]",
+                 "Reads streaming data, aggregates into a histogram (1D or 2D), and emits the serialized result.");
 
-        } else if (strncmp(arg, "-d=", 3) == 0 || strncmp(arg, "--delimiter=", 12) == 0 || strcmp(arg, "-d") == 0) {
-            const char *val = (arg[1] == 'd' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--delimiter=", 12) == 0) ? arg + 12 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val && *val) delim = val[0];
-        } else if (strcmp(arg, "--binary-f64") == 0) {
-            binary_input = true;
-        } else if (strcmp(arg, "--merge") == 0) {
-            merge_mode = true;
-        } else if (strcmp(arg, "--sumw2") == 0) {
-            flags |= HISTO_FLAG_TRACK_SUMW2;
-        } else if (strcmp(arg, "--no-sumw2") == 0) {
-            flags &= ~HISTO_FLAG_TRACK_SUMW2;
-        } else if (strcmp(arg, "--exact-moments") == 0) {
-            flags |= HISTO_FLAG_EXACT_MOMENTS;
-        } else if (strncmp(arg, "--rebin=", 8) == 0) {
-            rebin_factor = (uint32_t)atoi(arg + 8);
-        } else if (strcmp(arg, "--cdf") == 0) {
-            do_cdf = true;
-        } else if (strncmp(arg, "--normalize=", 12) == 0) {
-            norm_area = atof(arg + 12);
-        } else if (strncmp(arg, "-o=", 3) == 0) {
-            out_format = arg + 3;
-        } else if (strcmp(arg, "-o") == 0 && i + 1 < argc) {
-            out_format = argv[++i];
-        } else if (strncmp(arg, "--output=", 9) == 0) {
-            out_format = arg + 9;
-        } else if (strncmp(arg, "-f=", 3) == 0) {
-            out_file = arg + 3;
-        } else if (strcmp(arg, "-f") == 0 && i + 1 < argc) {
-            out_file = argv[++i];
-        } else if (strncmp(arg, "--output-file=", 14) == 0) {
-            out_file = arg + 14;
-        } else if (strncmp(arg, "--emit-every=", 13) == 0 || strcmp(arg, "--emit-every") == 0) {
-            const char *val = (strncmp(arg, "--emit-every=", 13) == 0) ? arg + 13 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) emit_every = (uint64_t)strtoull(val, NULL, 10);
-        } else if (strncmp(arg, "--emit-interval=", 16) == 0 || strcmp(arg, "--emit-interval") == 0) {
-            const char *val = (strncmp(arg, "--emit-interval=", 16) == 0) ? arg + 16 : (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) emit_interval = atof(val);
-        } else if (strncmp(arg, "--edges=", 8) == 0) {
-
-            const char *p = arg + 8;
-            size_t edge_cap = 16;
-            var_edges = (double *)malloc(edge_cap * sizeof(double));
-            n_edges = 0;
-            while (*p) {
-                if (n_edges >= edge_cap) {
-                    edge_cap *= 2;
-                    var_edges = (double *)realloc(var_edges, edge_cap * sizeof(double));
-                }
-                char *endp = NULL;
-                var_edges[n_edges++] = strtod(p, &endp);
-                if (endp == p) break;
-                if (*endp == ',') p = endp + 1;
-                else p = endp;
-            }
-        } else if (arg[0] == '-' && arg[1] != '\0') {
-            fprintf(stderr, "Unknown option '%s'. Run 'histo-fill --help' for usage.\n", arg);
-            if (var_edges) free(var_edges);
-            return 1;
-        } else {
-            file_start = i;
-            break;
-        }
+    int rc = cli_opt_parse(&parser, argc, argv, 1);
+    if (rc < 0) {
+        cli_opt_print_help(&parser, out);
+        if (edges_ctx.var_edges) free(edges_ctx.var_edges);
+        cli_opt_free(&parser);
+        return 0;
     }
+    if (rc > 0) {
+        fprintf(err, "%s\n", cli_opt_error(&parser));
+        if (edges_ctx.var_edges) free(edges_ctx.var_edges);
+        cli_opt_free(&parser);
+        return 1;
+    }
+
+    if (auto_bins_rule_str) {
+        auto_range = true;
+        if (strcasecmp(auto_bins_rule_str, "fd") == 0) auto_bins_rule = HISTO_BIN_RULE_FD;
+        else if (strcasecmp(auto_bins_rule_str, "scott") == 0) auto_bins_rule = HISTO_BIN_RULE_SCOTT;
+        else if (strcasecmp(auto_bins_rule_str, "sturges") == 0) auto_bins_rule = HISTO_BIN_RULE_STURGES;
+        else if (strcasecmp(auto_bins_rule_str, "doane") == 0) auto_bins_rule = HISTO_BIN_RULE_DOANE;
+        else if (strcasecmp(auto_bins_rule_str, "knuth") == 0) auto_bins_rule = HISTO_BIN_RULE_KNUTH;
+        else auto_bins_rule = HISTO_BIN_RULE_AUTO;
+    }
+
+    bool has_min = !isnan(range_min);
+    bool has_max = !isnan(range_max);
+    bool has_xmin = !isnan(xmin);
+    bool has_xmax = !isnan(xmax);
+    bool has_ymin = !isnan(ymin);
+    bool has_ymax = !isnan(ymax);
+
+    if (has_xmin || has_xmax || has_ymin || has_ymax || xbins > 0 || ybins > 0) {
+        is_2d = true;
+    }
+    if (xbins == 0) xbins = 50;
+    if (ybins == 0) ybins = 50;
+
+    if (w_col != 0) {
+        has_weights = true;
+    } else {
+        w_col = is_2d ? 3 : 2;
+    }
+
+    if (flag_no_sumw2) flags &= ~HISTO_FLAG_TRACK_SUMW2;
+    if (flag_exact_moments) flags |= HISTO_FLAG_EXACT_MOMENTS;
+
+    double *var_edges = edges_ctx.var_edges;
+    size_t n_edges = edges_ctx.n_edges;
 
     if (!out_format) {
         out_format = ((out == stdout) && cli_is_stdout_tty() && !out_file) ? "json" : "binary";
@@ -383,15 +351,14 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
         if (!out_fp) {
             fprintf(err, "Error: Cannot open output file '%s'\n", out_file);
             if (var_edges) free(var_edges);
+            cli_opt_free(&parser);
             return 1;
         }
     }
 
-
-    int num_files = argc - file_start;
     const char *default_files[] = {"-"};
-    const char **files = (num_files > 0) ? (const char **)(argv + file_start) : default_files;
-    int nfiles = (num_files > 0) ? num_files : 1;
+    const char **files = (parser.num_positionals > 0) ? parser.positionals : default_files;
+    int nfiles = (parser.num_positionals > 0) ? parser.num_positionals : 1;
 
     if (is_2d) {
         /* -------------------------------------------------------------
@@ -521,6 +488,7 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
             histo2d_destroy(h2);
         }
         if (out_fp != out && out_fp != stdout) fclose(out_fp);
+        cli_opt_free(&parser);
         return 0;
     }
 
@@ -553,6 +521,7 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
             fprintf(stderr, "Error: Failed to initialize histogram.\n");
             if (var_edges) free(var_edges);
             if (out_fp != stdout) fclose(out_fp);
+            cli_opt_free(&parser);
             return 1;
         }
     }
@@ -729,5 +698,6 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
 
     if (var_edges) free(var_edges);
     if (out_fp != out && out_fp != stdout) fclose(out_fp);
+    cli_opt_free(&parser);
     return 0;
 }

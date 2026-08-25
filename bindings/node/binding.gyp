@@ -17,6 +17,7 @@
         "../../src/simd_neon.c",
         "../../src/vendor/cJSON/cJSON.c",
         "../../tools/src/cli_common.c",
+        "../../tools/src/cli_opt.c",
         "../../tools/src/cli_main.c",
         "../../tools/src/cli_palette.c",
         "../../tools/src/cmd_fill.c",

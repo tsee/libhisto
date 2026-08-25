@@ -35,6 +35,7 @@ bundled/src/vendor/cJSON/cJSON.h
 bundled/src/vendor/cJSON/LICENSE
 bundled/tools/CMakeLists.txt
 bundled/tools/include/cli_common.h
+bundled/tools/include/cli_opt.h
 bundled/tools/include/cli_palette.h
 bundled/tools/include/tui_engine.h
 bundled/tools/include/tui_term.h
@@ -44,6 +45,7 @@ bundled/tools/scripts/gen_terminal_svg.py
 bundled/tools/src/.tui_engine.c.swp
 bundled/tools/src/cli_common.c
 bundled/tools/src/cli_main.c
+bundled/tools/src/cli_opt.c
 bundled/tools/src/cli_palette.c
 bundled/tools/src/cmd_cmp.c
 bundled/tools/src/cmd_fill.c

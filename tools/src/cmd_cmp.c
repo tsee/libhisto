@@ -3,69 +3,63 @@
  */
 
 #include "cli_common.h"
+#include "cli_opt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
-#include <unistd.h>
-
-static void print_cmp_usage(FILE *out) {
-    if (!out) out = stdout;
-    fprintf(out, "Usage: histo-cmp [OPTIONS] <HISTO_A> <HISTO_B>\n");
-    fprintf(out, "       histo cmp [OPTIONS] <HISTO_A> <HISTO_B>\n\n");
-    fprintf(out, "Compares two histograms and computes statistical distance metrics and compatibility.\n\n");
-    fprintf(out, "Options:\n");
-    fprintf(out, "  -f, --format=<FMT>       Output format: table (default), json, tsv\n");
-    fprintf(out, "  -h, --help               Show this help message\n");
-}
 
 int histo_cli_cmp(int argc, char **argv, FILE *out, FILE *err) {
     if (!out) out = stdout;
     if (!err) err = stderr;
-    optind = 1;
 
     const char *fmt = "table";
-    int file_start = argc;
 
-    for (int i = 1; i < argc; ++i) {
-        const char *arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            print_cmp_usage(out);
-            return 0;
-        } else if (strncmp(arg, "-f=", 3) == 0 || strncmp(arg, "--format=", 9) == 0 || strcmp(arg, "-f") == 0 || strcmp(arg, "--format") == 0) {
-            const char *val = (arg[1] == 'f' && arg[2] == '=') ? arg + 3 :
-                              (strncmp(arg, "--format=", 9) == 0) ? arg + 9 :
-                              (i + 1 < argc) ? argv[++i] : NULL;
-            if (val) fmt = val;
-        } else if (arg[0] == '-' && arg[1] != '\0') {
-            fprintf(err, "Unknown option '%s'. Run 'histo-cmp --help' for usage.\n", arg);
-            return 1;
-        } else {
-            file_start = i;
-            break;
-        }
+    const cli_opt_spec_t specs[] = {
+        {'f', "format", NULL, CLI_OPT_TYPE_STRING, &fmt, NULL, 0, "FMT",
+         "Output format: table (default), json, tsv", "table"}
+    };
+
+    cli_opt_parser_t parser;
+    cli_opt_init(&parser, specs, sizeof(specs) / sizeof(specs[0]),
+                 "histo-cmp", "[OPTIONS] <HISTO_A> <HISTO_B>",
+                 "Compares two histograms and computes statistical distance metrics and compatibility.");
+
+    int rc = cli_opt_parse(&parser, argc, argv, 1);
+    if (rc < 0) {
+        cli_opt_print_help(&parser, out);
+        cli_opt_free(&parser);
+        return 0;
     }
-
-    if (argc - file_start < 2) {
-        fprintf(err, "Error: Two histogram input paths are required.\n\n");
-        print_cmp_usage(err);
+    if (rc > 0) {
+        fprintf(err, "%s\n", cli_opt_error(&parser));
+        cli_opt_free(&parser);
         return 1;
     }
 
-    const char *path1 = argv[file_start];
-    const char *path2 = argv[file_start + 1];
+    if (parser.num_positionals < 2) {
+        fprintf(err, "Error: Two histogram input paths are required.\n\n");
+        cli_opt_print_help(&parser, err);
+        cli_opt_free(&parser);
+        return 1;
+    }
+
+    const char *path1 = parser.positionals[0];
+    const char *path2 = parser.positionals[1];
 
     histo_t *h1 = NULL;
     histo_t *h2 = NULL;
 
     if (cli_read_histogram_from_file(path1, &h1) != HISTO_OK) {
         fprintf(err, "Error: Failed to read first histogram from '%s'\n", path1);
+        cli_opt_free(&parser);
         return 1;
     }
     if (cli_read_histogram_from_file(path2, &h2) != HISTO_OK) {
         fprintf(err, "Error: Failed to read second histogram from '%s'\n", path2);
         histo_destroy(h1);
+        cli_opt_free(&parser);
         return 1;
     }
 
@@ -81,7 +75,6 @@ int histo_cli_cmp(int argc, char **argv, FILE *out, FILE *err) {
     histo_cmp_wasserstein_1d(h1, h2, &w1);
     histo_cmp_kl_divergence(h1, h2, &kl);
     histo_cmp_bhattacharyya(h1, h2, &bhat);
-
 
     if (strcmp(fmt, "json") == 0) {
         fprintf(out, "{\n");
@@ -122,5 +115,6 @@ int histo_cli_cmp(int argc, char **argv, FILE *out, FILE *err) {
 
     histo_destroy(h1);
     histo_destroy(h2);
+    cli_opt_free(&parser);
     return 0;
 }

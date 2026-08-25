@@ -428,8 +428,174 @@ void test_cli_space_separated_args(void) {
     remove(tmp_out_json);
 }
 
-int main(void) {
+extern int histo_cli_main(int argc, char **argv, FILE *out, FILE *err);
 
+void test_cli_attached_and_bundled_options(void) {
+    const char *tmp_in = "/tmp/test_cli_attached_in.txt";
+    const char *tmp_out = "/tmp/test_cli_attached_out.json";
+
+    FILE *fp = fopen(tmp_in, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 20; ++i) {
+        fprintf(fp, "%d %f\n", i, 1.5);
+    }
+    fclose(fp);
+
+    /* 1. histo-fill with attached short options: -n10 -w -ojson -f <file> */
+    char *fill_argv[] = {
+        "histo-fill", "-n10", "--min=0", "--max=20", "-w", "-ojson", "-f", (char *)tmp_out, (char *)tmp_in
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
+
+    /* 2. histo-plot with attached short options */
+    char *plot_argv[] = {
+        "histo-plot", "-W100", "-sascii", "--no-stats", (char *)tmp_out
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_argv) / sizeof(plot_argv[0])), plot_argv));
+
+    /* 3. histo-stats with attached short option: -fjson */
+    char *stats_argv[] = {
+        "histo-stats", "-fjson", (char *)tmp_out
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
+
+    /* 4. histo-cmp with attached short option: -fjson */
+    char *cmp_argv[] = {
+        "histo-cmp", "-fjson", (char *)tmp_out, (char *)tmp_out
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main((int)(sizeof(cmp_argv) / sizeof(cmp_argv[0])), cmp_argv));
+
+    remove(tmp_in);
+    remove(tmp_out);
+}
+
+void test_cli_interspersed_positionals(void) {
+    const char *tmp_in = "/tmp/test_cli_inter_in.txt";
+    const char *tmp_out = "/tmp/test_cli_inter_out.json";
+
+    FILE *fp = fopen(tmp_in, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 10; ++i) fprintf(fp, "%d\n", i);
+    fclose(fp);
+
+    /* Flags before, between, and after positional arguments */
+    char *fill_argv[] = {
+        "histo-fill", "--min", "0", (char *)tmp_in, "--max", "10", "--output=json", "-f", (char *)tmp_out, "-n", "10"
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
+
+    /* histo-stats with flags after positional argument */
+    char *stats_argv[] = {
+        "histo-stats", (char *)tmp_out, "--format", "json"
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
+
+    /* histo-cmp with flags between positional arguments */
+    char *cmp_argv[] = {
+        "histo-cmp", (char *)tmp_out, "--format=json", (char *)tmp_out
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main((int)(sizeof(cmp_argv) / sizeof(cmp_argv[0])), cmp_argv));
+
+    remove(tmp_in);
+    remove(tmp_out);
+}
+
+void test_cli_double_dash_and_negatives(void) {
+    const char *tmp_in = "/tmp/test_cli_neg_in.txt";
+    const char *tmp_out = "/tmp/test_cli_neg_out.json";
+
+    FILE *fp = fopen(tmp_in, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = -50; i < -10; ++i) fprintf(fp, "%d\n", i);
+    fclose(fp);
+
+    /* Negative number bounds passed detached and attached */
+    char *fill_argv[] = {
+        "histo-fill", "--bins", "10", "--min", "-60.0", "--max", "-5.0", "-o", "json", "-f", (char *)tmp_out, "--", (char *)tmp_in
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
+
+    /* Double dash positional terminator */
+    char *stats_argv[] = {
+        "histo-stats", "--format=json", "--", (char *)tmp_out
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
+
+    remove(tmp_in);
+    remove(tmp_out);
+}
+
+void test_cli_exhaustive_error_cases(void) {
+    /* Unknown options across all commands */
+    char *fill_unk[] = {"histo-fill", "--unknown-flag-123"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fill_main(2, fill_unk));
+
+    char *plot_unk[] = {"histo-plot", "--unknown-flag-123"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_plot_main(2, plot_unk));
+
+    char *stats_unk[] = {"histo-stats", "--unknown-flag-123"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_stats_main(2, stats_unk));
+
+    char *cmp_unk[] = {"histo-cmp", "--unknown-flag-123"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_cmp_main(2, cmp_unk));
+
+    char *fit_unk[] = {"histo-fit", "--unknown-flag-123"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fit_main(2, fit_unk));
+
+    char *top_unk[] = {"histo-top", "--unknown-flag-123"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_top_main(2, top_unk));
+
+    /* Missing arguments */
+    char *fill_miss[] = {"histo-fill", "--bins"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fill_main(2, fill_miss));
+
+    char *plot_miss[] = {"histo-plot", "--width"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_plot_main(2, plot_miss));
+
+    char *stats_miss[] = {"histo-stats", "--format"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_stats_main(2, stats_miss));
+
+    char *cmp_miss[] = {"histo-cmp", "--format"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_cmp_main(2, cmp_miss));
+
+    /* Invalid type conversions */
+    char *fill_type_err[] = {"histo-fill", "--bins=abc"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fill_main(2, fill_type_err));
+
+    char *plot_type_err[] = {"histo-plot", "--width=xyz"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, cmd_plot_main(2, plot_type_err));
+}
+
+void test_cli_dispatcher_and_help(void) {
+    char *disp_help[] = {"histo", "--help"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(2, disp_help, stdout, stderr));
+
+    char *disp_ver[] = {"histo", "--version"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(2, disp_ver, stdout, stderr));
+
+    char *disp_v[] = {"histo", "-v"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(2, disp_v, stdout, stderr));
+
+    char *disp_fill_help[] = {"histo", "fill", "--help"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(3, disp_fill_help, stdout, stderr));
+
+    char *disp_plot_help[] = {"histo", "plot", "--help"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(3, disp_plot_help, stdout, stderr));
+
+    char *disp_stats_help[] = {"histo", "stats", "--help"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(3, disp_stats_help, stdout, stderr));
+
+    char *disp_cmp_help[] = {"histo", "cmp", "--help"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(3, disp_cmp_help, stdout, stderr));
+
+    char *disp_fit_help[] = {"histo", "fit", "--help"};
+    TEST_ASSERT_EQUAL_INT(0, histo_cli_main(3, disp_fit_help, stdout, stderr));
+
+    char *disp_unk_cmd[] = {"histo", "unknown_cmd_xyz"};
+    TEST_ASSERT_NOT_EQUAL_INT(0, histo_cli_main(2, disp_unk_cmd, stdout, stderr));
+}
+
+int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_json_serialization_roundtrip_uniform);
     RUN_TEST(test_json_serialization_roundtrip_variable);
@@ -441,6 +607,12 @@ int main(void) {
     RUN_TEST(test_cli_plot_palettes);
     RUN_TEST(test_cli_top_help);
     RUN_TEST(test_cli_space_separated_args);
+    RUN_TEST(test_cli_attached_and_bundled_options);
+    RUN_TEST(test_cli_interspersed_positionals);
+    RUN_TEST(test_cli_double_dash_and_negatives);
+    RUN_TEST(test_cli_exhaustive_error_cases);
+    RUN_TEST(test_cli_dispatcher_and_help);
     return UNITY_END();
 }
+
 
