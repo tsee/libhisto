@@ -8,7 +8,8 @@ import _libhisto
 from histo.constants import FLAG_NONE, FLAG_TRACK_SUMW2, FLAG_EXACT_MOMENTS
 from histo.fit import FitResult, MODEL_MAP, LOSS_MAP
 from histo.compat import HAS_NUMPY, require_numpy, as_float64_buffer
-from histo.axis import Axis
+from histo.axis import Axis, HistogramAxis
+from histo.uhi import loc, rebin, underflow as uhi_underflow, overflow as uhi_overflow, Kind
 
 
 class Histogram:
@@ -189,12 +190,20 @@ class Histogram:
         return arr
 
     @property
-    def axes(self) -> Tuple[Axis]:
+    def axes(self) -> Tuple[HistogramAxis]:
         """UHI axes tuple."""
-        return (Axis(self.nbins, self.min, self.max, raw_histo=self._raw),)
+        return (HistogramAxis(self.nbins, self.min, self.max, raw_histo=self._raw),)
 
     def values(self, flow: bool = False) -> Any:
-        """UHI values protocol returning array of bin counts."""
+        """
+        UHI values protocol returning NumPy array of bin counts.
+        
+        Parameters
+        ----------
+        flow : bool, default=False
+            If True, returns array of length N+2 [underflow, *bins, overflow].
+            If False, returns array of length N.
+        """
         np = require_numpy("Histogram.values")
         if not flow:
             return np.array([self.bin_content(i) for i in range(self.nbins)], dtype=np.float64)
@@ -204,23 +213,131 @@ class Histogram:
         )
 
     def variances(self, flow: bool = False) -> Optional[Any]:
-        """UHI variances protocol returning array of sum_w2 or bin uncertainties squared."""
+        """
+        UHI variances protocol returning array of sum_w2 variances.
+        
+        Parameters
+        ----------
+        flow : bool, default=False
+            If True, returns array of length N+2 [underflow_w2, *bins_w2, overflow_w2].
+            If False, returns array of length N.
+        """
         np = require_numpy("Histogram.variances")
         if not flow:
             return np.array([self.bin_sum_w2(i) for i in range(self.nbins)], dtype=np.float64)
+        u_w2 = getattr(self._raw, "underflow_sum_w2", self.underflow)
+        o_w2 = getattr(self._raw, "overflow_sum_w2", self.overflow)
         return np.array(
-            [self.underflow] + [self.bin_sum_w2(i) for i in range(self.nbins)] + [self.overflow],
+            [u_w2] + [self.bin_sum_w2(i) for i in range(self.nbins)] + [o_w2],
             dtype=np.float64
         )
 
     def counts(self, flow: bool = False) -> Any:
-        """UHI counts protocol."""
+        """UHI counts protocol (alias for values)."""
         return self.values(flow=flow)
 
     @property
     def kind(self) -> str:
         """UHI kind property."""
-        return "COUNT"
+        return Kind.COUNT
+
+    @property
+    def flags(self) -> int:
+        """Active feature flags."""
+        return getattr(self._raw, "flags", FLAG_NONE)
+
+    def to_scipy_dist(self) -> Any:
+        """
+        Convert histogram to a scipy.stats.rv_histogram continuous distribution object.
+
+        Returns
+        -------
+        scipy.stats.rv_histogram
+            Continuous random variable distribution interpolated from histogram bins.
+        """
+        try:
+            import scipy.stats
+        except ImportError:
+            raise ImportError(
+                "to_scipy_dist() requires scipy. "
+                "Please install scipy using 'pip install scipy' or 'pip install histo[scipy]'."
+            )
+
+        np = require_numpy("Histogram.to_scipy_dist")
+        counts = np.array([self.bin_content(i) for i in range(self.nbins)], dtype=np.float64)
+        edges = self.axes[0].edges
+        return scipy.stats.rv_histogram((counts, edges))
+
+    def to_boost(self) -> Any:
+        """
+        Convert Histogram to a boost_histogram.Histogram object.
+
+        Returns
+        -------
+        boost_histogram.Histogram
+        """
+        try:
+            import boost_histogram as bh
+        except ImportError:
+            raise ImportError(
+                "to_boost() requires boost-histogram. "
+                "Please install boost-histogram using 'pip install boost-histogram' or 'pip install histo[uhi]'."
+            )
+
+        ax = self.axes[0]
+        edges = [float(x) for x in ax.edges]
+        is_uniform = True
+        dx0 = edges[1] - edges[0]
+        for i in range(1, len(edges) - 1):
+            if abs((edges[i + 1] - edges[i]) - dx0) > 1e-10 * max(1.0, abs(dx0)):
+                is_uniform = False
+                break
+
+        if is_uniform:
+            b_ax = bh.axis.Regular(self.nbins, self.min, self.max, underflow=True, overflow=True)
+        else:
+            b_ax = bh.axis.Variable(edges, underflow=True, overflow=True)
+
+        has_w2 = (self.flags & FLAG_TRACK_SUMW2) != 0
+        storage = bh.storage.Weight() if has_w2 else bh.storage.Double()
+        bh_h = bh.Histogram(b_ax, storage=storage)
+
+        vals = self.values(flow=True)
+        if has_w2:
+            vars_arr = self.variances(flow=True)
+            bh_h.view(flow=True).value = vals
+            bh_h.view(flow=True).variance = vars_arr
+        else:
+            bh_h.view(flow=True)[:] = vals
+
+        return bh_h
+
+    @classmethod
+    def from_boost(cls, bh_histo: Any) -> "Histogram":
+        """
+        Construct a libhisto Histogram from a 1D boost-histogram Histogram.
+        """
+        if len(bh_histo.axes) != 1:
+            raise ValueError(f"Expected 1D boost-histogram, got {len(bh_histo.axes)}D")
+
+        b_ax = bh_histo.axes[0]
+        edges = [float(x) for x in b_ax.edges]
+        has_sumw2 = hasattr(bh_histo.view(), "variance")
+
+        h = cls.from_numpy(bh_histo.values(), edges, track_sumw2=has_sumw2)
+        if hasattr(bh_histo, "view"):
+            view = bh_histo.view(flow=True)
+            if hasattr(view, "value"):
+                underflow_val = float(view.value[0])
+                overflow_val = float(view.value[-1])
+            else:
+                underflow_val = float(view[0])
+                overflow_val = float(view[-1])
+            if underflow_val > 0:
+                h._raw.fill(float(edges[0]) - 1.0, weight=underflow_val)
+            if overflow_val > 0:
+                h._raw.fill(float(edges[-1]) + 1.0, weight=overflow_val)
+        return h
 
     # -------------------------------------------------------------------------
     # Ingestion Methods
@@ -400,27 +517,92 @@ class Histogram:
         """Get (lower, upper) boundaries of bin_index."""
         return self._raw.bin_bounds(int(bin_index))
 
-    def __getitem__(self, key: Union[int, slice]) -> Union[float, "Histogram"]:
+    def __getitem__(self, key: Any) -> Union[float, "Histogram"]:
         """
-        Indexing: h[i] returns bin content.
-        Slicing: h[start:end] returns sliced sub-histogram.
+        Indexing and slicing with UHI locators and rebin support:
+        - h[i]: returns bin content at integer index i.
+        - h[loc(x)]: returns bin content at coordinate x.
+        - h[start:stop]: returns sliced Histogram across [start, stop).
+        - h[start:stop:rebin(n)] or h[start:stop:nj]: slices and rebins.
         """
-        if isinstance(key, slice):
-            start = 0 if key.start is None else int(key.start)
-            stop = self.nbins if key.stop is None else int(key.stop)
-            if start < 0:
-                start += self.nbins
-            if stop < 0:
-                stop += self.nbins
-            start = max(0, min(self.nbins - 1, start))
-            stop = max(start, min(self.nbins - 1, stop))
-            return self.slice(start, stop)
-        elif isinstance(key, int):
+        if isinstance(key, int):
             if key < 0:
                 key += self.nbins
             if key < 0 or key >= self.nbins:
                 raise IndexError(f"Bin index {key} out of range [0, {self.nbins - 1}]")
             return self.bin_content(key)
+
+        if isinstance(key, loc):
+            idx = self.axes[0].index(key.value) + key.offset
+            if idx < 0 or idx >= self.nbins:
+                raise IndexError(f"loc({key.value}) resolves to out-of-bounds bin {idx}")
+            return self.bin_content(idx)
+
+        if key is uhi_underflow or type(key).__name__ == "_UnderflowTag":
+            return self.underflow
+
+        if key is uhi_overflow or type(key).__name__ == "_OverflowTag":
+            return self.overflow
+
+        if isinstance(key, slice):
+            # 1. Parse start
+            if key.start is None:
+                start_idx = 0
+            elif isinstance(key.start, loc):
+                start_idx = self.axes[0].index(key.start.value) + key.start.offset
+            elif key.start is uhi_underflow or type(key.start).__name__ == "_UnderflowTag":
+                start_idx = 0
+            elif isinstance(key.start, int):
+                start_idx = key.start
+                if start_idx < 0:
+                    start_idx += self.nbins
+            else:
+                start_idx = int(key.start)
+            start_idx = max(0, min(self.nbins - 1, start_idx))
+
+            # 2. Parse stop
+            if key.stop is None:
+                stop_idx = self.nbins - 1
+            elif isinstance(key.stop, loc):
+                idx = self.axes[0].index(key.stop.value) + key.stop.offset
+                stop_idx = idx - 1 if idx > 0 else 0
+            elif key.stop is uhi_overflow or type(key.stop).__name__ == "_OverflowTag":
+                stop_idx = self.nbins - 1
+            elif isinstance(key.stop, int):
+                idx = key.stop
+                if idx < 0:
+                    idx += self.nbins
+                stop_idx = idx
+            else:
+                idx = int(key.stop)
+                stop_idx = idx
+            stop_idx = max(start_idx, min(self.nbins - 1, stop_idx))
+
+            # 3. Parse step (rebin)
+            rebin_factor = 1
+            if key.step is not None:
+                if isinstance(key.step, rebin):
+                    rebin_factor = key.step.factor
+                elif isinstance(key.step, complex):
+                    if key.step.real == 0 and key.step.imag > 0:
+                        rebin_factor = int(round(key.step.imag))
+                    else:
+                        raise ValueError(f"Invalid complex slice step: {key.step}")
+                elif isinstance(key.step, int) and key.step > 0:
+                    rebin_factor = key.step
+                else:
+                    raise TypeError(f"Invalid slice step: {key.step}")
+
+            if key.start is None and key.stop is None:
+                res = self.clone()
+            else:
+                res = self.slice(start_idx, stop_idx)
+
+            if rebin_factor > 1:
+                res = res.rebin(rebin_factor)
+
+            return res
+
         raise TypeError(f"Invalid index type: {type(key)}")
 
     def __iter__(self):

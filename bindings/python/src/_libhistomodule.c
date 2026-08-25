@@ -16,6 +16,8 @@
 #include "histo/cli.h"
 #include "histo/version.h"
 #include "histo/types.h"
+#include "internal.h"
+#include "internal_2d.h"
 
 /* ------------------------------------------------------------------------- */
 /* Exception types                                                           */
@@ -357,9 +359,21 @@ static PyObject *Histo1D_underflow(Histo1DObject *self, void *closure) {
     return PyFloat_FromDouble(histo_underflow(self->h));
 }
 
+static PyObject *Histo1D_underflow_sum_w2(Histo1DObject *self, void *closure) {
+    (void)closure;
+    if (!self->h) return PyFloat_FromDouble(0.0);
+    return PyFloat_FromDouble(self->h->underflow_sum_w2);
+}
+
 static PyObject *Histo1D_overflow(Histo1DObject *self, void *closure) {
     (void)closure;
     return PyFloat_FromDouble(histo_overflow(self->h));
+}
+
+static PyObject *Histo1D_overflow_sum_w2(Histo1DObject *self, void *closure) {
+    (void)closure;
+    if (!self->h) return PyFloat_FromDouble(0.0);
+    return PyFloat_FromDouble(self->h->overflow_sum_w2);
 }
 
 static PyObject *Histo1D_nan_count(Histo1DObject *self, void *closure) {
@@ -471,14 +485,23 @@ static PyObject *Histo1D_rms(Histo1DObject *self, void *closure) {
     return PyFloat_FromDouble(val);
 }
 
+static PyObject *Histo1D_flags(Histo1DObject *self, void *closure) {
+    (void)closure;
+    if (!self->h) return PyLong_FromUnsignedLong(0);
+    return PyLong_FromUnsignedLong(self->h->flags);
+}
+
 static PyGetSetDef Histo1D_getsetters[] = {
+    {"flags", (getter)Histo1D_flags, NULL, "Histogram feature flags", NULL},
     {"nbins", (getter)Histo1D_nbins, NULL, "Number of bins", NULL},
     {"min", (getter)Histo1D_min, NULL, "Lower range limit", NULL},
     {"max", (getter)Histo1D_max, NULL, "Upper range limit", NULL},
     {"total_weight", (getter)Histo1D_total_weight, NULL, "Total in-range accumulated weight", NULL},
     {"num_entries", (getter)Histo1D_num_entries, NULL, "Total fill operations", NULL},
     {"underflow", (getter)Histo1D_underflow, NULL, "Underflow accumulated weight", NULL},
+    {"underflow_sum_w2", (getter)Histo1D_underflow_sum_w2, NULL, "Underflow sum of squared weights", NULL},
     {"overflow", (getter)Histo1D_overflow, NULL, "Overflow accumulated weight", NULL},
+    {"overflow_sum_w2", (getter)Histo1D_overflow_sum_w2, NULL, "Overflow sum of squared weights", NULL},
     {"nan_count", (getter)Histo1D_nan_count, NULL, "Non-finite sample count", NULL},
     {"mean", (getter)Histo1D_mean, NULL, "Distribution mean", NULL},
     {"variance", (getter)Histo1D_variance, NULL, "Distribution variance", NULL},
@@ -1477,8 +1500,14 @@ static PyObject *Histo2D_std_dev_x(Histo2DObject *self, void *closure) { (void)c
 static PyObject *Histo2D_std_dev_y(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_std_dev_y(self->h2d, &v); return PyFloat_FromDouble(v); }
 static PyObject *Histo2D_covariance(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_covariance(self->h2d, &v); return PyFloat_FromDouble(v); }
 static PyObject *Histo2D_correlation(Histo2DObject *self, void *closure) { (void)closure; double v = 0.0; histo2d_correlation(self->h2d, &v); return PyFloat_FromDouble(v); }
+static PyObject *Histo2D_flags(Histo2DObject *self, void *closure) {
+    (void)closure;
+    if (!self->h2d) return PyLong_FromUnsignedLong(0);
+    return PyLong_FromUnsignedLong(self->h2d->flags);
+}
 
 static PyGetSetDef Histo2D_getsetters[] = {
+    {"flags", (getter)Histo2D_flags, NULL, "2D Histogram feature flags", NULL},
     {"nx", (getter)Histo2D_nx, NULL, "Bins along X", NULL},
     {"ny", (getter)Histo2D_ny, NULL, "Bins along Y", NULL},
     {"xmin", (getter)Histo2D_xmin, NULL, "X minimum", NULL},
@@ -1560,6 +1589,40 @@ static PyObject *Histo2D_find_region(Histo2DObject *self, PyObject *args) {
     histo_status_t st = histo2d_find_region(self->h2d, x, y, &reg);
     if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
     return PyLong_FromLong((long)reg);
+}
+
+static PyObject *Histo2D_region_content(Histo2DObject *self, PyObject *args) {
+    int region = 0;
+    if (!PyArg_ParseTuple(args, "i", &region)) return NULL;
+    if (region < 0 || region >= HISTO2D_REGION_COUNT || !self->h2d) {
+        PyErr_SetString(PyExc_ValueError, "Invalid region index (must be 0..8)");
+        return NULL;
+    }
+    double weight = 0.0;
+    uint64_t count = 0;
+    histo_status_t st = histo2d_region_content(self->h2d, (histo2d_region_t)region, &weight, &count);
+    if (st != HISTO_OK) { set_histo_error(st, NULL); return NULL; }
+    return PyFloat_FromDouble(weight);
+}
+
+static PyObject *Histo2D_region_sum_w2(Histo2DObject *self, PyObject *args) {
+    int region = 0;
+    if (!PyArg_ParseTuple(args, "i", &region)) return NULL;
+    if (region < 0 || region >= HISTO2D_REGION_COUNT || !self->h2d) {
+        PyErr_SetString(PyExc_ValueError, "Invalid region index (must be 0..8)");
+        return NULL;
+    }
+    return PyFloat_FromDouble(self->h2d->guards[region].sum_w2);
+}
+
+static PyObject *Histo2D_region_count(Histo2DObject *self, PyObject *args) {
+    int region = 0;
+    if (!PyArg_ParseTuple(args, "i", &region)) return NULL;
+    if (region < 0 || region >= HISTO2D_REGION_COUNT || !self->h2d) {
+        PyErr_SetString(PyExc_ValueError, "Invalid region index (must be 0..8)");
+        return NULL;
+    }
+    return PyLong_FromUnsignedLongLong(self->h2d->guards[region].count);
 }
 
 static PyObject *Histo2D_integral(Histo2DObject *self, PyObject *args) {
@@ -1751,6 +1814,9 @@ static PyMethodDef Histo2D_methods[] = {
     {"bin_center", (PyCFunction)(void(*)(void))Histo2D_bin_center, METH_VARARGS, "Get 2D bin midpoint (cx, cy)"},
     {"find_bin", (PyCFunction)(void(*)(void))Histo2D_find_bin, METH_VARARGS, "Find (ix, iy) bin indices for coordinate (x, y)"},
     {"find_region", (PyCFunction)(void(*)(void))Histo2D_find_region, METH_VARARGS, "Identify 9-guard region for coordinate (x, y)"},
+    {"region_content", (PyCFunction)(void(*)(void))Histo2D_region_content, METH_VARARGS, "Get 2D guard region accumulated weight"},
+    {"region_sum_w2", (PyCFunction)(void(*)(void))Histo2D_region_sum_w2, METH_VARARGS, "Get 2D guard region sum of squared weights"},
+    {"region_count", (PyCFunction)(void(*)(void))Histo2D_region_count, METH_VARARGS, "Get 2D guard region entry count"},
     {"integral", (PyCFunction)(void(*)(void))Histo2D_integral, METH_VARARGS, "Calculate 2D volume/integral"},
     {"project_x", (PyCFunction)(void(*)(void))Histo2D_project_x, METH_VARARGS, "Project along X to 1D"},
     {"project_y", (PyCFunction)(void(*)(void))Histo2D_project_y, METH_VARARGS, "Project along Y to 1D"},
@@ -2571,6 +2637,17 @@ PyMODINIT_FUNC PyInit__libhisto(void) {
     PyModule_AddIntConstant(m, "KDE_BW_SILVERMAN", HISTO_KDE_BANDWIDTH_SILVERMAN);
     PyModule_AddIntConstant(m, "KDE_BW_SCOTT", HISTO_KDE_BANDWIDTH_SCOTT);
     PyModule_AddIntConstant(m, "KDE_BW_MANUAL", HISTO_KDE_BANDWIDTH_MANUAL);
+
+    /* 2D Guard Regions */
+    PyModule_AddIntConstant(m, "REGION_CENTER", HISTO2D_REGION_CENTER);
+    PyModule_AddIntConstant(m, "REGION_EAST", HISTO2D_REGION_EAST);
+    PyModule_AddIntConstant(m, "REGION_NORTH", HISTO2D_REGION_NORTH);
+    PyModule_AddIntConstant(m, "REGION_SOUTH", HISTO2D_REGION_SOUTH);
+    PyModule_AddIntConstant(m, "REGION_WEST", HISTO2D_REGION_WEST);
+    PyModule_AddIntConstant(m, "REGION_SOUTH_WEST", HISTO2D_REGION_SOUTH_WEST);
+    PyModule_AddIntConstant(m, "REGION_SOUTH_EAST", HISTO2D_REGION_SOUTH_EAST);
+    PyModule_AddIntConstant(m, "REGION_NORTH_WEST", HISTO2D_REGION_NORTH_WEST);
+    PyModule_AddIntConstant(m, "REGION_NORTH_EAST", HISTO2D_REGION_NORTH_EAST);
 
     return m;
 }

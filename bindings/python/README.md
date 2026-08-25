@@ -73,14 +73,67 @@ print(f"p99 quantile: {sketch.quantile(0.99):.3f}")
 
 ---
 
-## NumPy & Universal Histogram Interface (UHI)
+## Universal Histogram Interface (UHI) & Scikit-HEP Compliance
 
-`histo` provides native zero-copy integration with NumPy and the Scikit-HEP Universal Histogram Interface:
+`histo` implements full compliance with the [Universal Histogram Interface (UHI)](https://uhi.readthedocs.io/) protocols (`PlottableHistogram`, `PlottableAxis`), enabling seamless interoperability with the entire Python HEP visualization ecosystem (`mplhep`, `hist`, `plothist`, `histoprint`, `boost-histogram`).
 
-- **`to_numpy()` & `from_numpy()`**: Direct roundtrip parity with `numpy.histogram` and `numpy.histogram2d`.
-- **`__array__()`**: Enables passing `histo.Histogram` and `histo.Histogram2D` instances directly into `np.asarray(h)`, `np.sum(h)`, and NumPy ufuncs (`np.sqrt`, `np.log`).
-- **UHI Protocols**: Compatible with `mplhep`, `plothist`, and `histoprint` via `.axes`, `.values()`, `.variances()`, `.edges`, and `.centers`.
-- **Zero Mandatory Dependencies**: All NumPy functionality gracefully degrades without errors when NumPy is not installed, preserving a 100% lightweight, dependency-free installation.
+### 1D & 2D UHI Protocols & Properties
+
+- **`axes`**: Tuple of `HistogramAxis` (`PlottableAxis`) objects with `len(ax)`, `ax.edges`, `ax.centers`, `ax.widths`, `ax.traits`, `ax.bin(i)`, and `ax.index(val)`.
+- **`kind`**: Returns `"COUNT"` (`Kind.COUNT`).
+- **`values(flow: bool = False)`**:
+  - 1D: Returns 1D array of shape `(N,)` (`flow=False`) or `(N+2,)` incorporating `[underflow, *bins, overflow]` (`flow=True`).
+  - 2D: Returns 2D array of shape `(Nx, Ny)` (`flow=False`) or `(Nx+2, Ny+2)` (`flow=True`) incorporating all 9 geometric boundary regions:
+    * Center grid: `[1:Nx+1, 1:Ny+1]`
+    * 4 Corners: Bottom-Left `[0, 0]`, Bottom-Right `[Nx+1, 0]`, Top-Left `[0, Ny+1]`, Top-Right `[Nx+1, Ny+1]`
+    * 4 Boundary Guards: West `[0, 1:Ny+1]`, East `[Nx+1, 1:Ny+1]`, South `[1:Nx+1, 0]`, North `[1:Nx+1, Ny+1]`
+- **`variances(flow: bool = False)`**: Returns $\sum w^2$ variances array with matching shapes.
+- **`counts(flow: bool = False)`**: Alias for `values(flow=flow)`.
+
+### UHI Slicing, Locators, and Rebinning
+
+```python
+from histo import Histogram, Histogram2D, loc, rebin, underflow, overflow, sum as uhi_sum
+
+h = Histogram(bins=50, range=(0.0, 100.0), track_sumw2=True)
+h.fill(25.0, weight=2.0)
+
+# Coordinate locators & boundary tags
+content = h[loc(25.0)]         # Direct coordinate lookup
+underflow_w = h[underflow]     # Underflow weight
+overflow_w = h[overflow]       # Overflow weight
+
+# Slicing ranges with locators
+sub_h = h[loc(20.0):loc(60.0)] # Sub-histogram from 20.0 to 60.0
+
+# Rebinning in slice expressions
+rebinned = h[::rebin(2)]       # Rebin by factor of 2
+rebinned_c = h[::2j]           # Complex step rebinning (boost-histogram convention)
+
+# 2D Slicing, Projection & Locators
+h2 = Histogram2D(xbins=20, xrange=(0, 10), ybins=20, yrange=(0, 10))
+h2.fill(2.5, 7.5, weight=3.0)
+
+val = h2[loc(2.5), loc(7.5)]   # 2D coordinate access
+proj_x = h2[:, uhi_sum]        # Project onto X-axis (integrating over Y)
+proj_y = h2[uhi_sum, :]        # Project onto Y-axis (integrating over X)
+slice_1d = h2[loc(2.5), :]     # 1D slice along Y at fixed X
+h2_sub = h2[::rebin(2), ::rebin(2)] # 2D rebinning
+```
+
+### High-Level Interoperability & Converters
+
+```python
+# Convert to continuous SciPy probability distribution
+dist = h.to_scipy_dist()       # Returns scipy.stats.rv_histogram
+pdf_val = dist.pdf(25.0)
+
+# Bidirectional boost-histogram conversion
+bh_histo = h.to_boost()        # Convert 1D/2D to boost_histogram.Histogram
+h_restored = Histogram.from_boost(bh_histo) # Restore to libhisto Histogram
+```
+
+- **Zero Mandatory Dependencies**: All NumPy, SciPy, and boost-histogram integrations gracefully degrade without errors when those optional packages are absent.
 
 ---
 

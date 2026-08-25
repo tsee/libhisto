@@ -4,10 +4,15 @@
 
 from typing import Sequence, Optional, Union, Tuple, Dict, Any
 import _libhisto
-from histo.constants import FLAG_NONE, FLAG_TRACK_SUMW2
+from histo.constants import (
+    FLAG_NONE, FLAG_TRACK_SUMW2,
+    REGION_CENTER, REGION_EAST, REGION_NORTH, REGION_SOUTH, REGION_WEST,
+    REGION_SOUTH_WEST, REGION_SOUTH_EAST, REGION_NORTH_WEST, REGION_NORTH_EAST
+)
 from histo.histogram import Histogram
 from histo.compat import HAS_NUMPY, require_numpy, as_float64_buffer
-from histo.axis import Axis
+from histo.axis import Axis, HistogramAxis
+from histo.uhi import loc, rebin, underflow as uhi_underflow, overflow as uhi_overflow, sum as uhi_sum, Kind
 
 
 class Histogram2D:
@@ -153,24 +158,170 @@ class Histogram2D:
         return H
 
     @property
-    def axes(self) -> Tuple[Axis, Axis]:
+    def axes(self) -> Tuple[HistogramAxis, HistogramAxis]:
         """UHI axes tuple (XAxis, YAxis)."""
-        x_ax = Axis(self.nx, self.xmin, self.xmax, axis_idx=0)
-        y_ax = Axis(self.ny, self.ymin, self.ymax, axis_idx=1)
+        x_ax = HistogramAxis(self.nx, self.xmin, self.xmax, raw_histo=self._raw, axis_idx=0)
+        y_ax = HistogramAxis(self.ny, self.ymin, self.ymax, raw_histo=self._raw, axis_idx=1)
         return (x_ax, y_ax)
 
     def values(self, flow: bool = False) -> Any:
-        """UHI values protocol."""
-        return self.__array__()
+        """
+        UHI values protocol returning 2D NumPy array of bin contents.
+
+        Parameters
+        ----------
+        flow : bool, default=False
+            If False, returns (nx, ny) array.
+            If True, returns (nx+2, ny+2) array incorporating the 9 boundary guard regions:
+              * center: bins[ix, iy] at [1:nx+1, 1:ny+1]
+              * left guard: region_left[iy] at [0, 1:ny+1]
+              * right guard: region_right[iy] at [nx+1, 1:ny+1]
+              * bottom guard: region_bottom[ix] at [1:nx+1, 0]
+              * top guard: region_top[ix] at [1:nx+1, ny+1]
+              * corners: bottom-left [0, 0], bottom-right [nx+1, 0],
+                         top-left [0, ny+1], top-right [nx+1, ny+1]
+        """
+        np = require_numpy("Histogram2D.values")
+        if not flow:
+            return self.__array__()
+
+        arr = np.zeros((self.nx + 2, self.ny + 2), dtype=np.float64)
+        for ix in range(self.nx):
+            for iy in range(self.ny):
+                arr[ix + 1, iy + 1] = self.bin_content(ix, iy)
+
+        # 4 Corner guard regions
+        arr[0, 0] = self._raw.region_content(REGION_SOUTH_WEST)
+        arr[self.nx + 1, 0] = self._raw.region_content(REGION_SOUTH_EAST)
+        arr[0, self.ny + 1] = self._raw.region_content(REGION_NORTH_WEST)
+        arr[self.nx + 1, self.ny + 1] = self._raw.region_content(REGION_NORTH_EAST)
+
+        # 4 Edge guard regions
+        w_west = self._raw.region_content(REGION_WEST)
+        w_east = self._raw.region_content(REGION_EAST)
+        w_south = self._raw.region_content(REGION_SOUTH)
+        w_north = self._raw.region_content(REGION_NORTH)
+
+        arr[0, 1 : self.ny + 1] = w_west / self.ny
+        arr[self.nx + 1, 1 : self.ny + 1] = w_east / self.ny
+        arr[1 : self.nx + 1, 0] = w_south / self.nx
+        arr[1 : self.nx + 1, self.ny + 1] = w_north / self.nx
+
+        return arr
+
+    def variances(self, flow: bool = False) -> Optional[Any]:
+        """
+        UHI variances protocol returning 2D NumPy array of bin uncertainties squared.
+
+        Parameters
+        ----------
+        flow : bool, default=False
+            If False, returns (nx, ny) array.
+            If True, returns (nx+2, ny+2) array incorporating the 9 boundary guard regions.
+        """
+        np = require_numpy("Histogram2D.variances")
+        if not flow:
+            H = np.zeros((self.nx, self.ny), dtype=np.float64)
+            for ix in range(self.nx):
+                for iy in range(self.ny):
+                    H[ix, iy] = self.bin_sum_w2(ix, iy)
+            return H
+
+        arr = np.zeros((self.nx + 2, self.ny + 2), dtype=np.float64)
+        for ix in range(self.nx):
+            for iy in range(self.ny):
+                arr[ix + 1, iy + 1] = self.bin_sum_w2(ix, iy)
+
+        # 4 Corner guard regions
+        arr[0, 0] = self._raw.region_sum_w2(REGION_SOUTH_WEST)
+        arr[self.nx + 1, 0] = self._raw.region_sum_w2(REGION_SOUTH_EAST)
+        arr[0, self.ny + 1] = self._raw.region_sum_w2(REGION_NORTH_WEST)
+        arr[self.nx + 1, self.ny + 1] = self._raw.region_sum_w2(REGION_NORTH_EAST)
+
+        # 4 Edge guard regions
+        w2_west = self._raw.region_sum_w2(REGION_WEST)
+        w2_east = self._raw.region_sum_w2(REGION_EAST)
+        w2_south = self._raw.region_sum_w2(REGION_SOUTH)
+        w2_north = self._raw.region_sum_w2(REGION_NORTH)
+
+        arr[0, 1 : self.ny + 1] = w2_west / self.ny
+        arr[self.nx + 1, 1 : self.ny + 1] = w2_east / self.ny
+        arr[1 : self.nx + 1, 0] = w2_south / self.nx
+        arr[1 : self.nx + 1, self.ny + 1] = w2_north / self.nx
+
+        return arr
 
     def counts(self, flow: bool = False) -> Any:
-        """UHI counts protocol."""
+        """UHI counts protocol (alias for values)."""
         return self.values(flow=flow)
 
     @property
     def kind(self) -> str:
         """UHI kind property."""
-        return "COUNT"
+        return Kind.COUNT
+
+    @property
+    def flags(self) -> int:
+        """Active feature flags."""
+        return getattr(self._raw, "flags", FLAG_NONE)
+
+    def to_boost(self) -> Any:
+        """
+        Convert Histogram2D to a boost_histogram.Histogram 2D object.
+
+        Returns
+        -------
+        boost_histogram.Histogram
+        """
+        try:
+            import boost_histogram as bh
+        except ImportError:
+            raise ImportError(
+                "to_boost() requires boost-histogram. "
+                "Please install boost-histogram using 'pip install boost-histogram' or 'pip install histo[uhi]'."
+            )
+
+        axes = []
+        for i, ax in enumerate(self.axes):
+            edges = [float(x) for x in ax.edges]
+            is_uniform = True
+            dx0 = edges[1] - edges[0]
+            for j in range(1, len(edges) - 1):
+                if abs((edges[j + 1] - edges[j]) - dx0) > 1e-10 * max(1.0, abs(dx0)):
+                    is_uniform = False
+                    break
+            if is_uniform:
+                axes.append(bh.axis.Regular(len(ax), ax.min, ax.max, underflow=True, overflow=True))
+            else:
+                axes.append(bh.axis.Variable(edges, underflow=True, overflow=True))
+
+        has_w2 = (self.flags & FLAG_TRACK_SUMW2) != 0
+        storage = bh.storage.Weight() if has_w2 else bh.storage.Double()
+        bh_h = bh.Histogram(*axes, storage=storage)
+
+        vals = self.values(flow=True)
+        if has_w2:
+            vars_arr = self.variances(flow=True)
+            bh_h.view(flow=True).value = vals
+            bh_h.view(flow=True).variance = vars_arr
+        else:
+            bh_h.view(flow=True)[:] = vals
+
+        return bh_h
+
+    @classmethod
+    def from_boost(cls, bh_histo: Any) -> "Histogram2D":
+        """
+        Construct a libhisto Histogram2D from a 2D boost-histogram Histogram.
+        """
+        if len(bh_histo.axes) != 2:
+            raise ValueError(f"Expected 2D boost-histogram, got {len(bh_histo.axes)}D")
+
+        xedges = [float(x) for x in bh_histo.axes[0].edges]
+        yedges = [float(x) for x in bh_histo.axes[1].edges]
+        has_sumw2 = hasattr(bh_histo.view(), "variance")
+
+        return cls.from_numpy(bh_histo.values(), xedges, yedges, track_sumw2=has_sumw2)
 
     # -------------------------------------------------------------------------
     # Ingestion Methods
@@ -341,11 +492,126 @@ class Histogram2D:
             return self._raw.integral(int(ix_min), int(ix_max), int(iy_min), int(iy_max))
         return self._raw.integral()
 
-    def __getitem__(self, idx: Tuple[int, int]) -> float:
-        """Index access: h2[ix, iy]."""
-        if not isinstance(idx, tuple) or len(idx) != 2:
-            raise TypeError("Histogram2D index must be a (ix, iy) tuple")
-        return self.bin_content(idx[0], idx[1])
+    def __getitem__(self, key: Any) -> Union[float, Histogram, "Histogram2D"]:
+        """
+        2D Indexing, slicing, projection, and rebinning:
+        - h2[ix, iy]: returns bin content (scalar float).
+        - h2[loc(x), loc(y)]: returns bin content at coordinates (x, y).
+        - h2[ix, :]: returns 1D Histogram slice along Y at fixed X bin ix.
+        - h2[:, iy]: returns 1D Histogram slice along X at fixed Y bin iy.
+        - h2[:, uhi.sum] or h2[:, sum]: projects along X axis (returns 1D Histogram).
+        - h2[uhi.sum, :] or h2[sum, :]: projects along Y axis (returns 1D Histogram).
+        - h2[slice_x, slice_y]: returns sliced / rebinned Histogram2D.
+        """
+        if not isinstance(key, tuple):
+            key = (key, slice(None, None))
+        if len(key) != 2:
+            raise TypeError("Histogram2D index must have 2 dimensions (x, y)")
+
+        key_x, key_y = key
+
+        # Check for sum / projection tags or built-in sum function
+        is_x_sum = key_x is uhi_sum or type(key_x).__name__ == "_SumTag" or key_x is sum
+        is_y_sum = key_y is uhi_sum or type(key_y).__name__ == "_SumTag" or key_y is sum
+
+        if is_x_sum and is_y_sum:
+            return self.total_weight
+
+        if is_y_sum:
+            # Project onto X axis
+            proj = self.project_x()
+            if isinstance(key_x, slice) and (key_x.start is not None or key_x.stop is not None or key_x.step is not None):
+                return proj[key_x]
+            return proj
+
+        if is_x_sum:
+            # Project onto Y axis
+            proj = self.project_y()
+            if isinstance(key_y, slice) and (key_y.start is not None or key_y.stop is not None or key_y.step is not None):
+                return proj[key_y]
+            return proj
+
+        # Check for coordinate / integer single cell access
+        is_x_scalar = isinstance(key_x, (int, loc))
+        is_y_scalar = isinstance(key_y, (int, loc))
+
+        if is_x_scalar and is_y_scalar:
+            if isinstance(key_x, loc):
+                ix = self.axes[0].index(key_x.value) + key_x.offset
+            else:
+                ix = int(key_x)
+                if ix < 0:
+                    ix += self.nx
+            if ix < 0 or ix >= self.nx:
+                raise IndexError(f"X bin index {ix} out of range [0, {self.nx - 1}]")
+
+            if isinstance(key_y, loc):
+                iy = self.axes[1].index(key_y.value) + key_y.offset
+            else:
+                iy = int(key_y)
+                if iy < 0:
+                    iy += self.ny
+            if iy < 0 or iy >= self.ny:
+                raise IndexError(f"Y bin index {iy} out of range [0, {self.ny - 1}]")
+
+            return self.bin_content(ix, iy)
+
+        # 1D slice along Y at fixed X
+        if is_x_scalar and isinstance(key_y, slice):
+            if isinstance(key_x, loc):
+                ix = self.axes[0].index(key_x.value) + key_x.offset
+            else:
+                ix = int(key_x)
+                if ix < 0:
+                    ix += self.nx
+            if ix < 0 or ix >= self.nx:
+                raise IndexError(f"X bin index {ix} out of range [0, {self.nx - 1}]")
+            h1_y = self.slice_y(ix, ix)
+            if key_y.start is not None or key_y.stop is not None or key_y.step is not None:
+                return h1_y[key_y]
+            return h1_y
+
+        # 1D slice along X at fixed Y
+        if isinstance(key_x, slice) and is_y_scalar:
+            if isinstance(key_y, loc):
+                iy = self.axes[1].index(key_y.value) + key_y.offset
+            else:
+                iy = int(key_y)
+                if iy < 0:
+                    iy += self.ny
+            if iy < 0 or iy >= self.ny:
+                raise IndexError(f"Y bin index {iy} out of range [0, {self.ny - 1}]")
+            h1_x = self.slice_x(iy, iy)
+            if key_x.start is not None or key_x.stop is not None or key_x.step is not None:
+                return h1_x[key_x]
+            return h1_x
+
+        # 2D slice / rebin
+        if isinstance(key_x, slice) and isinstance(key_y, slice):
+            rebin_x = 1
+            if key_x.step is not None:
+                if isinstance(key_x.step, rebin):
+                    rebin_x = key_x.step.factor
+                elif isinstance(key_x.step, complex) and key_x.step.real == 0 and key_x.step.imag > 0:
+                    rebin_x = int(round(key_x.step.imag))
+                elif isinstance(key_x.step, int) and key_x.step > 0:
+                    rebin_x = key_x.step
+
+            rebin_y = 1
+            if key_y.step is not None:
+                if isinstance(key_y.step, rebin):
+                    rebin_y = key_y.step.factor
+                elif isinstance(key_y.step, complex) and key_y.step.real == 0 and key_y.step.imag > 0:
+                    rebin_y = int(round(key_y.step.imag))
+                elif isinstance(key_y.step, int) and key_y.step > 0:
+                    rebin_y = key_y.step
+
+            res = self.clone()
+            if rebin_x > 1 or rebin_y > 1:
+                res = res.rebin(rebin_x, rebin_y)
+            return res
+
+        raise TypeError(f"Invalid 2D indexing types: {type(key_x)}, {type(key_y)}")
 
     # -------------------------------------------------------------------------
     # Projections, Slices & Profiles

@@ -64,3 +64,14 @@ PALETTES = (
     "rainbow",
 )
 
+# 2D Guard Regions
+REGION_CENTER = getattr(_libhisto, "REGION_CENTER", 0)
+REGION_EAST = getattr(_libhisto, "REGION_EAST", 1)
+REGION_NORTH = getattr(_libhisto, "REGION_NORTH", 2)
+REGION_SOUTH = getattr(_libhisto, "REGION_SOUTH", 3)
+REGION_WEST = getattr(_libhisto, "REGION_WEST", 4)
+REGION_SOUTH_WEST = getattr(_libhisto, "REGION_SOUTH_WEST", 5)
+REGION_SOUTH_EAST = getattr(_libhisto, "REGION_SOUTH_EAST", 6)
+REGION_NORTH_WEST = getattr(_libhisto, "REGION_NORTH_WEST", 7)
+REGION_NORTH_EAST = getattr(_libhisto, "REGION_NORTH_EAST", 8)
+

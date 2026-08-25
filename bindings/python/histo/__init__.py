@@ -12,10 +12,14 @@ from histo.constants import (
     KDE_KERNEL_GAUSSIAN, KDE_KERNEL_EPANECHNIKOV, KDE_KERNEL_UNIFORM, KDE_KERNEL_TRIANGULAR,
     KDE_KERNEL_BIWEIGHT, KDE_KERNEL_COSINE,
     KDE_BW_SILVERMAN, KDE_BW_SCOTT, KDE_BW_MANUAL,
-    PALETTES
+    PALETTES,
+    REGION_CENTER, REGION_EAST, REGION_NORTH, REGION_SOUTH, REGION_WEST,
+    REGION_SOUTH_WEST, REGION_SOUTH_EAST, REGION_NORTH_WEST, REGION_NORTH_EAST
 )
 from histo.histogram import Histogram
 from histo.histogram2d import Histogram2D
+from histo.axis import Axis, HistogramAxis, Interval
+from histo.uhi import loc, rebin, underflow, overflow, sum, Kind, AxisTraits, PlottableTraits, PlottableAxis, PlottableHistogram
 from histo.sketch import Sketch
 from histo.fit import FitResult
 from histo.kde import KDE
@@ -45,6 +49,19 @@ __all__ = [
     "Histo",
     "Histogram2D",
     "Histo2D",
+    "Axis",
+    "HistogramAxis",
+    "Interval",
+    "loc",
+    "rebin",
+    "underflow",
+    "overflow",
+    "sum",
+    "Kind",
+    "AxisTraits",
+    "PlottableTraits",
+    "PlottableAxis",
+    "PlottableHistogram",
     "Sketch",
     "DDSketch",
     "FitResult",
@@ -53,6 +70,15 @@ __all__ = [
     "plot",
     "top",
     "PALETTES",
+    "REGION_CENTER",
+    "REGION_EAST",
+    "REGION_NORTH",
+    "REGION_SOUTH",
+    "REGION_WEST",
+    "REGION_SOUTH_WEST",
+    "REGION_SOUTH_EAST",
+    "REGION_NORTH_WEST",
+    "REGION_NORTH_EAST",
     "VERSION",
     "FLAG_NONE",
     "FLAG_TRACK_SUMW2",
