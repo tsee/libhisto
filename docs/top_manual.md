@@ -264,7 +264,7 @@ kretprobe:vfs_read /@start[tid]/ {
     delete(@start[tid]);
 }' | histo top --bins 50 --autorange --window 100000
 ```
-- **What it does**: Traces every Linux `vfs_read()` system call entry and return, measures exact elapsed duration in microseconds ($\mu\text{s}$), and streams latencies to `histo top`.
+- **What it does**: Traces every Linux `vfs_read()` system call entry and return, measures exact elapsed duration in microseconds (µs), and streams latencies to `histo top`.
 - **Why it is interesting**: Unveils disk I/O bottlenecks, filesystem cache hit vs. miss distributions, and tail latency outliers (P99, P99.9) on live production workloads without polling jitter.
 
 ### 6.8 Disk Block I/O Payload Size vs. Latency (2D Bivariate eBPF)
@@ -281,7 +281,7 @@ tracepoint:block:block_rq_complete /@start[args->dev, args->sector]/ {
     delete(@start[args->dev, args->sector]);
 }' | histo top --2d --xcol 1 --ycol 2 --autorange --palette plasma
 ```
-- **What it does**: Hooks kernel block I/O tracepoints, emitting request size in kilobytes ($KB$) and round-trip completion latency ($\mu\text{s}$).
+- **What it does**: Hooks kernel block I/O tracepoints, emitting request size in kilobytes (KB) and round-trip completion latency (µs).
 - **Why it is interesting**: Renders a live 2D spatial heatmap demonstrating how NVMe/SATA latency scales with payload size and revealing multi-queue congestion patterns.
 
 > [!WARNING]
