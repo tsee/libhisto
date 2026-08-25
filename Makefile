@@ -1,4 +1,4 @@
-.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-python python-dist test-python-dist test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-python python-dist test-python-dist test-node build-node test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -11,9 +11,9 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl-dist test-python test-python-dist test-fuzz test-tsan memcheck docs
+test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl-dist test-python test-python-dist test-node test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
-	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL & PYTHON BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
+	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL, PYTHON & NODE BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
 
 test-doc-examples: build
@@ -52,6 +52,12 @@ python-dist:
 
 test-python-dist:
 	python3 tests/scripts/test_python_dist.py
+
+build-node:
+	cd bindings/node && node-gyp rebuild
+
+test-node: build-node
+	cd bindings/node && npm test
 
 
 

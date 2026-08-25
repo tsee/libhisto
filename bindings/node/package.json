@@ -1,0 +1,43 @@
+{
+  "name": "histo",
+  "version": "0.2.0",
+  "description": "High-performance, memory-safe ISO C99 1D and 2D histogramming, KDE, DDSketch, and curve fitting library for Node.js",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "build": "node-gyp rebuild",
+    "build:debug": "node-gyp rebuild --debug",
+    "test": "node --test test/*.js",
+    "clean": "node-gyp clean"
+  },
+  "keywords": [
+    "histogram",
+    "histogram2d",
+    "statistics",
+    "kde",
+    "ddsketch",
+    "quantile",
+    "curve-fitting",
+    "native",
+    "napi",
+    "zero-copy",
+    "float64array",
+    "simd",
+    "data-science"
+  ],
+  "author": "Steffen Mueller <github@steffen-mueller.net>",
+  "license": "MIT",
+  "gypfile": true,
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "binding.gyp",
+    "index.js",
+    "index.d.ts",
+    "src/addon.c",
+    "README.md",
+    "LICENSE"
+  ]
+}

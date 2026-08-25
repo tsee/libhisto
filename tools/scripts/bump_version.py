@@ -15,6 +15,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 VERSION_H = os.path.join(REPO_ROOT, "include", "histo", "version.h")
 CMAKELIST_ROOT = os.path.join(REPO_ROOT, "CMakeLists.txt")
 PYPROJECT_TOML = os.path.join(REPO_ROOT, "bindings", "python", "pyproject.toml")
+NODE_PACKAGE_JSON = os.path.join(REPO_ROOT, "bindings", "node", "package.json")
 PERL_MATH_HISTO = os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo", "lib", "Math", "Histo.pm")
 PERL_ALIEN_HISTO = os.path.join(REPO_ROOT, "bindings", "perl", "Alien-libhisto", "lib", "Alien", "libhisto.pm")
 PERL_MATH_HISTO_PDL = os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo-PDL", "lib", "Math", "Histo", "PDL.pm")
@@ -61,6 +62,22 @@ def check_all_versions():
     else:
         print("[FAIL] Could not find version in pyproject.toml")
         status = False
+
+    # 3. Node.js bindings (package.json)
+    if os.path.exists(NODE_PACKAGE_JSON):
+        with open(NODE_PACKAGE_JSON, "r", encoding="utf-8") as f:
+            node_pkg = f.read()
+        m = re.search(r'"version"\s*:\s*"([^"]+)"', node_pkg)
+        if m:
+            node_ver = m.group(1)
+            if node_ver != core_ver:
+                print(f"[FAIL] Node.js package.json version ({node_ver}) does not match core ({core_ver})")
+                status = False
+            else:
+                print(f"[OK] Node.js package.json: {node_ver}")
+        else:
+            print("[FAIL] Could not find version in bindings/node/package.json")
+            status = False
 
     # 3. Perl bindings
     perl_pm_files = []
@@ -153,7 +170,16 @@ def set_version(new_version):
         f.write(content)
     print(f"[UPDATED] {PYPROJECT_TOML}")
 
-    # 4. Perl bindings
+    # 4. Node.js package.json
+    if os.path.exists(NODE_PACKAGE_JSON):
+        with open(NODE_PACKAGE_JSON, "r", encoding="utf-8") as f:
+            content = f.read()
+        content = re.sub(r'("version"\s*:\s*)"[^"]+"', rf'\g<1>"{new_version}"', content)
+        with open(NODE_PACKAGE_JSON, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"[UPDATED] {NODE_PACKAGE_JSON}")
+
+    # 5. Perl bindings
     perl_pm_files = []
     for root, _, files in os.walk(os.path.join(REPO_ROOT, "bindings", "perl")):
         if "bundled" in root or "_alien" in root or "blib" in root or ".git" in root:
