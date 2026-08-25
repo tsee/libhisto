@@ -118,6 +118,12 @@ void test_json_corrupted_payload(void) {
     TEST_ASSERT_EQUAL_INT(HISTO_ERR_DESERIALIZATION, histo_deserialize_json("{\"schema\": \"libhisto-v2\", \"nbins\": ", &h));
 }
 
+static unsigned int g_cli_tmp_counter = 0;
+
+static void get_unique_tmp_path(char *buf, size_t bufsz, const char *tag, const char *ext) {
+    snprintf(buf, bufsz, "/tmp/histo_test_cli_%d_%u_%s%s", (int)getpid(), ++g_cli_tmp_counter, tag, ext ? ext : "");
+}
+
 void test_cli_execution_pipelines(void) {
     /* Test command-line help flags */
     char *help_argv[] = {"histo", "--help"};
@@ -127,7 +133,8 @@ void test_cli_execution_pipelines(void) {
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(2, help_argv));
 
     /* Create temporary data file */
-    const char *data_path = "/tmp/test_cli_data.txt";
+    char data_path[256];
+    get_unique_tmp_path(data_path, sizeof(data_path), "cli_exec_data", ".txt");
     FILE *fp = fopen(data_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
     for (int i = 1; i <= 50; ++i) {
@@ -136,38 +143,40 @@ void test_cli_execution_pipelines(void) {
     fclose(fp);
 
     /* Test histo-fill writing binary output */
-    const char *out_bin = "/tmp/test_cli_out.bin";
+    char out_bin[256];
+    get_unique_tmp_path(out_bin, sizeof(out_bin), "cli_exec_out", ".bin");
     char *fill_bin_argv[] = {
         "histo-fill", "--bins=10", "--min=0", "--max=50", "-w",
-        "-o", "binary", "-f", (char *)out_bin, (char *)data_path
+        "-o", "binary", "-f", out_bin, data_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(10, fill_bin_argv));
 
     /* Test histo-stats on binary output */
-    char *stats_argv[] = {"histo-stats", "-f", "json", (char *)out_bin};
+    char *stats_argv[] = {"histo-stats", "-f", "json", out_bin};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_stats_main(4, stats_argv));
 
     /* Test histo-plot on binary output */
-    char *plot_argv[] = {"histo-plot", "-s", "ascii", "--no-stats", (char *)out_bin};
+    char *plot_argv[] = {"histo-plot", "-s", "ascii", "--no-stats", out_bin};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(5, plot_argv));
 
     /* Test histo-plot with sparkline mode */
-    char *sparkline_argv[] = {"histo-plot", "-S", (char *)out_bin};
+    char *sparkline_argv[] = {"histo-plot", "-S", out_bin};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(3, sparkline_argv));
 
-    char *sparkline_ascii_argv[] = {"histo-plot", "--sparkline", "-s", "ascii", "--no-stats", (char *)out_bin};
+    char *sparkline_ascii_argv[] = {"histo-plot", "--sparkline", "-s", "ascii", "--no-stats", out_bin};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(6, sparkline_ascii_argv));
 
     /* Create second dataset for comparison */
-    const char *out_bin2 = "/tmp/test_cli_out2.bin";
+    char out_bin2[256];
+    get_unique_tmp_path(out_bin2, sizeof(out_bin2), "cli_exec_out2", ".bin");
     char *fill_bin_argv2[] = {
         "histo-fill", "--bins=10", "--min=0", "--max=50",
-        "-o", "binary", "-f", (char *)out_bin2, (char *)data_path
+        "-o", "binary", "-f", out_bin2, data_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(9, fill_bin_argv2));
 
     /* Test histo-cmp */
-    char *cmp_argv[] = {"histo-cmp", "-f", "json", (char *)out_bin, (char *)out_bin2};
+    char *cmp_argv[] = {"histo-cmp", "-f", "json", out_bin, out_bin2};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(5, cmp_argv));
 
     remove(data_path);
@@ -182,7 +191,8 @@ void test_cli_fit_pipeline(void) {
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(2, help_argv));
 
     /* Create sample gaussian data */
-    const char *gauss_path = "/tmp/test_cli_gauss.txt";
+    char gauss_path[256];
+    get_unique_tmp_path(gauss_path, sizeof(gauss_path), "cli_fit_gauss", ".txt");
     FILE *fp = fopen(gauss_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
     for (int i = 0; i < 500; ++i) {
@@ -195,67 +205,68 @@ void test_cli_fit_pipeline(void) {
     fclose(fp);
 
     /* Test default fit (Gaussian) */
-    char *fit_default_argv[] = {"histo-fit", (char *)gauss_path};
+    char *fit_default_argv[] = {"histo-fit", gauss_path};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(2, fit_default_argv));
 
     /* Test JSON fit */
-    char *fit_json_argv[] = {"histo-fit", "--model=gaussian", "-j", (char *)gauss_path};
+    char *fit_json_argv[] = {"histo-fit", "--model=gaussian", "-j", gauss_path};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_json_argv));
 
     /* Test quiet fit */
-    char *fit_quiet_argv[] = {"histo-fit", "-q", (char *)gauss_path};
+    char *fit_quiet_argv[] = {"histo-fit", "-q", gauss_path};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_quiet_argv));
 
     /* Test plot fit */
-    char *fit_plot_argv[] = {"histo-fit", "-p", (char *)gauss_path};
+    char *fit_plot_argv[] = {"histo-fit", "-p", gauss_path};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_plot_argv));
 
     /* Test constrained fit with bounds and fix-param */
     char *fit_bounds_argv[] = {
-        "histo-fit", "--bounds=2=1.0:10.0", "--fix-param=1=50.0", (char *)gauss_path
+        "histo-fit", "--bounds=2=1.0:10.0", "--fix-param=1=50.0", gauss_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_bounds_argv));
 
     /* Test other models on serialized histogram */
-    const char *out_hist = "/tmp/test_cli_fit_h.json";
+    char out_hist[256];
+    get_unique_tmp_path(out_hist, sizeof(out_hist), "cli_fit_h", ".json");
     char *fill_argv[] = {
         "histo-fill", "--bins=20", "--min=20", "--max=80",
-        "-o", "json", "-f", (char *)out_hist, (char *)gauss_path
+        "-o", "json", "-f", out_hist, gauss_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(9, fill_argv));
 
-    char *fit_poly_argv[] = {"histo-fit", "-m", "polynomial", "-d", "2", (char *)out_hist};
+    char *fit_poly_argv[] = {"histo-fit", "-m", "polynomial", "-d", "2", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(6, fit_poly_argv));
 
-    char *fit_exp_argv[] = {"histo-fit", "-m", "exponential", (char *)out_hist};
+    char *fit_exp_argv[] = {"histo-fit", "-m", "exponential", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_exp_argv));
 
-    char *fit_bw_argv[] = {"histo-fit", "-m", "breit-wigner", (char *)out_hist};
+    char *fit_bw_argv[] = {"histo-fit", "-m", "breit-wigner", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_bw_argv));
 
-    char *fit_logn_argv[] = {"histo-fit", "-m", "lognormal", "-j", (char *)out_hist};
+    char *fit_logn_argv[] = {"histo-fit", "-m", "lognormal", "-j", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(5, fit_logn_argv));
 
-    char *fit_gpoly_argv[] = {"histo-fit", "-m", "gauss+linear", (char *)out_hist};
+    char *fit_gpoly_argv[] = {"histo-fit", "-m", "gauss+linear", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_gpoly_argv));
 
-    char *fit_weibull_argv[] = {"histo-fit", "-m", "weibull", (char *)out_hist};
+    char *fit_weibull_argv[] = {"histo-fit", "-m", "weibull", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_weibull_argv));
 
-    char *fit_gamma_argv[] = {"histo-fit", "-m", "gamma", (char *)out_hist};
+    char *fit_gamma_argv[] = {"histo-fit", "-m", "gamma", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_gamma_argv));
 
-    char *fit_poisson_argv[] = {"histo-fit", "-m", "poisson", (char *)out_hist};
+    char *fit_poisson_argv[] = {"histo-fit", "-m", "poisson", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_poisson_argv));
 
-    char *fit_laplace_argv[] = {"histo-fit", "-m", "laplace", (char *)out_hist};
+    char *fit_laplace_argv[] = {"histo-fit", "-m", "laplace", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(4, fit_laplace_argv));
 
-    char *fit_mle_argv[] = {"histo-fit", "--mle", (char *)out_hist};
+    char *fit_mle_argv[] = {"histo-fit", "--mle", out_hist};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_mle_argv));
 
     /* Error handling */
-    char *fit_err_argv[] = {"histo-fit", "-m", "invalid_model_name", (char *)out_hist};
+    char *fit_err_argv[] = {"histo-fit", "-m", "invalid_model_name", out_hist};
     optind = 1; TEST_ASSERT_NOT_EQUAL_INT(0, cmd_fit_main(4, fit_err_argv));
 
     remove(gauss_path);
@@ -264,7 +275,8 @@ void test_cli_fit_pipeline(void) {
 
 void test_cli_2d_fill_and_delimiters(void) {
     /* 1. Comma-separated CSV */
-    const char *csv_path = "/tmp/test_cli_2d.csv";
+    char csv_path[256];
+    get_unique_tmp_path(csv_path, sizeof(csv_path), "cli_2d", ".csv");
     FILE *fp = fopen(csv_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
     for (int i = 0; i < 100; ++i) {
@@ -272,16 +284,18 @@ void test_cli_2d_fill_and_delimiters(void) {
     }
     fclose(fp);
 
-    const char *out_2d_json = "/tmp/test_cli_2d.json";
+    char out_2d_json[256];
+    get_unique_tmp_path(out_2d_json, sizeof(out_2d_json), "cli_2d", ".json");
     char *fill_csv_argv[] = {
         "histo-fill", "--2d", "--xbins", "10", "--xmin", "0", "--xmax", "10",
         "--ybins", "10", "--ymin", "0", "--ymax", "10",
-        "-o", "json", "-f", (char *)out_2d_json, (char *)csv_path
+        "-o", "json", "-f", out_2d_json, csv_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_csv_argv) / sizeof(fill_csv_argv[0])), fill_csv_argv));
 
     /* 2. Tab-separated TSV with weights */
-    const char *tsv_path = "/tmp/test_cli_2d.tsv";
+    char tsv_path[256];
+    get_unique_tmp_path(tsv_path, sizeof(tsv_path), "cli_2d", ".tsv");
     fp = fopen(tsv_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
     for (int i = 0; i < 100; ++i) {
@@ -289,18 +303,20 @@ void test_cli_2d_fill_and_delimiters(void) {
     }
     fclose(fp);
 
-    const char *out_2d_bin = "/tmp/test_cli_2d.bin";
+    char out_2d_bin[256];
+    get_unique_tmp_path(out_2d_bin, sizeof(out_2d_bin), "cli_2d", ".bin");
     char *fill_tsv_argv[] = {
-        "histo-fill", "--2d", "-w", "-o", "binary", "-f", (char *)out_2d_bin, (char *)tsv_path
+        "histo-fill", "--2d", "-w", "-o", "binary", "-f", out_2d_bin, tsv_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_tsv_argv) / sizeof(fill_tsv_argv[0])), fill_tsv_argv));
 
     /* Test histo-plot on 2D binary file */
-    char *plot_2d_argv[] = {"histo-plot", (char *)out_2d_bin};
+    char *plot_2d_argv[] = {"histo-plot", out_2d_bin};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_2d_argv) / sizeof(plot_2d_argv[0])), plot_2d_argv));
 
     /* 3. Semicolon-separated file */
-    const char *semi_path = "/tmp/test_cli_2d.semi";
+    char semi_path[256];
+    get_unique_tmp_path(semi_path, sizeof(semi_path), "cli_2d", ".semi");
     fp = fopen(semi_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
     for (int i = 0; i < 50; ++i) {
@@ -309,7 +325,7 @@ void test_cli_2d_fill_and_delimiters(void) {
     fclose(fp);
 
     char *fill_semi_argv[] = {
-        "histo-fill", "--2d", "--auto-range", "-d", ";", "-o", "json", (char *)semi_path
+        "histo-fill", "--2d", "--auto-range", "-d", ";", "-o", "json", semi_path
     };
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_semi_argv) / sizeof(fill_semi_argv[0])), fill_semi_argv));
 
@@ -330,8 +346,10 @@ void test_cli_error_handling(void) {
 }
 
 void test_cli_plot_palettes(void) {
-    const char *tmp_1d = "/tmp/test_cli_palette_1d.json";
-    const char *tmp_2d = "/tmp/test_cli_palette_2d.json";
+    char tmp_1d[256];
+    char tmp_2d[256];
+    get_unique_tmp_path(tmp_1d, sizeof(tmp_1d), "cli_palette_1d", ".json");
+    get_unique_tmp_path(tmp_2d, sizeof(tmp_2d), "cli_palette_2d", ".json");
 
     /* Generate sample 1D and 2D histograms */
     histo_t *h1d = histo_create_uniform(20, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
@@ -363,18 +381,18 @@ void test_cli_plot_palettes(void) {
     for (size_t i = 0; i < sizeof(palettes) / sizeof(palettes[0]); ++i) {
         char pal_opt[64];
         snprintf(pal_opt, sizeof(pal_opt), "--palette=%s", palettes[i]);
-        char *plot_1d_argv[] = {"histo-plot", "-c", "always", pal_opt, (char *)tmp_1d};
+        char *plot_1d_argv[] = {"histo-plot", "-c", "always", pal_opt, tmp_1d};
         optind = 1;
         TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_1d_argv) / sizeof(plot_1d_argv[0])), plot_1d_argv));
 
         /* Test on 2D */
-        char *plot_2d_argv[] = {"histo-plot", "-c", "always", pal_opt, (char *)tmp_2d};
+        char *plot_2d_argv[] = {"histo-plot", "-c", "always", pal_opt, tmp_2d};
         optind = 1;
         TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_2d_argv) / sizeof(plot_2d_argv[0])), plot_2d_argv));
     }
 
     /* Test --colormap alias */
-    char *plot_alias_argv[] = {"histo-plot", "-c", "always", "--colormap=plasma", (char *)tmp_1d};
+    char *plot_alias_argv[] = {"histo-plot", "-c", "always", "--colormap=plasma", tmp_1d};
     optind = 1;
     TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_alias_argv) / sizeof(plot_alias_argv[0])), plot_alias_argv));
 
@@ -391,8 +409,10 @@ void test_cli_top_help(void) {
 }
 
 void test_cli_space_separated_args(void) {
-    const char *tmp_input = "/tmp/test_cli_space_args_in.txt";
-    const char *tmp_out_json = "/tmp/test_cli_space_args_out.json";
+    char tmp_input[256];
+    char tmp_out_json[256];
+    get_unique_tmp_path(tmp_input, sizeof(tmp_input), "cli_space_args_in", ".txt");
+    get_unique_tmp_path(tmp_out_json, sizeof(tmp_out_json), "cli_space_args_out", ".json");
 
     FILE *fp = fopen(tmp_input, "w");
     TEST_ASSERT_NOT_NULL(fp);
@@ -403,28 +423,28 @@ void test_cli_space_separated_args(void) {
 
     /* Test histo-fill with space-separated --bins 20 --min 0 --max 20 -o json */
     char *fill_argv[] = {
-        "histo-fill", "--bins", "20", "--min", "0", "--max", "20", "-o", "json", "-f", (char *)tmp_out_json, (char *)tmp_input
+        "histo-fill", "--bins", "20", "--min", "0", "--max", "20", "-o", "json", "-f", tmp_out_json, tmp_input
     };
     optind = 1;
     TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
 
     /* Test histo-stats with space-separated --format json */
     char *stats_argv[] = {
-        "histo-stats", "--format", "json", (char *)tmp_out_json
+        "histo-stats", "--format", "json", tmp_out_json
     };
     optind = 1;
     TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
 
     /* Test histo-plot with space-separated --width 100 --style blocks --color never */
     char *plot_argv[] = {
-        "histo-plot", "--width", "100", "--style", "blocks", "--color", "never", (char *)tmp_out_json
+        "histo-plot", "--width", "100", "--style", "blocks", "--color", "never", tmp_out_json
     };
     optind = 1;
     TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_argv) / sizeof(plot_argv[0])), plot_argv));
 
     /* Test histo-cmp with space-separated --format json */
     char *cmp_argv[] = {
-        "histo-cmp", "--format", "json", (char *)tmp_out_json, (char *)tmp_out_json
+        "histo-cmp", "--format", "json", tmp_out_json, tmp_out_json
     };
     optind = 1;
     TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main((int)(sizeof(cmp_argv) / sizeof(cmp_argv[0])), cmp_argv));
@@ -436,8 +456,10 @@ void test_cli_space_separated_args(void) {
 extern int histo_cli_main(int argc, char **argv, FILE *out, FILE *err);
 
 void test_cli_attached_and_bundled_options(void) {
-    const char *tmp_in = "/tmp/test_cli_attached_in.txt";
-    const char *tmp_out = "/tmp/test_cli_attached_out.json";
+    char tmp_in[256];
+    char tmp_out[256];
+    get_unique_tmp_path(tmp_in, sizeof(tmp_in), "cli_attached_in", ".txt");
+    get_unique_tmp_path(tmp_out, sizeof(tmp_out), "cli_attached_out", ".json");
 
     FILE *fp = fopen(tmp_in, "w");
     TEST_ASSERT_NOT_NULL(fp);
@@ -448,25 +470,25 @@ void test_cli_attached_and_bundled_options(void) {
 
     /* 1. histo-fill with attached short options: -n10 -w -ojson -f <file> */
     char *fill_argv[] = {
-        "histo-fill", "-n10", "--min=0", "--max=20", "-w", "-ojson", "-f", (char *)tmp_out, (char *)tmp_in
+        "histo-fill", "-n10", "--min=0", "--max=20", "-w", "-ojson", "-f", tmp_out, tmp_in
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
 
     /* 2. histo-plot with attached short options */
     char *plot_argv[] = {
-        "histo-plot", "-W100", "-sascii", "--no-stats", (char *)tmp_out
+        "histo-plot", "-W100", "-sascii", "--no-stats", tmp_out
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_argv) / sizeof(plot_argv[0])), plot_argv));
 
     /* 3. histo-stats with attached short option: -fjson */
     char *stats_argv[] = {
-        "histo-stats", "-fjson", (char *)tmp_out
+        "histo-stats", "-fjson", tmp_out
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
 
     /* 4. histo-cmp with attached short option: -fjson */
     char *cmp_argv[] = {
-        "histo-cmp", "-fjson", (char *)tmp_out, (char *)tmp_out
+        "histo-cmp", "-fjson", tmp_out, tmp_out
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main((int)(sizeof(cmp_argv) / sizeof(cmp_argv[0])), cmp_argv));
 
@@ -475,8 +497,10 @@ void test_cli_attached_and_bundled_options(void) {
 }
 
 void test_cli_interspersed_positionals(void) {
-    const char *tmp_in = "/tmp/test_cli_inter_in.txt";
-    const char *tmp_out = "/tmp/test_cli_inter_out.json";
+    char tmp_in[256];
+    char tmp_out[256];
+    get_unique_tmp_path(tmp_in, sizeof(tmp_in), "cli_inter_in", ".txt");
+    get_unique_tmp_path(tmp_out, sizeof(tmp_out), "cli_inter_out", ".json");
 
     FILE *fp = fopen(tmp_in, "w");
     TEST_ASSERT_NOT_NULL(fp);
@@ -485,19 +509,19 @@ void test_cli_interspersed_positionals(void) {
 
     /* Flags before, between, and after positional arguments */
     char *fill_argv[] = {
-        "histo-fill", "--min", "0", (char *)tmp_in, "--max", "10", "--output=json", "-f", (char *)tmp_out, "-n", "10"
+        "histo-fill", "--min", "0", tmp_in, "--max", "10", "--output=json", "-f", tmp_out, "-n", "10"
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
 
     /* histo-stats with flags after positional argument */
     char *stats_argv[] = {
-        "histo-stats", (char *)tmp_out, "--format", "json"
+        "histo-stats", tmp_out, "--format", "json"
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
 
     /* histo-cmp with flags between positional arguments */
     char *cmp_argv[] = {
-        "histo-cmp", (char *)tmp_out, "--format=json", (char *)tmp_out
+        "histo-cmp", tmp_out, "--format=json", tmp_out
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main((int)(sizeof(cmp_argv) / sizeof(cmp_argv[0])), cmp_argv));
 
@@ -506,8 +530,10 @@ void test_cli_interspersed_positionals(void) {
 }
 
 void test_cli_double_dash_and_negatives(void) {
-    const char *tmp_in = "/tmp/test_cli_neg_in.txt";
-    const char *tmp_out = "/tmp/test_cli_neg_out.json";
+    char tmp_in[256];
+    char tmp_out[256];
+    get_unique_tmp_path(tmp_in, sizeof(tmp_in), "cli_neg_in", ".txt");
+    get_unique_tmp_path(tmp_out, sizeof(tmp_out), "cli_neg_out", ".json");
 
     FILE *fp = fopen(tmp_in, "w");
     TEST_ASSERT_NOT_NULL(fp);
@@ -516,13 +542,13 @@ void test_cli_double_dash_and_negatives(void) {
 
     /* Negative number bounds passed detached and attached */
     char *fill_argv[] = {
-        "histo-fill", "--bins", "10", "--min", "-60.0", "--max", "-5.0", "-o", "json", "-f", (char *)tmp_out, "--", (char *)tmp_in
+        "histo-fill", "--bins", "10", "--min", "-60.0", "--max", "-5.0", "-o", "json", "-f", tmp_out, "--", tmp_in
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
 
     /* Double dash positional terminator */
     char *stats_argv[] = {
-        "histo-stats", "--format=json", "--", (char *)tmp_out
+        "histo-stats", "--format=json", "--", tmp_out
     };
     TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
 

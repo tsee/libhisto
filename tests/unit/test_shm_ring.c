@@ -14,7 +14,8 @@ void setUp(void) {}
 void tearDown(void) {}
 
 void test_shm_create_open_close(void) {
-    const char *shm_name = "/histo_test_shm_lifecycle";
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), "/histo_test_shm_lc_%d", (int)getpid());
     histo_shm_t producer_shm;
     histo_shm_t consumer_shm;
 
@@ -36,7 +37,8 @@ void test_shm_create_open_close(void) {
 }
 
 void test_shm_push_and_pop_batch(void) {
-    const char *shm_name = "/histo_test_shm_stream";
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), "/histo_test_shm_stream_%d", (int)getpid());
     histo_shm_t producer;
     histo_shm_t consumer;
 
@@ -72,7 +74,8 @@ void test_shm_push_and_pop_batch(void) {
 }
 
 void test_shm_wrap_around_and_overrun(void) {
-    const char *shm_name = "/histo_test_shm_wrap";
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), "/histo_test_shm_wrap_%d", (int)getpid());
     histo_shm_t producer;
     histo_shm_t consumer;
 
@@ -102,7 +105,8 @@ void test_shm_wrap_around_and_overrun(void) {
 }
 
 void test_shm_2d_entries(void) {
-    const char *shm_name = "/histo_test_shm_2d";
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), "/histo_test_shm_2d_%d", (int)getpid());
     histo_shm_t producer;
     histo_shm_t consumer;
 

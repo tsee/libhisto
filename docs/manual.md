@@ -116,7 +116,7 @@ sudo bpftrace -q examples/ebpf/runqlat.bt | histo stats
 # Stream high-throughput telemetry (>50M events/sec) via shared memory
 histo top --shm=/histo_shm --scale-input 0.001
 ```
-> See [`examples/ebpf/README.md`](../examples/ebpf/README.md) for full recipe documentation and non-root capability setup.
+> See `examples/ebpf/README.md` for full recipe documentation and non-root capability setup.
 
 ### 0.4 Python 3 API
 

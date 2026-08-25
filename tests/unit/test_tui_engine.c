@@ -588,7 +588,8 @@ void test_tui_engine_snapshot_export_roundtrip(void) {
     usleep(50000);
 
     /* Export binary snapshot to temp file */
-    const char *bin_path = "/tmp/test_snapshot.histo";
+    char bin_path[256];
+    snprintf(bin_path, sizeof(bin_path), "/tmp/test_snapshot_%d.histo", (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, bin_path, false));
 
     /* Read back file and deserialize */
@@ -613,7 +614,8 @@ void test_tui_engine_snapshot_export_roundtrip(void) {
     unlink(bin_path);
 
     /* Export JSON snapshot */
-    const char *json_path = "/tmp/test_snapshot.json";
+    char json_path[256];
+    snprintf(json_path, sizeof(json_path), "/tmp/test_snapshot_%d.json", (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, json_path, true));
 
     FILE *jfp = fopen(json_path, "r");
@@ -791,7 +793,8 @@ void test_tui_engine_2d_snapshot_export_roundtrip(void) {
     usleep(50000);
 
     /* Export 2D binary snapshot */
-    const char *bin_path = "/tmp/test_2d_snapshot.histo";
+    char bin_path[256];
+    snprintf(bin_path, sizeof(bin_path), "/tmp/test_2d_snapshot_%d.histo", (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, bin_path, false));
 
     FILE *bfp = fopen(bin_path, "rb");
@@ -814,7 +817,8 @@ void test_tui_engine_2d_snapshot_export_roundtrip(void) {
     unlink(bin_path);
 
     /* Export 2D JSON snapshot */
-    const char *json_path = "/tmp/test_2d_snapshot.json";
+    char json_path[256];
+    snprintf(json_path, sizeof(json_path), "/tmp/test_2d_snapshot_%d.json", (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, json_path, true));
 
     FILE *jfp = fopen(json_path, "r");
