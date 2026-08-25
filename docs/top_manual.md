@@ -251,7 +251,49 @@ tail -F /var/log/app/metrics.tsv | histo top --val-col=1
 # Press '1' to inspect Latency, '2' for Bytes, '3' for CPU!
 ```
 
-### 6.7 2D Coordinate Telemetry (Sensors / Simulation)
+### 6.7 Linux Kernel VFS Latencies (eBPF & `bpftrace`)
+Inspect filesystem `read()` latencies in real time directly from the kernel:
+
+```bash
+# Ingest VFS read latency in microseconds (us)
+sudo bpftrace -e '
+kprobe:vfs_read { @start[tid] = nsecs; }
+kretprobe:vfs_read /@start[tid]/ {
+    $lat_us = (nsecs - @start[tid]) / 1000;
+    printf("%d\n", $lat_us);
+    delete(@start[tid]);
+}' | histo top --bins 50 --autorange --window 100000
+```
+- **What it does**: Traces every Linux `vfs_read()` system call entry and return, measures exact elapsed duration in microseconds ($\mu\text{s}$), and streams latencies to `histo top`.
+- **Why it is interesting**: Unveils disk I/O bottlenecks, filesystem cache hit vs. miss distributions, and tail latency outliers (P99, P99.9) on live production workloads without polling jitter.
+
+### 6.8 Disk Block I/O Payload Size vs. Latency (2D Bivariate eBPF)
+Correlate disk request sizes with completion times:
+
+```bash
+# Stream: <request_size_kb> <latency_us>
+sudo bpftrace -e '
+tracepoint:block:block_rq_issue { @start[args->dev, args->sector] = nsecs; }
+tracepoint:block:block_rq_complete /@start[args->dev, args->sector]/ {
+    $lat_us = (nsecs - @start[args->dev, args->sector]) / 1000;
+    $kb = args->nr_sector / 2;
+    printf("%d %d\n", $kb, $lat_us);
+    delete(@start[args->dev, args->sector]);
+}' | histo top --2d --xcol 1 --ycol 2 --autorange --palette plasma
+```
+- **What it does**: Hooks kernel block I/O tracepoints, emitting request size in kilobytes ($KB$) and round-trip completion latency ($\mu\text{s}$).
+- **Why it is interesting**: Renders a live 2D spatial heatmap demonstrating how NVMe/SATA latency scales with payload size and revealing multi-queue congestion patterns.
+
+> [!WARNING]
+> **Security & Privilege Isolation Notice**:
+> - **Only elevate the tracer, never the monitor**: In `sudo bpftrace ... | histo top`, root permissions apply strictly to `bpftrace` (required by the kernel to attach probes). `histo top` executes as your **unprivileged local user** on the other side of the UNIX pipe.
+> - **Never run `sudo histo top`**: Running terminal UI tools as root violates the principle of least privilege and allows commands like `:save /path` or `:export` to write with root permissions.
+> - **Alternative to `sudo`**: On modern Linux (5.8+), grant granular kernel capabilities directly to `bpftrace` without invoking `sudo`:
+>   ```bash
+>   sudo setcap cap_bpf,cap_perfmon,cap_sys_resource+ep $(which bpftrace)
+>   ```
+
+### 6.9 2D Coordinate Telemetry (Sensors / Simulation)
 ```bash
 # Monitor bivariate position coordinates (X, Y)
 simulation_engine --emit-coords | histo top --2d --bins=40 --palette=inferno
