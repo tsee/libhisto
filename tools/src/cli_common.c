@@ -7,6 +7,7 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <ctype.h>
+#include <math.h>
 
 int cli_get_terminal_width(int default_width) {
     const char *col_env = getenv("COLUMNS");
@@ -48,6 +49,362 @@ double cli_get_time_sec(void) {
     return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
 }
 
+/* ========================================================================= */
+/* bpftrace Output Stream Parser & Geometry Reconstruction                    */
+/* ========================================================================= */
+
+typedef struct {
+    double low;
+    double high;
+    double count;
+} bpftrace_bucket_t;
+
+static bool parse_bpftrace_num(const char *str, char **endptr, double *out_val) {
+    if (!str || !out_val) return false;
+    while (*str && isspace((unsigned char)*str)) str++;
+    if (*str == '\0') return false;
+
+    char *end = NULL;
+    double val = strtod(str, &end);
+    if (end == str) return false;
+
+    /* Check unit multiplier */
+    double mult = 1.0;
+    if (*end == 'K' || *end == 'k') {
+        if (*(end + 1) == 'i' || *(end + 1) == 'I') {
+            if (*(end + 2) == 'B' || *(end + 2) == 'b') end += 3;
+            else end += 2;
+        } else if (*(end + 1) == 'B' || *(end + 1) == 'b') {
+            end += 2;
+        } else {
+            end += 1;
+        }
+        mult = 1024.0;
+    } else if (*end == 'M' || *end == 'm') {
+        if (*(end + 1) == 's' || *(end + 1) == 'S') {
+            /* Milliseconds */
+            end += 2;
+            mult = 1e-3;
+        } else {
+            if (*(end + 1) == 'i' || *(end + 1) == 'I') {
+                if (*(end + 2) == 'B' || *(end + 2) == 'b') end += 3;
+                else end += 2;
+            } else if (*(end + 1) == 'B' || *(end + 1) == 'b') {
+                end += 2;
+            } else {
+                end += 1;
+            }
+            mult = 1024.0 * 1024.0;
+        }
+    } else if (*end == 'G' || *end == 'g') {
+        if (*(end + 1) == 'i' || *(end + 1) == 'I') {
+            if (*(end + 2) == 'B' || *(end + 2) == 'b') end += 3;
+            else end += 2;
+        } else if (*(end + 1) == 'B' || *(end + 1) == 'b') {
+            end += 2;
+        } else {
+            end += 1;
+        }
+        mult = 1024.0 * 1024.0 * 1024.0;
+    } else if (*end == 'T' || *end == 't') {
+        if (*(end + 1) == 'i' || *(end + 1) == 'I') {
+            if (*(end + 2) == 'B' || *(end + 2) == 'b') end += 3;
+            else end += 2;
+        } else if (*(end + 1) == 'B' || *(end + 1) == 'b') {
+            end += 2;
+        } else {
+            end += 1;
+        }
+        mult = 1024.0 * 1024.0 * 1024.0 * 1024.0;
+    } else if (*end == 'u' || *end == 'U') {
+        if (*(end + 1) == 's' || *(end + 1) == 'S') end += 2;
+        else end += 1;
+        mult = 1e-6;
+    } else if (*end == 'n' || *end == 'N') {
+        if (*(end + 1) == 's' || *(end + 1) == 'S') end += 2;
+        else end += 1;
+        mult = 1e-9;
+    } else if (*end == 's' && !isalnum((unsigned char)*(end + 1))) {
+        end += 1;
+        mult = 1.0;
+    }
+
+    *out_val = val * mult;
+    if (endptr) *endptr = end;
+    return true;
+}
+
+static bool parse_bpftrace_bucket_line(const char *line, double *out_low, double *out_high, double *out_count) {
+    if (!line || !out_low || !out_high || !out_count) return false;
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '\0' || *p == '#' || *p == '@') return false;
+
+    /* Format 1: [low, high) count or [val] count or (low, high] count */
+    if (*p == '[' || *p == '(') {
+        p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+
+        double low = 0.0, high = 0.0;
+        if (*p == '<' || strncmp(p, "...", 3) == 0 || strncmp(p, "-inf", 4) == 0) {
+            if (*p == '<') p++;
+            else if (strncmp(p, "...", 3) == 0) p += 3;
+            else p += 4;
+            while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
+            char *end = NULL;
+            if (!parse_bpftrace_num(p, &end, &high)) return false;
+            p = end;
+            low = (high > 0.0) ? 0.0 : high - 1.0;
+        } else {
+            char *end = NULL;
+            if (!parse_bpftrace_num(p, &end, &low)) return false;
+            p = end;
+            while (*p && isspace((unsigned char)*p)) p++;
+
+            if (*p == ',') {
+                p++;
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (strncmp(p, "...", 3) == 0 || strncmp(p, "+inf", 4) == 0) {
+                    if (strncmp(p, "...", 3) == 0) p += 3;
+                    else p += 4;
+                    high = (low > 0.0) ? low * 2.0 : low + 1.0;
+                } else {
+                    if (!parse_bpftrace_num(p, &end, &high)) return false;
+                    p = end;
+                }
+            } else if (*p == ']' || *p == ')') {
+                /* Single value: [0] -> [0, 1), [1] -> [1, 2), [X] -> [X, X+1) */
+                high = low + 1.0;
+            } else {
+                return false;
+            }
+        }
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != ']' && *p != ')') return false;
+        p++; /* Skip closing bracket */
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        char *end = NULL;
+        double count = strtod(p, &end);
+        if (end == p) return false;
+
+        *out_low = low;
+        *out_high = high;
+        *out_count = count;
+        return true;
+    }
+
+    /* Format 2: BCC style: "  0 -> 1 : 10 |***|" */
+    char *end = NULL;
+    double low = 0.0, high = 0.0;
+    if (parse_bpftrace_num(p, &end, &low)) {
+        p = end;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (p[0] == '-' && p[1] == '>') {
+            p += 2;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (parse_bpftrace_num(p, &end, &high)) {
+                p = end;
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == ':') {
+                    p++;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    double count = strtod(p, &end);
+                    if (end != p) {
+                        *out_low = low;
+                        *out_high = high + 1.0;
+                        *out_count = count;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+static int bpftrace_bucket_cmp(const void *a, const void *b) {
+    const bpftrace_bucket_t *ba = (const bpftrace_bucket_t *)a;
+    const bpftrace_bucket_t *bb = (const bpftrace_bucket_t *)b;
+    if (ba->low < bb->low) return -1;
+    if (ba->low > bb->low) return 1;
+    return 0;
+}
+
+histo_status_t cli_parse_bpftrace_histogram_str(const char *text, histo_t **out_h) {
+    if (!text || !out_h) return HISTO_ERR_INVALID_ARG;
+    *out_h = NULL;
+
+    size_t cap = 32;
+    size_t num_buckets = 0;
+    bpftrace_bucket_t *buckets = (bpftrace_bucket_t *)malloc(cap * sizeof(bpftrace_bucket_t));
+    if (!buckets) return HISTO_ERR_NOMEM;
+
+    const char *p = text;
+    char line[1024];
+
+    while (*p) {
+        size_t lidx = 0;
+        while (*p && *p != '\n' && *p != '\r' && lidx + 1 < sizeof(line)) {
+            line[lidx++] = *p++;
+        }
+        line[lidx] = '\0';
+        while (*p == '\n' || *p == '\r') p++;
+
+        double low = 0.0, high = 0.0, count = 0.0;
+        if (parse_bpftrace_bucket_line(line, &low, &high, &count)) {
+            if (num_buckets >= cap) {
+                cap *= 2;
+                bpftrace_bucket_t *new_b = (bpftrace_bucket_t *)realloc(buckets, cap * sizeof(bpftrace_bucket_t));
+                if (!new_b) {
+                    free(buckets);
+                    return HISTO_ERR_NOMEM;
+                }
+                buckets = new_b;
+            }
+            buckets[num_buckets].low = low;
+            buckets[num_buckets].high = high;
+            buckets[num_buckets].count = count;
+            num_buckets++;
+        }
+    }
+
+    if (num_buckets == 0) {
+        free(buckets);
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    /* Sort buckets by lower edge */
+    qsort(buckets, num_buckets, sizeof(bpftrace_bucket_t), bpftrace_bucket_cmp);
+
+    /* Construct edges array */
+    double *edges = (double *)malloc((num_buckets + 1) * sizeof(double));
+    if (!edges) {
+        free(buckets);
+        return HISTO_ERR_NOMEM;
+    }
+
+    edges[0] = buckets[0].low;
+    bool is_contiguous = true;
+    for (size_t i = 0; i < num_buckets; ++i) {
+        edges[i + 1] = buckets[i].high;
+        if (i > 0 && fabs(buckets[i].low - buckets[i - 1].high) > 1e-9) {
+            is_contiguous = false;
+        }
+    }
+
+    histo_t *h = NULL;
+    uint32_t flags = HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS;
+
+    /* Check if bins are uniform width */
+    bool is_uniform = is_contiguous;
+    if (is_contiguous && num_buckets > 1) {
+        double width0 = edges[1] - edges[0];
+        for (size_t i = 1; i < num_buckets; ++i) {
+            double w = edges[i + 1] - edges[i];
+            if (fabs(w - width0) > 1e-6 * (fabs(width0) + 1.0)) {
+                is_uniform = false;
+                break;
+            }
+        }
+    }
+
+    if (is_uniform && num_buckets > 0 && edges[num_buckets] > edges[0]) {
+        h = histo_create_uniform((uint32_t)num_buckets, edges[0], edges[num_buckets], flags);
+    } else {
+        /* Ensure strict monotonicity */
+        bool monotonic = true;
+        for (size_t i = 0; i < num_buckets; ++i) {
+            if (edges[i + 1] <= edges[i]) {
+                monotonic = false;
+                break;
+            }
+        }
+        if (monotonic) {
+            h = histo_create_variable((uint32_t)num_buckets, edges, flags);
+        }
+    }
+
+    if (!h) {
+        free(edges);
+        free(buckets);
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    /* Fill bin contents */
+    for (size_t i = 0; i < num_buckets; ++i) {
+        if (buckets[i].count > 0.0) {
+            histo_fill_bin(h, (uint32_t)i, buckets[i].count);
+        }
+    }
+
+    free(edges);
+    free(buckets);
+    *out_h = h;
+    return HISTO_OK;
+}
+
+histo_status_t cli_parse_bpftrace_histogram(FILE *fp, histo_t **out_h) {
+    if (!fp || !out_h) return HISTO_ERR_INVALID_ARG;
+    *out_h = NULL;
+
+    size_t cap = 2048;
+    size_t len = 0;
+    char *buf = (char *)malloc(cap);
+    if (!buf) return HISTO_ERR_NOMEM;
+
+    char line[1024];
+    size_t buckets_seen = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        double low, high, count;
+        if (parse_bpftrace_bucket_line(line, &low, &high, &count)) {
+            buckets_seen++;
+        } else {
+            /* If we were in a table and hit an empty line or next map header '@' */
+            const char *p = line;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (buckets_seen > 0 && (*p == '@' || *p == '\0')) {
+                if (*p == '@') {
+                    for (int i = (int)strlen(line) - 1; i >= 0; --i) {
+                        ungetc(line[i], fp);
+                    }
+                }
+                break;
+            }
+        }
+
+        size_t line_len = strlen(line);
+        if (len + line_len + 1 >= cap) {
+            cap = (cap + line_len + 1) * 2;
+            char *new_buf = (char *)realloc(buf, cap);
+            if (!new_buf) {
+                free(buf);
+                return HISTO_ERR_NOMEM;
+            }
+            buf = new_buf;
+        }
+        memcpy(buf + len, line, line_len);
+        len += line_len;
+        buf[len] = '\0';
+    }
+
+    if (buckets_seen == 0) {
+        free(buf);
+        return HISTO_ERR_DESERIALIZATION;
+    }
+
+    histo_status_t st = cli_parse_bpftrace_histogram_str(buf, out_h);
+    free(buf);
+    return st;
+}
+
+/* ========================================================================= */
+/* Stream Format Detection                                                   */
+/* ========================================================================= */
+
 cli_input_format_t cli_detect_stream_format(FILE *fp) {
     if (!fp) return CLI_INPUT_UNKNOWN;
     int c1 = fgetc(fp);
@@ -75,18 +432,29 @@ cli_input_format_t cli_detect_stream_format(FILE *fp) {
     ungetc(c2, fp);
     ungetc(c1, fp);
 
-    /* Skip leading whitespace to detect JSON '{' */
+    /* Skip leading whitespace to detect JSON '{' or bpftrace '@' / '[' */
     int ch;
-    long offset = 0;
-    while ((ch = fgetc(fp)) != EOF && isspace(ch)) {
-        offset++;
+    int peek_buf[512];
+    int peek_len = 0;
+    while ((ch = fgetc(fp)) != EOF && peek_len < 500) {
+        peek_buf[peek_len++] = ch;
+        if (!isspace(ch)) break;
     }
-    if (ch == '{') {
-        ungetc(ch, fp);
-        return CLI_INPUT_JSON_HISTO;
+
+    if (peek_len > 0) {
+        int first_non_space = peek_buf[peek_len - 1];
+        if (first_non_space == '{') {
+            for (int i = peek_len - 1; i >= 0; --i) ungetc(peek_buf[i], fp);
+            return CLI_INPUT_JSON_HISTO;
+        }
+        if (first_non_space == '@' || first_non_space == '[') {
+            for (int i = peek_len - 1; i >= 0; --i) ungetc(peek_buf[i], fp);
+            return CLI_INPUT_BPFTRACE_HISTO;
+        }
     }
-    if (ch != EOF) {
-        ungetc(ch, fp);
+
+    for (int i = peek_len - 1; i >= 0; --i) {
+        ungetc(peek_buf[i], fp);
     }
     return CLI_INPUT_TEXT_NUMBERS;
 }
@@ -236,6 +604,15 @@ histo_status_t cli_read_any_histogram_from_stream(FILE *fp, histo_t **out_1d, hi
         }
     }
 
+    if (fmt == CLI_INPUT_BPFTRACE_HISTO || fmt == CLI_INPUT_TEXT_NUMBERS) {
+        if (out_1d) {
+            histo_status_t st = cli_parse_bpftrace_histogram(fp, out_1d);
+            if (st == HISTO_OK) {
+                return HISTO_OK;
+            }
+        }
+    }
+
     return HISTO_ERR_DESERIALIZATION;
 }
 
@@ -271,4 +648,3 @@ histo_status_t cli_read_histo2d_from_stream(FILE *fp, histo2d_t **out_h) {
 histo_status_t cli_read_histo2d_from_file(const char *path, histo2d_t **out_h) {
     return cli_read_any_histogram_from_file(path, NULL, out_h);
 }
-

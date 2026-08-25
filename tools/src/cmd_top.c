@@ -753,11 +753,17 @@ int cmd_top_main(int argc, char **argv) {
     const char *palette_name = NULL;
     histo_palette_t palette = HISTO_PALETTE_VIRIDIS;
     uint32_t flags = HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS;
+    double scale_input = 1.0;
+    const char *shm_path = NULL;
     const char *file_arg = NULL;
 
     const cli_opt_spec_t specs[] = {
         {'n', "bins", NULL, CLI_OPT_TYPE_UINT32, &nbins, NULL, 0, "N",
          "Number of uniform bins (default: 50)", "50"},
+        {'S', "scale-input", NULL, CLI_OPT_TYPE_DOUBLE, &scale_input, NULL, 0, "FACTOR",
+         "Multiply incoming measurements by scale factor (e.g. 1e-3 for ns->us)", "1.0"},
+        {0, "shm", NULL, CLI_OPT_TYPE_STRING, &shm_path, NULL, 0, "PATH",
+         "Attach to memory-mapped shared memory ring buffer (e.g. /histo_shm)", NULL},
         {0, "min", NULL, CLI_OPT_TYPE_DOUBLE, &rmin, NULL, 0, "X",
          "Lower boundary", "0.0"},
         {0, "max", NULL, CLI_OPT_TYPE_DOUBLE, &rmax, NULL, 0, "X",
@@ -843,7 +849,21 @@ int cmd_top_main(int argc, char **argv) {
     }
 
     tui_engine_t eng;
-    if (is_2d) {
+    if (shm_path) {
+        if (is_2d) {
+            if (!tui_engine_init_shm(&eng, shm_path, true, xbins, xmin, xmax, flags)) {
+                fprintf(stderr, "Error: Failed to attach to shared memory ring buffer '%s'\n", shm_path);
+                if (in_fp != stdin) fclose(in_fp);
+                return 1;
+            }
+        } else {
+            if (!tui_engine_init_shm(&eng, shm_path, false, nbins, rmin, rmax, flags)) {
+                fprintf(stderr, "Error: Failed to attach to shared memory ring buffer '%s'\n", shm_path);
+                if (in_fp != stdin) fclose(in_fp);
+                return 1;
+            }
+        }
+    } else if (is_2d) {
         if (!tui_engine_init(&eng, in_fp, true, xbins, xmin, xmax, flags, has_weights)) {
             fprintf(stderr, "Error: Failed to initialize 2D TUI engine.\n");
             if (in_fp != stdin) fclose(in_fp);
@@ -860,6 +880,8 @@ int cmd_top_main(int argc, char **argv) {
             return 1;
         }
     }
+
+    tui_engine_set_scale_input(&eng, scale_input);
 
     eng.auto_range = auto_range;
     eng.delim = delim;

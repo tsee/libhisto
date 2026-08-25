@@ -2,14 +2,19 @@
  * Integration tests for CLI subcommands, input pipelines, and JSON output.
  */
 
+#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
+
 #include "unity.h"
 #include "histo/histo.h"
 #include "histo/histo2d.h"
 #include "histo/version.h"
+#include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include <getopt.h>
 
 void setUp(void) {}
@@ -595,6 +600,103 @@ void test_cli_dispatcher_and_help(void) {
     TEST_ASSERT_NOT_EQUAL_INT(0, histo_cli_main(2, disp_unk_cmd, stdout, stderr));
 }
 
+void test_cli_scale_input(void) {
+    char data_path[] = "/tmp/histo_scale_test_XXXXXX";
+    int fd = mkstemp(data_path);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, fd);
+    FILE *fp = fdopen(fd, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+
+    /* 1000000 ns, 2000000 ns, 3000000 ns */
+    fprintf(fp, "1000000\n2000000\n3000000\n");
+    fclose(fp);
+
+    char out_path[] = "/tmp/histo_scale_out_XXXXXX";
+    int fd_out = mkstemp(out_path);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, fd_out);
+    close(fd_out);
+
+    char *fill_args[] = {
+        "histo-fill",
+        "--scale-input=1e-3",
+        "--auto-range",
+        "--bins=10",
+        "--output=json",
+        "-f", out_path,
+        data_path
+    };
+    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(8, fill_args));
+
+    histo_t *h = NULL;
+    TEST_ASSERT_EQUAL_INT(HISTO_OK, cli_read_histogram_from_file(out_path, &h));
+    TEST_ASSERT_NOT_NULL(h);
+
+    double mean = 0.0;
+    histo_mean(h, &mean);
+    /* 1000, 2000, 3000 scaled down from 1e6, 2e6, 3e6 with 1e-3 => mean should be ~2000 */
+    TEST_ASSERT_DOUBLE_WITHIN(50.0, 2000.0, mean);
+
+    histo_destroy(h);
+    unlink(data_path);
+    unlink(out_path);
+}
+
+void test_cli_bpftrace_pipeline(void) {
+    char bpf_path[] = "/tmp/histo_bpf_test_XXXXXX";
+    int fd = mkstemp(bpf_path);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, fd);
+    FILE *fp = fdopen(fd, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+
+    fprintf(fp,
+        "@vfs_read_latency:\n"
+        "[0]                    10 |@@@@@                                   |\n"
+        "[1]                     5 |@@                                      |\n"
+        "[2, 4)                 20 |@@@@@@@@@@                              |\n"
+        "[4, 8)                 80 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|\n"
+        "[8, 16)                40 |@@@@@@@@@@@@@@@@@@@@                    |\n"
+        "[16, 32)               15 |@@@@@@@                                 |\n"
+        "[32, 64)                2 |@                                       |\n"
+        "[64, 128)               0 |                                        |\n"
+        "[128, 256)              1 |@                                       |\n"
+    );
+    fclose(fp);
+
+    /* Test 1: histo stats on bpftrace output */
+    char *stats_args[] = {"histo-stats", "--format=json", bpf_path};
+    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main(3, stats_args));
+
+    /* Test 2: histo plot on bpftrace output */
+    char *plot_args[] = {"histo-plot", "--style=blocks", bpf_path};
+    TEST_ASSERT_EQUAL_INT(0, cmd_plot_main(3, plot_args));
+
+    /* Test 3: histo fit on bpftrace output */
+    char *fit_args[] = {"histo-fit", "--model=gaussian", bpf_path};
+    TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_args));
+
+    /* Test 4: histo fill on bpftrace output to produce JSON */
+    char json_out[] = "/tmp/histo_bpf_json_XXXXXX";
+    int fd_json = mkstemp(json_out);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, fd_json);
+    close(fd_json);
+
+    char *fill_args[] = {"histo-fill", "--output=json", "-f", json_out, bpf_path};
+    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(5, fill_args));
+
+    histo_t *deser = NULL;
+    TEST_ASSERT_EQUAL_INT(HISTO_OK, cli_read_histogram_from_file(json_out, &deser));
+    TEST_ASSERT_NOT_NULL(deser);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 173.0, histo_total_weight(deser));
+    histo_destroy(deser);
+
+    /* Test 5: histo cmp on two bpftrace files */
+    char *cmp_args[] = {"histo-cmp", bpf_path, bpf_path};
+    TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(3, cmp_args));
+
+    unlink(bpf_path);
+    unlink(json_out);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_json_serialization_roundtrip_uniform);
@@ -612,7 +714,10 @@ int main(void) {
     RUN_TEST(test_cli_double_dash_and_negatives);
     RUN_TEST(test_cli_exhaustive_error_cases);
     RUN_TEST(test_cli_dispatcher_and_help);
+    RUN_TEST(test_cli_scale_input);
+    RUN_TEST(test_cli_bpftrace_pipeline);
     return UNITY_END();
 }
+
 
 

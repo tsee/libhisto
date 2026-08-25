@@ -1,0 +1,36 @@
+#!/usr/bin/env bpftrace
+/*
+ * tcp_rtt.bt - Trace TCP Smoothed Round-Trip Time (SRTT) distribution
+ *
+ * Inspects TCP connections on established packet reception and samples
+ * the smoothed RTT (srtt_us) in microseconds.
+ *
+ * Usage:
+ *   sudo bpftrace tcp_rtt.bt
+ *   sudo bpftrace -q tcp_rtt.bt | histo plot
+ *   sudo bpftrace -q tcp_rtt.bt | histo stats
+ *   sudo bpftrace -q tcp_rtt.bt | histo fit --model=lognormal
+ */
+
+#include <net/sock.h>
+#include <linux/tcp.h>
+
+BEGIN
+{
+    printf("Tracing TCP RTT distribution (microseconds)... Hit Ctrl-C to end.\n");
+}
+
+kprobe:tcp_rcv_established
+{
+    $sk = (struct sock *)arg0;
+    $tp = (struct tcp_sock *)arg0;
+    $srtt_us = $tp->srtt_us >> 3; /* Kernel stores srtt shifted by 3 bits */
+
+    if ($srtt_us > 0) {
+        @tcp_rtt_us = hist($srtt_us);
+    }
+}
+
+END
+{
+}

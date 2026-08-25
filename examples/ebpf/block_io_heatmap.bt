@@ -1,0 +1,40 @@
+#!/usr/bin/env bpftrace
+/*
+ * block_io_heatmap.bt - Trace block I/O request size vs latency distribution
+ *
+ * Tracks individual block device requests from issue to completion,
+ * emitting paired measurements (bytes latency_us) suitable for live 2D
+ * heatmaps or 1D histogram summaries.
+ *
+ * Usage:
+ *   sudo bpftrace block_io_heatmap.bt
+ *   sudo bpftrace -q block_io_heatmap.bt | histo top --2d
+ *   sudo bpftrace -q block_io_heatmap.bt | histo fill --2d --out=block_io.json
+ *   sudo bpftrace -q block_io_heatmap.bt | histo plot
+ */
+
+BEGIN
+{
+    printf("Tracing block I/O latency and size... Hit Ctrl-C to end.\n");
+}
+
+tracepoint:block:block_rq_issue
+{
+    @start[args->dev, args->sector] = nsecs;
+}
+
+tracepoint:block:block_rq_complete
+/@start[args->dev, args->sector]/
+{
+    $duration_us = (nsecs - @start[args->dev, args->sector]) / 1000;
+    $bytes = args->nr_sector * 512;
+    printf("%llu %llu\n", (uint64)$bytes, (uint64)$duration_us);
+    @io_latency_us = hist($duration_us);
+    @io_size_bytes = hist($bytes);
+    delete(@start[args->dev, args->sector]);
+}
+
+END
+{
+    clear(@start);
+}

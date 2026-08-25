@@ -99,7 +99,26 @@ python3 -c "import random; print('\n'.join(str(random.gauss(50, 10)) for _ in ra
  ─────────────────────┴──────────────────────────────────────────────────────
 ```
 
-### 0.3 Python 3 API
+### 0.3 Linux eBPF & bpftrace Telemetry Ingestion
+
+`libhisto` automatically detects and ingests `bpftrace` and BCC histogram tables (both power-of-two `hist()` and linear `lhist()`):
+
+```bash
+# Trace filesystem VFS read latency with automatic unit scaling (ns to us)
+sudo bpftrace -q examples/ebpf/vfs_read_latency.bt | histo plot --scale-input 1e-3
+
+# Fit Gaussian or LogNormal distributions to network round-trip time
+sudo bpftrace -q examples/ebpf/tcp_rtt.bt | histo fit --model=lognormal
+
+# Compute moments and quantiles from CPU scheduler runqueue latency
+sudo bpftrace -q examples/ebpf/runqlat.bt | histo stats
+
+# Stream high-throughput telemetry (>50M events/sec) via shared memory
+histo top --shm=/histo_shm --scale-input 0.001
+```
+> See [`examples/ebpf/README.md`](../examples/ebpf/README.md) for full recipe documentation and non-root capability setup.
+
+### 0.4 Python 3 API
 
 ```python
 import histo

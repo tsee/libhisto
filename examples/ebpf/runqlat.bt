@@ -1,0 +1,43 @@
+#!/usr/bin/env bpftrace
+/*
+ * runqlat.bt - Trace CPU scheduler run-queue waiting latency
+ *
+ * Measures the time between a task becoming ready to run (woken up or enqueued)
+ * and actually being scheduled onto a CPU core by the Linux CFS/EEVDF scheduler.
+ *
+ * Usage:
+ *   sudo bpftrace runqlat.bt
+ *   sudo bpftrace -q runqlat.bt | histo plot
+ *   sudo bpftrace -q runqlat.bt | histo stats
+ *   sudo bpftrace -q runqlat.bt | histo plot --log
+ */
+
+BEGIN
+{
+    printf("Tracing CPU scheduler runqueue latency (microseconds)... Hit Ctrl-C to end.\n");
+}
+
+tracepoint:sched:sched_wakeup,
+tracepoint:sched:sched_wakeup_new
+{
+    @qtime[args->pid] = nsecs;
+}
+
+tracepoint:sched:sched_switch
+{
+    if (args->prev_state == 0) {
+        @qtime[args->prev_pid] = nsecs;
+    }
+
+    $ns = @qtime[args->next_pid];
+    if ($ns > 0) {
+        $lat_us = (nsecs - $ns) / 1000;
+        @runq_latency_us = hist($lat_us);
+        delete(@qtime[args->next_pid]);
+    }
+}
+
+END
+{
+    clear(@qtime);
+}

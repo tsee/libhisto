@@ -54,6 +54,8 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 | Option | Shorthand | Description | Default |
 | :--- | :--- | :--- | :--- |
 | `--bins=<N>` | `-n <N>` | Initial number of bins (1D) or X/Y bins (2D) | `50` |
+| `--scale-input=<FACTOR>` | `-S <FACTOR>` | Multiply incoming measurements by scale factor (e.g. `1e-3` for ns->us) | `1.0` |
+| `--shm=<PATH>` | | Attach to POSIX/Win32 shared memory binary ring buffer (e.g. `/histo_shm`) | `NULL` |
 | `--min=<X>` | | Initial lower range boundary (1D) | `0.0` |
 | `--max=<X>` | | Initial upper range boundary (1D) | `100.0` |
 | `--auto-range` | `-a` | Enable dynamic quantile auto-ranging | Enabled (`ON`) |
@@ -74,6 +76,21 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 | `--help` | `-h` | Display command-line options and exit | |
 
 ### 2.3 Ready-to-Run Quickstart Examples
+
+#### Linux eBPF Kernel Tracing with bpftrace & Stream Pre-Scaling
+```bash
+# Trace filesystem VFS read latency and scale nanoseconds to microseconds live
+sudo bpftrace -q examples/ebpf/vfs_read_latency.bt | histo top --scale-input 1e-3
+
+# Trace block I/O size vs latency live in 2D
+sudo bpftrace -q examples/ebpf/block_io_heatmap.bt | histo top --2d
+```
+
+#### High-Throughput Shared Memory Ring Buffer Ingestion (>50M events/sec)
+```bash
+# Attach to shared memory ring buffer producer
+histo top --shm=/histo_shm --scale-input 0.001
+```
 
 #### 1D Gaussian Stream with Live Fit & KDE Overlays
 ```bash

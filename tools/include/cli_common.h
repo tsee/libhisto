@@ -39,6 +39,7 @@ typedef enum {
     CLI_INPUT_UNKNOWN = 0,
     CLI_INPUT_BINARY_HISTO,
     CLI_INPUT_JSON_HISTO,
+    CLI_INPUT_BPFTRACE_HISTO,
     CLI_INPUT_TEXT_NUMBERS,
     CLI_INPUT_RAW_DOUBLES
 } cli_input_format_t;
@@ -54,6 +55,10 @@ histo_status_t cli_read_histo2d_from_file(const char *path, histo2d_t **out_h);
 
 histo_status_t cli_read_any_histogram_from_stream(FILE *fp, histo_t **out_1d, histo2d_t **out_2d);
 histo_status_t cli_read_any_histogram_from_file(const char *path, histo_t **out_1d, histo2d_t **out_2d);
+
+/* bpftrace stream parsing */
+histo_status_t cli_parse_bpftrace_histogram_str(const char *text, histo_t **out_h);
+histo_status_t cli_parse_bpftrace_histogram(FILE *fp, histo_t **out_h);
 
 /* Time utilities */
 double cli_get_time_sec(void);

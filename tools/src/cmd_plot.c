@@ -387,6 +387,7 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
     bool watch_mode = false;
     bool clear_screen = false;
     bool mode_2d = false;
+    double scale_input = 1.0;
     const char *title = NULL;
 
     const cli_opt_spec_t specs[] = {
@@ -396,6 +397,8 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
          "Glyph style: blocks (default), ascii, shaded, sparkline", "blocks"},
         {'S', "sparkline", NULL, CLI_OPT_TYPE_BOOL, &sparkline, NULL, 0, NULL,
          "Render compact single-line sparkline", NULL},
+        {0, "scale-input", NULL, CLI_OPT_TYPE_DOUBLE, &scale_input, NULL, 0, "FACTOR",
+         "Multiply incoming measurements by scale factor (e.g. 1e-3 for ns->us)", "1.0"},
         {'c', "color", NULL, CLI_OPT_TYPE_STRING, &color_mode, NULL, 0, "MODE",
          "Color mode: auto (default), always, never", "auto"},
         {'p', "palette", "colormap", CLI_OPT_TYPE_STRING, &palette_name, NULL, 0, "NAME",
@@ -468,7 +471,7 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
         }
 
         cli_input_format_t fmt = cli_detect_stream_format(in_fp);
-        if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO) {
+        if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO || fmt == CLI_INPUT_BPFTRACE_HISTO) {
             histo2d_t *h2d = NULL;
             if (watch_mode) {
                 while (cli_read_histo2d_from_stream(in_fp, &h2d) == HISTO_OK) {
@@ -526,7 +529,7 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
                         cap *= 2;
                         samples = (double *)realloc(samples, cap * sizeof(double));
                     }
-                    samples[count++] = val;
+                    samples[count++] = val * (scale_input > 0.0 ? scale_input : 1.0);
                 }
             }
 

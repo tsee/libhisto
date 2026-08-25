@@ -218,6 +218,7 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
     uint32_t rebin_factor = 1;
     bool do_cdf = false;
     double norm_area = 0.0;
+    double scale_input = 1.0;
     const char *out_format = NULL;
     const char *out_file = NULL;
     uint64_t emit_every = 0;
@@ -226,6 +227,8 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
     const cli_opt_spec_t specs[] = {
         {'n', "bins", NULL, CLI_OPT_TYPE_UINT32, &nbins, NULL, 0, "N",
          "Number of uniform bins (default: 50)", "50"},
+        {'S', "scale-input", NULL, CLI_OPT_TYPE_DOUBLE, &scale_input, NULL, 0, "FACTOR",
+         "Multiply incoming measurements by scale factor (e.g. 1e-3 for ns->us)", "1.0"},
         {0, "min", NULL, CLI_OPT_TYPE_DOUBLE, &range_min, NULL, 0, "X",
          "Lower boundary (required unless --auto-range)", NULL},
         {0, "max", NULL, CLI_OPT_TYPE_DOUBLE, &range_max, NULL, 0, "X",
@@ -426,6 +429,10 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
                 }
 
                 if (!parsed_x || !parsed_y) continue;
+                if (scale_input > 0.0 && scale_input != 1.0) {
+                    vx *= scale_input;
+                    vy *= scale_input;
+                }
 
                 if (auto_range_2d) {
                     if (count_2d >= cap_2d) {
@@ -555,7 +562,7 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
             double val_buf[2];
             size_t needed = has_weights ? 2 : 1;
             while (fread(val_buf, sizeof(double), needed, in_fp) == needed) {
-                double x = val_buf[0];
+                double x = val_buf[0] * (scale_input > 0.0 ? scale_input : 1.0);
                 double w = has_weights ? val_buf[1] : 1.0;
                 if (auto_range) {
                     if (auto_count >= auto_cap) {
@@ -577,68 +584,86 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
                 }
             }
         } else {
-            /* Text line parsing with delimiter auto-detection */
-            char line[2048];
-            char detected_delim = delim;
-
-            while (fgets(line, sizeof(line), in_fp)) {
-                char *p = line;
-                while (*p && isspace((unsigned char)*p)) p++;
-                if (*p == '\0' || *p == '#') continue;
-
-                if (detected_delim == '\0') {
-                    detected_delim = auto_detect_delimiter(p);
-                }
-
-                double x = 0.0, w = 1.0;
-                bool parsed_x = false;
-
-                if (detected_delim != ' ') {
-                    int col = 1;
-                    char *tok = strtok(p, (char[]){detected_delim, '\0'});
-                    while (tok) {
-                        if (col == val_col) {
-                            x = atof(tok);
-                            parsed_x = true;
-                        } else if (has_weights && col == w_col) {
-                            w = atof(tok);
-                        }
-                        tok = strtok(NULL, (char[]){detected_delim, '\0'});
-                        col++;
-                    }
-                } else {
-                    int col = 1;
-                    char *tok = strtok(p, " \t\r\n");
-                    while (tok) {
-                        if (col == val_col) {
-                            x = atof(tok);
-                            parsed_x = true;
-                        } else if (has_weights && col == w_col) {
-                            w = atof(tok);
-                        }
-                        tok = strtok(NULL, " \t\r\n");
-                        col++;
+            /* Check if input stream is a pre-formatted histogram (e.g. bpftrace table or JSON) */
+            cli_input_format_t fmt = cli_detect_stream_format(in_fp);
+            if (fmt == CLI_INPUT_BPFTRACE_HISTO || fmt == CLI_INPUT_JSON_HISTO || fmt == CLI_INPUT_BINARY_HISTO) {
+                histo_t *incoming = NULL;
+                while (cli_read_histogram_from_stream(in_fp, &incoming) == HISTO_OK) {
+                    if (!h) {
+                        h = incoming;
+                    } else {
+                        histo_add(h, incoming);
+                        histo_destroy(incoming);
                     }
                 }
+                auto_range = false;
+            } else {
+                /* Text line parsing with delimiter auto-detection */
+                char line[2048];
+                char detected_delim = delim;
 
-                if (!parsed_x) continue;
+                while (fgets(line, sizeof(line), in_fp)) {
+                    char *p = line;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p == '\0' || *p == '#') continue;
 
-                if (auto_range) {
-                    if (auto_count >= auto_cap) {
-                        auto_cap = auto_cap == 0 ? 1024 : auto_cap * 2;
-                        auto_samples = (double *)realloc(auto_samples, auto_cap * sizeof(double));
-                        if (has_weights) auto_weights = (double *)realloc(auto_weights, auto_cap * sizeof(double));
+                    if (detected_delim == '\0') {
+                        detected_delim = auto_detect_delimiter(p);
                     }
-                    auto_samples[auto_count] = x;
-                    if (has_weights) auto_weights[auto_count] = w;
-                    auto_count++;
-                } else {
-                    histo_fill_w(h, x, w);
-                    sample_count++;
-                    if ((emit_every > 0 && sample_count % emit_every == 0) ||
-                        (emit_interval > 0.0 && (cli_get_time_sec() - last_emit_time) >= emit_interval)) {
-                        emit_histogram(h, out_format, out_fp, rebin_factor, do_cdf, norm_area);
-                        last_emit_time = cli_get_time_sec();
+
+                    double x = 0.0, w = 1.0;
+                    bool parsed_x = false;
+
+                    if (detected_delim != ' ') {
+                        int col = 1;
+                        char *tok = strtok(p, (char[]){detected_delim, '\0'});
+                        while (tok) {
+                            if (col == val_col) {
+                                x = atof(tok);
+                                parsed_x = true;
+                            } else if (has_weights && col == w_col) {
+                                w = atof(tok);
+                            }
+                            tok = strtok(NULL, (char[]){detected_delim, '\0'});
+                            col++;
+                        }
+                    } else {
+                        int col = 1;
+                        char *tok = strtok(p, " \t\r\n");
+                        while (tok) {
+                            if (col == val_col) {
+                                x = atof(tok);
+                                parsed_x = true;
+                            } else if (has_weights && col == w_col) {
+                                w = atof(tok);
+                            }
+                            tok = strtok(NULL, " \t\r\n");
+                            col++;
+                        }
+                    }
+
+                    if (!parsed_x) continue;
+                    if (scale_input > 0.0 && scale_input != 1.0) {
+                        x *= scale_input;
+                    }
+
+                    if (auto_range) {
+                        if (auto_count >= auto_cap) {
+                            auto_cap = auto_cap == 0 ? 1024 : auto_cap * 2;
+                            auto_samples = (double *)realloc(auto_samples, auto_cap * sizeof(double));
+                            if (has_weights) auto_weights = (double *)realloc(auto_weights, auto_cap * sizeof(double));
+                        }
+                        auto_samples[auto_count] = x;
+                        if (has_weights) auto_weights[auto_count] = w;
+                        auto_count++;
+                    } else {
+                        histo_fill_w(h, x, w);
+                        sample_count++;
+                        if ((emit_every > 0 && sample_count % emit_every == 0) ||
+                            (emit_interval > 0.0 && (cli_get_time_sec() - last_emit_time) >= emit_interval)) {
+                            emit_histogram(h, out_format, out_fp, rebin_factor, do_cdf, norm_area);
+                            last_emit_time = cli_get_time_sec();
+                        }
                     }
                 }
             }

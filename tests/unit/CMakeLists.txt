@@ -124,3 +124,17 @@ add_executable(test_cli_opt
 target_link_libraries(test_cli_opt PRIVATE histocli histo unity)
 add_test(NAME test_cli_opt COMMAND test_cli_opt)
 
+# Unit Test: bpftrace ASCII Table Parser
+add_executable(test_bpftrace_parser
+    test_bpftrace_parser.c
+)
+target_link_libraries(test_bpftrace_parser PRIVATE histocli histo unity)
+add_test(NAME test_bpftrace_parser COMMAND test_bpftrace_parser)
+
+# Unit Test: Shared Memory Ring Buffer IPC
+add_executable(test_shm_ring
+    test_shm_ring.c
+)
+target_link_libraries(test_shm_ring PRIVATE histocli histo unity Threads::Threads)
+add_test(NAME test_shm_ring COMMAND test_shm_ring)
+

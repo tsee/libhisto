@@ -1,0 +1,36 @@
+#!/usr/bin/env bpftrace
+/*
+ * vfs_read_latency.bt - Trace VFS read execution latency distribution
+ *
+ * Measures the latency of the kernel vfs_read() function in nanoseconds
+ * and outputs a log2 histogram.
+ *
+ * Usage:
+ *   sudo bpftrace vfs_read_latency.bt
+ *   sudo bpftrace -q vfs_read_latency.bt | histo plot
+ *   sudo bpftrace -q vfs_read_latency.bt | histo stats
+ *   sudo bpftrace -q vfs_read_latency.bt | histo plot --scale-input 1e-3 # ns to us
+ */
+
+BEGIN
+{
+    printf("Tracing VFS read latency... Hit Ctrl-C to end.\n");
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    $duration_ns = nsecs - @start[tid];
+    @vfs_read_latency_ns = hist($duration_ns);
+    delete(@start[tid]);
+}
+
+END
+{
+    clear(@start);
+}

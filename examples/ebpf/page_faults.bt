@@ -1,0 +1,37 @@
+#!/usr/bin/env bpftrace
+/*
+ * page_faults.bt - Trace memory page fault handling latency
+ *
+ * Samples page fault latency (time spent resolving minor and major page faults
+ * in the kernel page fault handler) in nanoseconds.
+ *
+ * Usage:
+ *   sudo bpftrace page_faults.bt
+ *   sudo bpftrace -q page_faults.bt | histo plot --scale-input 1e-3 # ns to us
+ *   sudo bpftrace -q page_faults.bt | histo stats
+ */
+
+BEGIN
+{
+    printf("Tracing memory page fault handling latency (nanoseconds)... Hit Ctrl-C to end.\n");
+}
+
+tracepoint:exceptions:page_fault_user_entry,
+tracepoint:exceptions:page_fault_kernel_entry
+{
+    @start[tid] = nsecs;
+}
+
+tracepoint:exceptions:page_fault_user_exit,
+tracepoint:exceptions:page_fault_kernel_exit
+/@start[tid]/
+{
+    $lat_ns = nsecs - @start[tid];
+    @page_fault_latency_ns = hist($lat_ns);
+    delete(@start[tid]);
+}
+
+END
+{
+    clear(@start);
+}

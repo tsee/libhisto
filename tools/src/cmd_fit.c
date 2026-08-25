@@ -436,7 +436,7 @@ int histo_cli_fit(int argc, char **argv, FILE *out, FILE *err) {
     }
 
     cli_input_format_t fmt = cli_detect_stream_format(fp);
-    if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO) {
+    if (fmt == CLI_INPUT_BINARY_HISTO || fmt == CLI_INPUT_JSON_HISTO || fmt == CLI_INPUT_BPFTRACE_HISTO) {
         if (cli_read_histogram_from_stream(fp, &h) != HISTO_OK) {
             fprintf(err, "Error: Failed to deserialize input histogram\n");
             if (fp != stdin) fclose(fp);
