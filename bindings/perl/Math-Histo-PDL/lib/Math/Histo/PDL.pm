@@ -6,7 +6,7 @@ use 5.010;
 
 our $VERSION = '0.2.1';
 
-use Math::Histo 0.1.1;
+use Math::Histo 0.2.1;
 use Math::Histo::2D;
 use PDL 2.000 ();
 use Carp qw(croak);
