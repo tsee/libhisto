@@ -5,7 +5,7 @@ use warnings;
 use Math::Histo ();
 use Math::Histo::Constants qw(:flags);
 
-our $VERSION = '0.2.0';
+our $VERSION = '0.2.1';
 
 
 sub new {

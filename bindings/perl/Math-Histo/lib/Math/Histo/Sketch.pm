@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Math::Histo ();
 
-our $VERSION = '0.2.0';
+our $VERSION = '0.2.1';
 
 
 sub new {

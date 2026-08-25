@@ -79,16 +79,43 @@ def check_all_versions():
         m = re.search(r'our\s+\$VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', perl_content)
         if m:
             perl_ver = m.group(1)
-            if perl_ver != core_ver:
-                print(f"[FAIL] {rel_path} version ({perl_ver}) does not match core ({core_ver})")
-                status = False
+            p_parts = perl_ver.split(".")
+            c_parts = core_ver.split(".")
+            if len(p_parts) == 3 and len(c_parts) == 3 and (p_parts[0], p_parts[1]) == (c_parts[0], c_parts[1]):
+                print(f"[OK] {rel_path}: {perl_ver} (aligned with core {c_parts[0]}.{c_parts[1]}.x)")
             else:
-                print(f"[OK] {rel_path}: {perl_ver}")
+                print(f"[FAIL] {rel_path} version ({perl_ver}) does not share major.minor with core ({core_ver})")
+                status = False
         else:
             print(f"[FAIL] Could not find $VERSION in {rel_path}")
             status = False
 
     return status
+
+
+def set_perl_version(dist_name, new_version):
+    parts = new_version.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        raise ValueError(f"Version must be in MAJOR.MINOR.PATCH format, got: {new_version}")
+
+    dist_dir = os.path.join(REPO_ROOT, "bindings", "perl", dist_name)
+    if not os.path.isdir(dist_dir):
+        raise ValueError(f"Unknown Perl distribution directory: {dist_dir}")
+
+    print(f"Setting Perl distribution {dist_name} version to: {new_version}")
+    for root, _, files in os.walk(dist_dir):
+        if "bundled" in root or "_alien" in root or "blib" in root or ".git" in root:
+            continue
+        for f in files:
+            if f.endswith(".pm"):
+                pm_path = os.path.join(root, f)
+                rel_path = os.path.relpath(pm_path, REPO_ROOT)
+                with open(pm_path, "r", encoding="utf-8") as fh:
+                    content = fh.read()
+                content = re.sub(r'(our\s+\$VERSION\s*=\s*[\'"])[^\'"]+([\'"])', rf"\g<1>{new_version}\g<2>", content)
+                with open(pm_path, "w", encoding="utf-8") as fh:
+                    fh.write(content)
+                print(f"[UPDATED] {rel_path}")
 
 
 def set_version(new_version):
@@ -150,10 +177,14 @@ def main():
     parser = argparse.ArgumentParser(description="Version verification and bump tool for libhisto.")
     parser.add_argument("--check", action="store_true", help="Check and print all component versions.")
     parser.add_argument("--set", type=str, metavar="X.Y.Z", help="Set new version across all components.")
+    parser.add_argument("--set-perl", nargs=2, metavar=("DIST", "X.Y.Z"), help="Set version for a specific Perl distribution (e.g. Math-Histo 0.2.1).")
     args = parser.parse_args()
 
     if args.set:
         set_version(args.set)
+        check_all_versions()
+    elif args.set_perl:
+        set_perl_version(args.set_perl[0], args.set_perl[1])
         check_all_versions()
     else:
         success = check_all_versions()

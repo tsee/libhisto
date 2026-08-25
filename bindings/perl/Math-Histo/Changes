@@ -1,5 +1,10 @@
 Revision history for Math-Histo
 
+0.2.1   2026-08-25
+        - Fix test suite failures on extended-precision Perl builds with long double and quadmath (__float128) NV types (GH #1).
+        - Replace exact string equality comparisons on floating-point quantities with Test2 within() tolerance checks.
+        - Eliminate bin boundary sampling resonance in t/02_stats.t.
+
 0.2.0   2026-08-21
         - Add 6 new parametric curve fitting models (Log-Normal, Gauss+Linear, Weibull, Gamma, Poisson, Laplace).
         - Add Math::Histo::Fit->eval and eval_grad for direct model & analytical Jacobian evaluation.

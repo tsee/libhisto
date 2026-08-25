@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-08-25 (Perl Bindings: Math::Histo, Math::Histo::PDL)
+
+### Fixed
+- **Perl Bindings (`Math-Histo`, `Math-Histo-PDL`)**:
+  - Fixed test suite failures on extended-precision Perl builds configured with `long double` or `__float128` (`-Dusequadmath`) NV types ([GH #1](https://github.com/tsee/libhisto/issues/1)).
+  - Replaced strict string equality assertions in `Test2::V0` tests with numerical tolerance checks via `within()`.
+  - Resolved bin-boundary aliasing in `t/02_stats.t` Gaussian mode estimation.
+
+---
+
 ## [0.2.0] - 2026-08-21
 
 ### Added
