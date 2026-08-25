@@ -380,6 +380,52 @@ void test_cli_plot_palettes(void) {
 void test_cli_top_help(void) {
     char *top_help_argv[] = {"histo-top", "--help"};
     optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main(2, top_help_argv));
+
+    char *top_bins_help_argv[] = {"histo-top", "--bins", "50", "--min", "0", "--max", "100", "--help"};
+    optind = 1; TEST_ASSERT_EQUAL_INT(0, cmd_top_main((int)(sizeof(top_bins_help_argv)/sizeof(top_bins_help_argv[0])), top_bins_help_argv));
+}
+
+void test_cli_space_separated_args(void) {
+    const char *tmp_input = "/tmp/test_cli_space_args_in.txt";
+    const char *tmp_out_json = "/tmp/test_cli_space_args_out.json";
+
+    FILE *fp = fopen(tmp_input, "w");
+    TEST_ASSERT_NOT_NULL(fp);
+    for (int i = 0; i < 20; ++i) {
+        fprintf(fp, "%d\n", i);
+    }
+    fclose(fp);
+
+    /* Test histo-fill with space-separated --bins 20 --min 0 --max 20 -o json */
+    char *fill_argv[] = {
+        "histo-fill", "--bins", "20", "--min", "0", "--max", "20", "-o", "json", "-f", (char *)tmp_out_json, (char *)tmp_input
+    };
+    optind = 1;
+    TEST_ASSERT_EQUAL_INT(0, cmd_fill_main((int)(sizeof(fill_argv) / sizeof(fill_argv[0])), fill_argv));
+
+    /* Test histo-stats with space-separated --format json */
+    char *stats_argv[] = {
+        "histo-stats", "--format", "json", (char *)tmp_out_json
+    };
+    optind = 1;
+    TEST_ASSERT_EQUAL_INT(0, cmd_stats_main((int)(sizeof(stats_argv) / sizeof(stats_argv[0])), stats_argv));
+
+    /* Test histo-plot with space-separated --width 100 --style blocks --color never */
+    char *plot_argv[] = {
+        "histo-plot", "--width", "100", "--style", "blocks", "--color", "never", (char *)tmp_out_json
+    };
+    optind = 1;
+    TEST_ASSERT_EQUAL_INT(0, cmd_plot_main((int)(sizeof(plot_argv) / sizeof(plot_argv[0])), plot_argv));
+
+    /* Test histo-cmp with space-separated --format json */
+    char *cmp_argv[] = {
+        "histo-cmp", "--format", "json", (char *)tmp_out_json, (char *)tmp_out_json
+    };
+    optind = 1;
+    TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main((int)(sizeof(cmp_argv) / sizeof(cmp_argv[0])), cmp_argv));
+
+    remove(tmp_input);
+    remove(tmp_out_json);
 }
 
 int main(void) {
@@ -394,6 +440,7 @@ int main(void) {
     RUN_TEST(test_cli_error_handling);
     RUN_TEST(test_cli_plot_palettes);
     RUN_TEST(test_cli_top_help);
+    RUN_TEST(test_cli_space_separated_args);
     return UNITY_END();
 }
 

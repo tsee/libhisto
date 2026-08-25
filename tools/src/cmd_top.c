@@ -800,71 +800,105 @@ int cmd_top_main(int argc, char **argv) {
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_top_usage(stdout);
             return 0;
-        } else if (strncmp(arg, "--bins=", 7) == 0) {
-            nbins = (uint32_t)atoi(arg + 7);
-            xbins = ybins = nbins;
-        } else if (strncmp(arg, "-n=", 3) == 0) {
-            nbins = (uint32_t)atoi(arg + 3);
-            xbins = ybins = nbins;
-        } else if (strcmp(arg, "-n") == 0 && i + 1 < argc) {
-            nbins = (uint32_t)atoi(argv[++i]);
-            xbins = ybins = nbins;
-        } else if (strncmp(arg, "--min=", 6) == 0) {
-            rmin = atof(arg + 6);
-            xmin = ymin = rmin;
-        } else if (strcmp(arg, "--min") == 0 && i + 1 < argc) {
-            rmin = atof(argv[++i]);
-            xmin = ymin = rmin;
-        } else if (strncmp(arg, "--max=", 6) == 0) {
-            rmax = atof(arg + 6);
-            xmax = ymax = rmax;
-        } else if (strcmp(arg, "--max") == 0 && i + 1 < argc) {
-            rmax = atof(argv[++i]);
-            xmax = ymax = rmax;
+        } else if (strncmp(arg, "-n=", 3) == 0 || strncmp(arg, "--bins=", 7) == 0 || strcmp(arg, "-n") == 0 || strcmp(arg, "--bins") == 0) {
+            const char *val = (arg[1] == 'n' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--bins=", 7) == 0) ? arg + 7 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                nbins = (uint32_t)atoi(val);
+                xbins = ybins = nbins;
+            }
+        } else if (strncmp(arg, "--min=", 6) == 0 || strcmp(arg, "--min") == 0) {
+            const char *val = (strncmp(arg, "--min=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                rmin = atof(val);
+                xmin = ymin = rmin;
+            }
+        } else if (strncmp(arg, "--max=", 6) == 0 || strcmp(arg, "--max") == 0) {
+            const char *val = (strncmp(arg, "--max=", 6) == 0) ? arg + 6 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                rmax = atof(val);
+                xmax = ymax = rmax;
+            }
         } else if (strcmp(arg, "-a") == 0 || strcmp(arg, "--autorange") == 0 || strcmp(arg, "--auto-range") == 0) {
             auto_range = true;
         } else if (strcmp(arg, "--no-autorange") == 0 || strcmp(arg, "--no-auto-range") == 0) {
             auto_range = false;
         } else if (strcmp(arg, "--2d") == 0) {
             is_2d = true;
-        } else if (strncmp(arg, "--xbins=", 8) == 0) {
-            xbins = (uint32_t)atoi(arg + 8);
-        } else if (strncmp(arg, "--ybins=", 8) == 0) {
-            ybins = (uint32_t)atoi(arg + 8);
-        } else if (strncmp(arg, "--xmin=", 7) == 0) {
-            xmin = atof(arg + 7);
-        } else if (strncmp(arg, "--xmax=", 7) == 0) {
-            xmax = atof(arg + 7);
-        } else if (strncmp(arg, "--ymin=", 7) == 0) {
-            ymin = atof(arg + 7);
-        } else if (strncmp(arg, "--ymax=", 7) == 0) {
-            ymax = atof(arg + 7);
+        } else if (strncmp(arg, "--xbins=", 8) == 0 || strcmp(arg, "--xbins") == 0) {
+            const char *val = (strncmp(arg, "--xbins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                xbins = (uint32_t)atoi(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--ybins=", 8) == 0 || strcmp(arg, "--ybins") == 0) {
+            const char *val = (strncmp(arg, "--ybins=", 8) == 0) ? arg + 8 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                ybins = (uint32_t)atoi(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--xmin=", 7) == 0 || strcmp(arg, "--xmin") == 0) {
+            const char *val = (strncmp(arg, "--xmin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                xmin = atof(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--xmax=", 7) == 0 || strcmp(arg, "--xmax") == 0) {
+            const char *val = (strncmp(arg, "--xmax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                xmax = atof(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--ymin=", 7) == 0 || strcmp(arg, "--ymin") == 0) {
+            const char *val = (strncmp(arg, "--ymin=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                ymin = atof(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--ymax=", 7) == 0 || strcmp(arg, "--ymax") == 0) {
+            const char *val = (strncmp(arg, "--ymax=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                ymax = atof(val);
+                is_2d = true;
+            }
         } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--weights") == 0) {
             has_weights = true;
-        } else if (strncmp(arg, "-d=", 3) == 0) {
-            delim = arg[3];
-        } else if (strcmp(arg, "-d") == 0 && i + 1 < argc) {
-            delim = argv[++i][0];
-        } else if (strncmp(arg, "--delimiter=", 12) == 0) {
-            delim = arg[12];
-        } else if (strncmp(arg, "--value-col=", 12) == 0) {
-            val_col = atoi(arg + 12);
-        } else if (strncmp(arg, "--val-col=", 10) == 0) {
-            val_col = atoi(arg + 10);
-        } else if (strncmp(arg, "--xcol=", 7) == 0) {
-            x_col = atoi(arg + 7);
-        } else if (strncmp(arg, "--ycol=", 7) == 0) {
-            y_col = atoi(arg + 7);
-        } else if (strncmp(arg, "--weights-col=", 14) == 0) {
-            w_col = atoi(arg + 14);
-        } else if (strncmp(arg, "-p=", 3) == 0) {
-            palette = histo_palette_from_name(arg + 3);
-        } else if (strcmp(arg, "-p") == 0 && i + 1 < argc) {
-            palette = histo_palette_from_name(argv[++i]);
-        } else if (strncmp(arg, "--palette=", 10) == 0) {
-            palette = histo_palette_from_name(arg + 10);
-        } else if (strncmp(arg, "--colormap=", 11) == 0) {
-            palette = histo_palette_from_name(arg + 11);
+        } else if (strncmp(arg, "-d=", 3) == 0 || strncmp(arg, "--delimiter=", 12) == 0 || strcmp(arg, "-d") == 0 || strcmp(arg, "--delimiter") == 0) {
+            const char *val = (arg[1] == 'd' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--delimiter=", 12) == 0) ? arg + 12 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val && *val) delim = val[0];
+        } else if (strncmp(arg, "--value-col=", 12) == 0 || strcmp(arg, "--value-col") == 0 || strncmp(arg, "--val-col=", 10) == 0 || strcmp(arg, "--val-col") == 0) {
+            const char *val = (strncmp(arg, "--value-col=", 12) == 0) ? arg + 12 :
+                              (strncmp(arg, "--val-col=", 10) == 0) ? arg + 10 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) val_col = atoi(val);
+        } else if (strncmp(arg, "--xcol=", 7) == 0 || strcmp(arg, "--xcol") == 0) {
+            const char *val = (strncmp(arg, "--xcol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                x_col = atoi(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--ycol=", 7) == 0 || strcmp(arg, "--ycol") == 0) {
+            const char *val = (strncmp(arg, "--ycol=", 7) == 0) ? arg + 7 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                y_col = atoi(val);
+                is_2d = true;
+            }
+        } else if (strncmp(arg, "--weights-col=", 14) == 0 || strcmp(arg, "--weights-col") == 0) {
+            const char *val = (strncmp(arg, "--weights-col=", 14) == 0) ? arg + 14 : (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) {
+                w_col = atoi(val);
+                has_weights = true;
+            }
+        } else if (strncmp(arg, "-p=", 3) == 0 || strncmp(arg, "--palette=", 10) == 0 || strncmp(arg, "--colormap=", 11) == 0 ||
+                   strcmp(arg, "-p") == 0 || strcmp(arg, "--palette") == 0 || strcmp(arg, "--colormap") == 0) {
+            const char *val = (arg[1] == 'p' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--palette=", 10) == 0) ? arg + 10 :
+                              (strncmp(arg, "--colormap=", 11) == 0) ? arg + 11 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) palette = histo_palette_from_name(val);
         } else if (strcmp(arg, "-M") == 0 || strcmp(arg, "--mono") == 0) {
             monochrome = true;
         } else if (arg[0] != '-') {

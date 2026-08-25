@@ -414,34 +414,30 @@ int histo_cli_plot(int argc, char **argv, FILE *out, FILE *err) {
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_plot_usage(out);
             return 0;
-        } else if (strncmp(arg, "-W=", 3) == 0) {
-            term_width = atoi(arg + 3);
-        } else if (strcmp(arg, "-W") == 0 && i + 1 < argc) {
-            term_width = atoi(argv[++i]);
-        } else if (strncmp(arg, "--width=", 8) == 0) {
-            term_width = atoi(arg + 8);
-        } else if (strncmp(arg, "-s=", 3) == 0) {
-            style = arg + 3;
-        } else if (strcmp(arg, "-s") == 0 && i + 1 < argc) {
-            style = argv[++i];
-        } else if (strncmp(arg, "--style=", 8) == 0) {
-            style = arg + 8;
+        } else if (strncmp(arg, "-W=", 3) == 0 || strncmp(arg, "--width=", 8) == 0 || strcmp(arg, "-W") == 0 || strcmp(arg, "--width") == 0) {
+            const char *val = (arg[1] == 'W' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--width=", 8) == 0) ? arg + 8 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) term_width = atoi(val);
+        } else if (strncmp(arg, "-s=", 3) == 0 || strncmp(arg, "--style=", 8) == 0 || strcmp(arg, "-s") == 0 || strcmp(arg, "--style") == 0) {
+            const char *val = (arg[1] == 's' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--style=", 8) == 0) ? arg + 8 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) style = val;
         } else if (strcmp(arg, "-S") == 0 || strcmp(arg, "--sparkline") == 0) {
             sparkline = true;
-        } else if (strncmp(arg, "-c=", 3) == 0) {
-            color_mode = arg + 3;
-        } else if (strcmp(arg, "-c") == 0 && i + 1 < argc) {
-            color_mode = argv[++i];
-        } else if (strncmp(arg, "--color=", 8) == 0) {
-            color_mode = arg + 8;
-        } else if (strncmp(arg, "-p=", 3) == 0) {
-            palette = histo_palette_from_name(arg + 3);
-        } else if (strcmp(arg, "-p") == 0 && i + 1 < argc) {
-            palette = histo_palette_from_name(argv[++i]);
-        } else if (strncmp(arg, "--palette=", 10) == 0) {
-            palette = histo_palette_from_name(arg + 10);
-        } else if (strncmp(arg, "--colormap=", 11) == 0) {
-            palette = histo_palette_from_name(arg + 11);
+        } else if (strncmp(arg, "-c=", 3) == 0 || strncmp(arg, "--color=", 8) == 0 || strcmp(arg, "-c") == 0 || strcmp(arg, "--color") == 0) {
+            const char *val = (arg[1] == 'c' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--color=", 8) == 0) ? arg + 8 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) color_mode = val;
+        } else if (strncmp(arg, "-p=", 3) == 0 || strncmp(arg, "--palette=", 10) == 0 || strncmp(arg, "--colormap=", 11) == 0 ||
+                   strcmp(arg, "-p") == 0 || strcmp(arg, "--palette") == 0 || strcmp(arg, "--colormap") == 0) {
+            const char *val = (arg[1] == 'p' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--palette=", 10) == 0) ? arg + 10 :
+                              (strncmp(arg, "--colormap=", 11) == 0) ? arg + 11 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) palette = histo_palette_from_name(val);
         } else if (strcmp(arg, "-l") == 0 || strcmp(arg, "--log") == 0) {
             log_scale = true;
         } else if (strcmp(arg, "-e") == 0 || strcmp(arg, "--errors") == 0) {

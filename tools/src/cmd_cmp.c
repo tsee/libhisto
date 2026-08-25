@@ -33,12 +33,11 @@ int histo_cli_cmp(int argc, char **argv, FILE *out, FILE *err) {
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_cmp_usage(out);
             return 0;
-        } else if (strncmp(arg, "-f=", 3) == 0) {
-            fmt = arg + 3;
-        } else if (strcmp(arg, "-f") == 0 && i + 1 < argc) {
-            fmt = argv[++i];
-        } else if (strncmp(arg, "--format=", 9) == 0) {
-            fmt = arg + 9;
+        } else if (strncmp(arg, "-f=", 3) == 0 || strncmp(arg, "--format=", 9) == 0 || strcmp(arg, "-f") == 0 || strcmp(arg, "--format") == 0) {
+            const char *val = (arg[1] == 'f' && arg[2] == '=') ? arg + 3 :
+                              (strncmp(arg, "--format=", 9) == 0) ? arg + 9 :
+                              (i + 1 < argc) ? argv[++i] : NULL;
+            if (val) fmt = val;
         } else if (arg[0] == '-' && arg[1] != '\0') {
             fprintf(err, "Unknown option '%s'. Run 'histo-cmp --help' for usage.\n", arg);
             return 1;
