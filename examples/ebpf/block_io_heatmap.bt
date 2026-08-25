@@ -13,11 +13,6 @@
  *   sudo bpftrace -q block_io_heatmap.bt | histo plot
  */
 
-BEGIN
-{
-    printf("Tracing block I/O latency and size... Hit Ctrl-C to end.\n");
-}
-
 tracepoint:block:block_rq_issue
 {
     @start[args->dev, args->sector] = nsecs;
