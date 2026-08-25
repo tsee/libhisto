@@ -25,7 +25,7 @@ This document defines the operational workflow, engineering standards, and commu
 - **Atomic Commits**: Make small, self-contained commits focused on a single logical change.
 - **Separate Binding Commits**: When updating language bindings due to core `libhisto` C API changes, **always update and commit the language bindings in separate commits** from the core C library commits (e.g., `feat(core): add XYZ` followed by `feat(bindings/perl): update XS wrapper for XYZ`).
 - **Descriptive Messages**: Write clear, imperative commit messages (e.g., `feat(binning): implement uniform bin lookup with bounds check`).
-- **Zero Broken Commits**: **Every commit containing code changes MUST pass the entire test suite cleanly before committing.** No broken states on any branch.
+- **Zero Broken Commits & Mandatory Monorepo Validation**: **Every commit containing code changes MUST pass the entire monorepo test suite cleanly before committing.** Agents MUST always build and test everything using `make test-all` (which validates the Core C library under ASan/UBSan, TSan, Valgrind memory checking, documentation tests, and all language bindings & distributions: Python, Perl, and Node.js) prior to finalizing commits. No broken states on any branch.
 
 
 
@@ -33,6 +33,10 @@ This document defines the operational workflow, engineering standards, and commu
 
 ## 3. Testing & Verification Standards
 
+- **Target Organization & Structure**:
+  - `make` / `make test`: Builds and tests the Core C library and CLI tools rapidly.
+  - `make bindings` / `make bindings-test`: Idiomatic summary targets to build and test all language bindings (`bindings/python/`, `bindings/perl/`, `bindings/node/`).
+  - `make test-all`: The authoritative monorepo gate executing all unit tests, integration suites, ASan/UBSan, TSan, Valgrind memcheck, hermetic Python/Perl distribution builds, Node.js tests, and Doxygen documentation.
 - **Exhaustive Correctness Testing**: Every feature, error branch, numerical routine, and boundary condition must be covered by thorough, deterministic tests.
 - **Edge-Case Vigilance**: Actively design, identify, and test edge cases at every step of development. This includes:
   - IEEE-754 specials: `NaN` (quiet/signaling), `+Inf`, `-Inf`, `-0.0`, subnormals/denormals, near-overflow extremes ($10^{308}$, $-10^{308}$).

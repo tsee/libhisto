@@ -1,8 +1,18 @@
-.PHONY: all build test test-all test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl test-perl-dist perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-python python-dist test-python-dist test-node build-node test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+.PHONY: all build test test-all test-doc-examples \
+        bindings bindings-test bindings-dist \
+        build-perl-alien build-perl-histo build-perl-pdl build-perl \
+        test-perl-alien test-perl-histo test-perl-pdl test-perl \
+        perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-perl-dist \
+        build-python test-python python-dist test-python-dist \
+        build-node test-node \
+        test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
 
 BUILD_DIR ?= build
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
+# ======================================================================
+# Default Core C Library & CLI Targets
+# ======================================================================
 all: build
 
 build:
@@ -11,7 +21,7 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-pdl test-perl-dist test-python test-python-dist test-node test-fuzz test-tsan memcheck docs
+test-all: test-asan test-doc-examples test-perl test-perl-dist test-python test-python-dist test-node test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
 	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL, PYTHON & NODE BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
@@ -19,23 +29,46 @@ test-all: test-asan test-doc-examples test-perl-alien test-perl-histo test-perl-
 test-doc-examples: build
 	python3 tests/scripts/test_doc_examples.py --source-dir . --build-dir $(BUILD_DIR) -j $(JOBS) --verbose
 
-test-perl-alien:
-	cd bindings/perl/Alien-libhisto && perl Makefile.PL && $(MAKE) test
+# ======================================================================
+# Language Bindings: Summary Targets
+# ======================================================================
+bindings: build-python build-perl build-node
+
+bindings-test: test-python test-perl test-node
+
+bindings-dist: python-dist perl-dist
+
+# ======================================================================
+# Perl Bindings (Alien-libhisto, Math-Histo, Math-Histo-PDL)
+# ======================================================================
+build-perl-alien:
+	cd bindings/perl/Alien-libhisto && perl Makefile.PL && $(MAKE)
+
+test-perl-alien: build-perl-alien
+	cd bindings/perl/Alien-libhisto && $(MAKE) test
 
 perl-alien-dist:
 	cd bindings/perl/Alien-libhisto && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
 
-test-perl-histo: test-perl-alien
-	cd bindings/perl/Math-Histo && perl Makefile.PL && $(MAKE) test
+build-perl-histo: build-perl-alien
+	cd bindings/perl/Math-Histo && perl Makefile.PL && $(MAKE)
+
+test-perl-histo: build-perl-histo
+	cd bindings/perl/Math-Histo && $(MAKE) test
 
 perl-histo-dist:
 	cd bindings/perl/Math-Histo && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
 
-test-perl-pdl: test-perl-histo
-	cd bindings/perl/Math-Histo-PDL && perl Makefile.PL && $(MAKE) test
+build-perl-pdl: build-perl-histo
+	cd bindings/perl/Math-Histo-PDL && perl Makefile.PL && $(MAKE)
+
+test-perl-pdl: build-perl-pdl
+	cd bindings/perl/Math-Histo-PDL && $(MAKE) test
 
 perl-pdl-dist:
 	cd bindings/perl/Math-Histo-PDL && perl Makefile.PL && perl -MExtUtils::Manifest=mkmanifest -e mkmanifest && $(MAKE) dist
+
+build-perl: build-perl-alien build-perl-histo build-perl-pdl
 
 test-perl: test-perl-alien test-perl-histo test-perl-pdl
 
@@ -44,8 +77,14 @@ test-perl-dist:
 
 perl-dist: perl-alien-dist perl-histo-dist perl-pdl-dist
 
-test-python:
-	cd bindings/python && python3 setup.py build_ext --inplace && PYTHONPATH=. python3 -m unittest discover -s tests -v
+# ======================================================================
+# Python Bindings (histo C-extension, UHI, SciPy & Boost converters)
+# ======================================================================
+build-python:
+	cd bindings/python && python3 setup.py build_ext --inplace
+
+test-python: build-python
+	cd bindings/python && PYTHONPATH=. python3 -m unittest discover -s tests -v
 
 python-dist:
 	cd bindings/python && python3 setup.py sdist
@@ -53,6 +92,9 @@ python-dist:
 test-python-dist:
 	python3 tests/scripts/test_python_dist.py
 
+# ======================================================================
+# Node.js / TypeScript Native Addon (N-API)
+# ======================================================================
 build-node:
 	cd bindings/node && node-gyp rebuild
 

@@ -43,20 +43,23 @@ Thank you for your interest in contributing to `libhisto`. This document outline
 
 ## 5. Development Workflow & Verification Gate
 
-Before submitting changes or opening a pull request, ensure the full test gate passes:
+`libhisto` provides granular and summary Makefile targets for core and multi-language development:
 
 ```bash
-# 1. Run local unit tests under AddressSanitizer
-make test-asan
+# 1. Build and test Core C library and CLI tools
+make
+make test        # Runs core C tests under AddressSanitizer & UBSan
 
-# 2. Run documentation code example extraction tests
-make test-doc-examples
+# 2. Build and test all language bindings (Python, Perl, Node.js)
+make bindings
+make bindings-test
 
-# 3. Verify language bindings
+# 3. Run individual language bindings
 make test-python
 make test-perl
+make test-node
 
-# 4. Run the complete pre-release test suite (Sanitizers, TSan, Valgrind, Docs)
+# 4. Run the complete monorepo pre-release test suite (Sanitizers, TSan, Valgrind, Distributions, Docs)
 make test-all
 ```
 

@@ -47,35 +47,41 @@ if(Python3_FOUND)
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         COMMENT "Testing inline documentation code examples and CLI pipelines"
     )
-    add_test(
-        NAME test_python
-        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s ${PROJECT_SOURCE_DIR}/bindings/python/tests -v
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/bindings/python
-    )
-    set_tests_properties(test_python PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_SOURCE_DIR}/bindings/python")
-
-    add_test(
-        NAME test_python_dist
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_python_dist.py
-    )
-    add_custom_target(test_python_dist
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_python_dist.py
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        COMMENT "Testing standalone Python distribution tarball building and installation"
-    )
 endif()
 
-find_package(Perl)
-if(PERL_FOUND)
-    add_test(
-        NAME test_perl_dist
-        COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_perl_dist.pl
-    )
-    add_custom_target(test_perl_dist
-        COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_perl_dist.pl
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        COMMENT "Testing standalone Perl CPAN distribution tarball building and installation"
-    )
+# Language binding tests in CTest (disabled by default in standard core CMake/CTest)
+if(LIBHISTO_ENABLE_BINDINGS_TESTS)
+    if(Python3_FOUND)
+        add_test(
+            NAME test_python
+            COMMAND ${Python3_EXECUTABLE} -m unittest discover -s ${PROJECT_SOURCE_DIR}/bindings/python/tests -v
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/bindings/python
+        )
+        set_tests_properties(test_python PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_SOURCE_DIR}/bindings/python")
+
+        add_test(
+            NAME test_python_dist
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_python_dist.py
+        )
+        add_custom_target(test_python_dist
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_python_dist.py
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            COMMENT "Testing standalone Python distribution tarball building and installation"
+        )
+    endif()
+
+    find_package(Perl)
+    if(PERL_FOUND)
+        add_test(
+            NAME test_perl_dist
+            COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_perl_dist.pl
+        )
+        add_custom_target(test_perl_dist
+            COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_perl_dist.pl
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            COMMENT "Testing standalone Perl CPAN distribution tarball building and installation"
+        )
+    endif()
 endif()
 
 
