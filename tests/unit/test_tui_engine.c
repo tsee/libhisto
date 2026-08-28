@@ -895,6 +895,48 @@ void test_tui_engine_stress_concurrent_ops(void) {
     fclose(in_fp);
 }
 
+void test_tui_engine_binary_streaming(void) {
+    int fds[2];
+    TEST_ASSERT_EQUAL(0, pipe(fds));
+
+    FILE *in_fp = fdopen(fds[0], "rb");
+    TEST_ASSERT_NOT_NULL(in_fp);
+
+    tui_engine_t eng;
+    TEST_ASSERT_TRUE(tui_engine_init(&eng, in_fp, false, 20, 0.0, 110.0, HISTO_FLAG_TRACK_SUMW2, false));
+    tui_engine_set_binary(&eng, true);
+    TEST_ASSERT_TRUE(tui_engine_start(&eng));
+
+    /* Write 100 binary doubles */
+    double raw_data[100];
+    for (int i = 0; i < 100; ++i) {
+        raw_data[i] = (double)(i + 1);
+    }
+    ssize_t written = write(fds[1], raw_data, sizeof(raw_data));
+    TEST_ASSERT_EQUAL((ssize_t)sizeof(raw_data), written);
+    close(fds[1]);
+
+    int timeout_ms = 1000;
+    while (!tui_engine_is_finished(&eng) && timeout_ms > 0) {
+        usleep(10000);
+        timeout_ms -= 10;
+    }
+    usleep(50000);
+
+    histo_t *snap = tui_engine_get_snapshot_1d(&eng);
+    TEST_ASSERT_NOT_NULL(snap);
+    TEST_ASSERT_EQUAL_UINT64(100, histo_num_entries(snap));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 100.0, histo_total_weight(snap));
+
+    double mean = 0.0;
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_mean(snap, &mean));
+    TEST_ASSERT_DOUBLE_WITHIN(0.5, 50.5, mean);
+    histo_destroy(snap);
+
+    tui_engine_free(&eng);
+    fclose(in_fp);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
@@ -902,6 +944,7 @@ int main(void) {
     RUN_TEST(test_tui_visual_width);
     RUN_TEST(test_tui_render_row_geometry);
     RUN_TEST(test_tui_engine_streaming_and_snapshot);
+    RUN_TEST(test_tui_engine_binary_streaming);
     RUN_TEST(test_tui_engine_autorange_p1_p99);
     RUN_TEST(test_tui_engine_weights);
     RUN_TEST(test_tui_engine_zoom_pan_1d);

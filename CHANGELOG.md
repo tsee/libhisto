@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **High-Speed Memory-Mapped Shared Memory Ingestion** (`histo top --shm=<path>`, `tools/include/tui_shm.h`):
   - Implemented lockless binary ring buffer shared memory ingestion protocol capable of processing >50,000,000 events/second.
   - Fully cross-platform implementation with POSIX `shm_open`/`mmap` and Windows `CreateFileMapping`/`MapViewOfFile`.
+- **Raw Binary Stream Ingestion in `histo top`** (`--binary-f64` / `--binary`):
+  - Added `--binary-f64` (alias `--binary`) to `histo top` for high-throughput raw Little-Endian IEEE-754 binary double streaming from standard input or files (>50M events/sec).
+  - Fully supports both 1D and 2D bivariate live modes with `-w` sample weights.
 - **Production eBPF Tracing Recipes** (`examples/ebpf/`):
   - Added production-ready scripts: `vfs_read_latency.bt` (filesystem latency), `block_io_heatmap.bt` (2D block size vs latency), `tcp_rtt.bt` (TCP RTT latency), `runqlat.bt` (CPU scheduler latency), `page_faults.bt` (page fault latency).
   - Added `examples/ebpf/README.md` with least-privilege capability setup (`CAP_BPF`, `CAP_PERFMON`).

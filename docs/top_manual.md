@@ -57,6 +57,7 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 | `--window=<N>` | `--reservoir=<N>` | Rolling window size (retain last N samples in reservoir cache) | All (`0`) |
 | `--decay=<LAMBDA>` | | Exponential decay rate per second (e.g. `0.05`) | `0.0` (off) |
 | `--scale-input=<FACTOR>` | `-S <FACTOR>` | Multiply incoming measurements by scale factor (e.g. `1e-3` for ns->us) | `1.0` |
+| `--binary-f64` | `--binary` | Ingest raw Little-Endian IEEE-754 double binary stream (`stdin`/file) | Disabled (ASCII) |
 | `--shm=<PATH>` | | Attach to POSIX/Win32 shared memory binary ring buffer (e.g. `/histo_shm`) | `NULL` |
 | `--min=<X>` | | Initial lower range boundary (1D) | `0.0` |
 | `--max=<X>` | | Initial upper range boundary (1D) | `100.0` |
@@ -81,6 +82,13 @@ If `FILE` is omitted or `-`, `histo top` reads from `stdin`.
 
 ### 2.3 Ready-to-Run Quickstart Examples
 
+#### Ultra-Fast Binary Streaming with Perl `pack` (>50M events/sec)
+```bash
+# Streams 4096 raw binary doubles per batch directly into SIMD ingestion
+perl -e 'while(1) { syswrite(STDOUT, pack("d4096", map rand(), 1..4096)) }' | \
+  histo top --binary-f64 --min 0 --max 1 --bins 50 --palette magma
+```
+
 #### Linux eBPF Kernel Tracing with bpftrace & Stream Pre-Scaling
 ```bash
 # Trace filesystem VFS read latency and scale nanoseconds to microseconds live
@@ -90,7 +98,7 @@ sudo bpftrace -q examples/ebpf/vfs_read_latency.bt | histo top --scale-input 1e-
 sudo bpftrace -q examples/ebpf/block_io_heatmap.bt | histo top --2d
 ```
 
-#### High-Throughput Shared Memory Ring Buffer Ingestion (>50M events/sec)
+#### High-Throughput Shared Memory Ring Buffer Ingestion (>100M events/sec)
 ```bash
 # Attach to shared memory ring buffer producer
 histo top --shm=/histo_shm --scale-input 0.001

@@ -752,6 +752,7 @@ int cmd_top_main(int argc, char **argv) {
     bool compact_header = false;
     bool monochrome = false;
     bool has_weights = false;
+    bool binary_input = false;
     char delim = ' ';
     int val_col = 1, x_col = 1, y_col = 2, w_col = 2;
     const char *palette_name = NULL;
@@ -764,6 +765,8 @@ int cmd_top_main(int argc, char **argv) {
     const cli_opt_spec_t specs[] = {
         {'n', "bins", NULL, CLI_OPT_TYPE_UINT32, &nbins, NULL, 0, "N",
          "Number of uniform bins (default: 50)", "50"},
+        {0, "binary-f64", "binary", CLI_OPT_TYPE_BOOL, &binary_input, NULL, CLI_OPT_FLAG_SET_TRUE, NULL,
+         "Read raw Little-Endian double binary stream (stdin/file)", NULL},
         {'S', "scale-input", NULL, CLI_OPT_TYPE_DOUBLE, &scale_input, NULL, 0, "FACTOR",
          "Multiply incoming measurements by scale factor (e.g. 1e-3 for ns->us)", "1.0"},
         {0, "shm", NULL, CLI_OPT_TYPE_STRING, &shm_path, NULL, 0, "PATH",
@@ -894,6 +897,7 @@ int cmd_top_main(int argc, char **argv) {
     }
 
     tui_engine_set_scale_input(&eng, scale_input);
+    tui_engine_set_binary(&eng, binary_input);
 
     eng.auto_range = auto_range;
     eng.auto_range_threshold = auto_range_threshold;

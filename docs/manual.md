@@ -546,6 +546,9 @@ python3 -u -c "import random, time; [print(f'{random.gauss(50, 10):.2f}', flush=
 # Real-time 2D bivariate heatmap monitor
 python3 -u -c "import random, time; [print(f'{random.gauss(50, 10):.2f} {random.gauss(50, 10):.2f}', flush=True) or time.sleep(0.001) for _ in range(50000)]" | histo top --2d
 
+# Ultra-fast raw binary IEEE-754 double streaming (>50M events/sec)
+perl -e 'while(1) { syswrite(STDOUT, pack("d4096", map rand(), 1..4096)) }' | histo top --binary-f64 --min 0 --max 1 --bins 50
+
 # Live Linux kernel VFS latency monitor via eBPF / bpftrace (see top_manual.md for security details)
 sudo bpftrace -e 'kprobe:vfs_read { @s[tid]=nsecs; } kretprobe:vfs_read /@s[tid]/ { printf("%d\n", (nsecs-@s[tid])/1000); delete(@s[tid]); }' | histo top --bins 50 --autorange
 ```

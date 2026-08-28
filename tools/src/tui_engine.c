@@ -426,82 +426,171 @@ static void *ingest_worker_thread(void *arg) {
     uint64_t last_calc_samples = 0;
 
     while (is_engine_running(eng)) {
-        if (!fgets(line, sizeof(line), eng->in_stream)) {
-            histo_mutex_lock(&eng->mutex);
-            if (batch_len > 0) {
-                int val_col = eng->val_col;
-                int x_col = eng->x_col;
-                int y_col = eng->y_col;
-                int w_col = eng->w_col;
-                bool is_2d = eng->is_2d;
-                bool has_w = eng->has_weights;
+        if (eng->is_binary) {
+            size_t n_vals_per_sample = eng->is_2d ? (eng->has_weights ? 3 : 2) : (eng->has_weights ? 2 : 1);
+            double raw_buf[64 * 3];
+            size_t n_req = batch_max - batch_len;
+            if (n_req == 0) n_req = batch_max;
+            if (n_req > 64) n_req = 64;
 
-                for (size_t i = 0; i < batch_len; ++i) {
-                    size_t nc = batch_ncols[i];
-                    int v_idx = (val_col >= 1 && val_col <= (int)nc) ? val_col - 1 : 0;
-                    int x_idx = (x_col >= 1 && x_col <= (int)nc) ? x_col - 1 : 0;
-                    int y_idx = (y_col >= 1 && y_col <= (int)nc) ? y_col - 1 : (nc > 1 ? 1 : 0);
-                    int w_idx = (w_col >= 1 && w_col <= (int)nc) ? w_col - 1 : -1;
+            size_t n_read = fread(raw_buf, sizeof(double) * n_vals_per_sample, n_req, eng->in_stream);
+            if (n_read == 0) {
+                if (feof(eng->in_stream)) {
+                    histo_mutex_lock(&eng->mutex);
+                    if (batch_len > 0) {
+                        int val_col = eng->val_col;
+                        int x_col = eng->x_col;
+                        int y_col = eng->y_col;
+                        int w_col = eng->w_col;
+                        bool is_2d = eng->is_2d;
+                        bool has_w = eng->has_weights;
 
-                    batch_w[i] = (w_idx >= 0) ? batch_cols[i][w_idx] : 1.0;
-                    if (is_2d) {
-                        batch_x[i] = batch_cols[i][x_idx];
-                        batch_y[i] = batch_cols[i][y_idx];
+                        for (size_t i = 0; i < batch_len; ++i) {
+                            size_t nc = batch_ncols[i];
+                            int v_idx = (val_col >= 1 && val_col <= (int)nc) ? val_col - 1 : 0;
+                            int x_idx = (x_col >= 1 && x_col <= (int)nc) ? x_col - 1 : 0;
+                            int y_idx = (y_col >= 1 && y_col <= (int)nc) ? y_col - 1 : (nc > 1 ? 1 : 0);
+                            int w_idx = (w_col >= 1 && w_col <= (int)nc) ? w_col - 1 : -1;
+
+                            batch_w[i] = (w_idx >= 0) ? batch_cols[i][w_idx] : 1.0;
+                            if (is_2d) {
+                                batch_x[i] = batch_cols[i][x_idx];
+                                batch_y[i] = batch_cols[i][y_idx];
+                            } else {
+                                batch_x[i] = batch_cols[i][v_idx];
+                                batch_y[i] = 0.0;
+                            }
+                        }
+
+                        if (is_2d && eng->live_2d) {
+                            for (size_t i = 0; i < batch_len; ++i) {
+                                histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
+                            }
+                        } else if (eng->live_1d) {
+                            if (has_w) {
+                                histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
+                            } else {
+                                histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
+                            }
+                        }
+                        for (size_t i = 0; i < batch_len; ++i) {
+                            reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
+                        }
+                        eng->total_samples += batch_len;
+                        batch_len = 0;
+                    }
+                    eng->finished_reading = true;
+                    histo_mutex_unlock(&eng->mutex);
+                    usleep(20000);
+                    continue;
+                }
+                usleep(500);
+            } else {
+                double scale = (eng->scale_input > 0.0) ? eng->scale_input : 1.0;
+                for (size_t i = 0; i < n_read; ++i) {
+                    size_t offset = i * n_vals_per_sample;
+                    if (eng->is_2d) {
+                        batch_cols[batch_len][0] = raw_buf[offset] * scale;
+                        batch_cols[batch_len][1] = raw_buf[offset + 1] * scale;
+                        if (eng->has_weights) {
+                            batch_cols[batch_len][2] = raw_buf[offset + 2];
+                            batch_ncols[batch_len] = 3;
+                        } else {
+                            batch_ncols[batch_len] = 2;
+                        }
                     } else {
-                        batch_x[i] = batch_cols[i][v_idx];
-                        batch_y[i] = 0.0;
+                        batch_cols[batch_len][0] = raw_buf[offset] * scale;
+                        if (eng->has_weights) {
+                            batch_cols[batch_len][1] = raw_buf[offset + 1];
+                            batch_ncols[batch_len] = 2;
+                        } else {
+                            batch_ncols[batch_len] = 1;
+                        }
                     }
-                }
-
-                if (is_2d && eng->live_2d) {
-                    for (size_t i = 0; i < batch_len; ++i) {
-                        histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
+                    for (size_t c = batch_ncols[batch_len]; c < TUI_MAX_COLS; ++c) {
+                        batch_cols[batch_len][c] = 0.0;
                     }
-                } else if (eng->live_1d) {
-                    if (has_w) {
-                        histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
-                    } else {
-                        histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
-                    }
+                    batch_len++;
                 }
-                for (size_t i = 0; i < batch_len; ++i) {
-                    reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
-                }
-                eng->total_samples += batch_len;
-                batch_len = 0;
             }
-            eng->finished_reading = true;
-            histo_mutex_unlock(&eng->mutex);
-            usleep(20000);
-            continue;
+        } else {
+            if (!fgets(line, sizeof(line), eng->in_stream)) {
+                histo_mutex_lock(&eng->mutex);
+                if (batch_len > 0) {
+                    int val_col = eng->val_col;
+                    int x_col = eng->x_col;
+                    int y_col = eng->y_col;
+                    int w_col = eng->w_col;
+                    bool is_2d = eng->is_2d;
+                    bool has_w = eng->has_weights;
+
+                    for (size_t i = 0; i < batch_len; ++i) {
+                        size_t nc = batch_ncols[i];
+                        int v_idx = (val_col >= 1 && val_col <= (int)nc) ? val_col - 1 : 0;
+                        int x_idx = (x_col >= 1 && x_col <= (int)nc) ? x_col - 1 : 0;
+                        int y_idx = (y_col >= 1 && y_col <= (int)nc) ? y_col - 1 : (nc > 1 ? 1 : 0);
+                        int w_idx = (w_col >= 1 && w_col <= (int)nc) ? w_col - 1 : -1;
+
+                        batch_w[i] = (w_idx >= 0) ? batch_cols[i][w_idx] : 1.0;
+                        if (is_2d) {
+                            batch_x[i] = batch_cols[i][x_idx];
+                            batch_y[i] = batch_cols[i][y_idx];
+                        } else {
+                            batch_x[i] = batch_cols[i][v_idx];
+                            batch_y[i] = 0.0;
+                        }
+                    }
+
+                    if (is_2d && eng->live_2d) {
+                        for (size_t i = 0; i < batch_len; ++i) {
+                            histo2d_fill_w(eng->live_2d, batch_x[i], batch_y[i], batch_w[i]);
+                        }
+                    } else if (eng->live_1d) {
+                        if (has_w) {
+                            histo_fill_n(eng->live_1d, batch_len, batch_x, batch_w);
+                        } else {
+                            histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
+                        }
+                    }
+                    for (size_t i = 0; i < batch_len; ++i) {
+                        reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
+                    }
+                    eng->total_samples += batch_len;
+                    batch_len = 0;
+                }
+                eng->finished_reading = true;
+                histo_mutex_unlock(&eng->mutex);
+                usleep(20000);
+                continue;
+            }
+
+            char *p = line;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == '\0' || *p == '#') continue;
+
+            double parsed_cols[TUI_MAX_COLS];
+            size_t n_cols = 0;
+            char *cur = p;
+            double scale = (eng->scale_input > 0.0) ? eng->scale_input : 1.0;
+
+            while (*cur && n_cols < TUI_MAX_COLS) {
+                while (*cur && (isspace((unsigned char)*cur) || *cur == ',' || *cur == '\t' || *cur == ';')) cur++;
+                if (*cur == '\0' || *cur == '#') break;
+                char *endp = NULL;
+                double v = strtod(cur, &endp);
+                if (endp == cur) break;
+                parsed_cols[n_cols++] = v * scale;
+                cur = endp;
+            }
+
+            if (n_cols == 0) continue;
+
+            for (size_t c = 0; c < TUI_MAX_COLS; ++c) {
+                batch_cols[batch_len][c] = (c < n_cols) ? parsed_cols[c] : 0.0;
+            }
+            batch_ncols[batch_len] = n_cols;
+            batch_len++;
         }
-
-        char *p = line;
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (*p == '\0' || *p == '#') continue;
-
-        double parsed_cols[TUI_MAX_COLS];
-        size_t n_cols = 0;
-        char *cur = p;
-        double scale = (eng->scale_input > 0.0) ? eng->scale_input : 1.0;
-
-        while (*cur && n_cols < TUI_MAX_COLS) {
-            while (*cur && (isspace((unsigned char)*cur) || *cur == ',' || *cur == '\t' || *cur == ';')) cur++;
-            if (*cur == '\0' || *cur == '#') break;
-            char *endp = NULL;
-            double v = strtod(cur, &endp);
-            if (endp == cur) break;
-            parsed_cols[n_cols++] = v * scale;
-            cur = endp;
-        }
-
-        if (n_cols == 0) continue;
-
-        for (size_t c = 0; c < TUI_MAX_COLS; ++c) {
-            batch_cols[batch_len][c] = (c < n_cols) ? parsed_cols[c] : 0.0;
-        }
-        batch_ncols[batch_len] = n_cols;
-        batch_len++;
 
         double now = get_time_now_sec();
         if (batch_len >= batch_max || (batch_len > 0 && now - last_flush_time >= 0.05)) {
@@ -712,27 +801,45 @@ void tui_engine_set_scale_input(tui_engine_t *eng, double scale_input) {
     histo_mutex_unlock(&eng->mutex);
 }
 
+void tui_engine_set_binary(tui_engine_t *eng, bool is_binary) {
+    if (!eng) return;
+    histo_mutex_lock(&eng->mutex);
+    eng->is_binary = is_binary;
+    histo_mutex_unlock(&eng->mutex);
+}
+
 bool tui_engine_start(tui_engine_t *eng) {
     if (!eng) return false;
+    histo_mutex_lock(&eng->mutex);
+    if (eng->thread_started) {
+        histo_mutex_unlock(&eng->mutex);
+        return true;
+    }
     eng->running = true;
     eng->last_time_sec = get_time_now_sec();
     if (histo_thread_create(&eng->thread, ingest_worker_thread, eng) != 0) {
         eng->running = false;
+        histo_mutex_unlock(&eng->mutex);
         return false;
     }
+    eng->thread_started = true;
+    histo_mutex_unlock(&eng->mutex);
     return true;
 }
 
 void tui_engine_stop(tui_engine_t *eng) {
     if (!eng) return;
     histo_mutex_lock(&eng->mutex);
-    if (!eng->running) {
+    if (!eng->thread_started) {
+        eng->running = false;
         histo_mutex_unlock(&eng->mutex);
         return;
     }
     eng->running = false;
+    eng->thread_started = false;
+    histo_thread_t th = eng->thread;
     histo_mutex_unlock(&eng->mutex);
-    histo_thread_join(eng->thread);
+    histo_thread_join(th);
 }
 
 void tui_engine_free(tui_engine_t *eng) {
