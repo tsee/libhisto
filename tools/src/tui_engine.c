@@ -265,18 +265,48 @@ static void reservoir_push(tui_reservoir_t *r, const double *cols, size_t num_co
     if (num_cols > TUI_MAX_COLS) num_cols = TUI_MAX_COLS;
     if (num_cols > r->num_cols) r->num_cols = num_cols;
 
+    size_t idx;
     if (r->count < r->cap) {
-        for (size_t c = 0; c < TUI_MAX_COLS; ++c) {
-            r->col_data[c][r->count] = (c < num_cols) ? cols[c] : 0.0;
-        }
-        if (r->weights) r->weights[r->count] = w;
-        r->count++;
+        idx = r->count++;
     } else {
-        for (size_t c = 0; c < TUI_MAX_COLS; ++c) {
-            r->col_data[c][r->head] = (c < num_cols) ? cols[c] : 0.0;
+        idx = r->head;
+        r->head = (r->head + 1 < r->cap) ? r->head + 1 : 0;
+    }
+
+    for (size_t c = 0; c < num_cols; ++c) {
+        r->col_data[c][idx] = cols[c];
+    }
+    for (size_t c = num_cols; c < r->num_cols; ++c) {
+        r->col_data[c][idx] = 0.0;
+    }
+    if (r->weights) r->weights[idx] = w;
+}
+
+static void reservoir_push_batch(tui_reservoir_t *r, const double bcols[][TUI_MAX_COLS], const size_t *ncols, const double *weights, size_t n) {
+    if (!r || !r->col_data[0] || n == 0) return;
+
+    for (size_t i = 0; i < n; ++i) {
+        size_t nc = ncols ? ncols[i] : 1;
+        if (nc > TUI_MAX_COLS) nc = TUI_MAX_COLS;
+        if (nc > r->num_cols) r->num_cols = nc;
+
+        size_t idx;
+        if (r->count < r->cap) {
+            idx = r->count++;
+        } else {
+            idx = r->head;
+            r->head = (r->head + 1 < r->cap) ? r->head + 1 : 0;
         }
-        if (r->weights) r->weights[r->head] = w;
-        r->head = (r->head + 1) % r->cap;
+
+        for (size_t c = 0; c < nc; ++c) {
+            r->col_data[c][idx] = bcols[i][c];
+        }
+        for (size_t c = nc; c < r->num_cols; ++c) {
+            r->col_data[c][idx] = 0.0;
+        }
+        if (r->weights) {
+            r->weights[idx] = weights ? weights[i] : 1.0;
+        }
     }
 }
 
@@ -307,8 +337,8 @@ static size_t get_reservoir_window(tui_engine_t *eng, double *out_x, double *out
     size_t win = (eng->window_size > 0 && eng->window_size < total) ? eng->window_size : total;
     size_t start_offset = total - win;
 
-    int cx = (col_x >= 1 && col_x <= TUI_MAX_COLS) ? col_x - 1 : 0;
-    int cy = (col_y >= 1 && col_y <= TUI_MAX_COLS) ? col_y - 1 : 1;
+    int cx = (col_x >= 1 && col_x <= (int)eng->reservoir.num_cols) ? col_x - 1 : 0;
+    int cy = (col_y >= 1 && col_y <= (int)eng->reservoir.num_cols) ? col_y - 1 : (eng->reservoir.num_cols > 1 ? 1 : 0);
 
     for (size_t i = 0; i < win; ++i) {
         size_t idx = (eng->reservoir.count < eng->reservoir.cap) ?
@@ -413,13 +443,24 @@ static void *ingest_worker_thread(void *arg) {
     if (!eng->in_stream) return NULL;
 
     char line[4096];
-    const size_t batch_max = 64;
-    double batch_x[64];
-    double batch_y[64];
-    double batch_w[64];
-    double batch_cols[64][TUI_MAX_COLS];
-    size_t batch_ncols[64];
+    const size_t batch_max = 4096;
+    double *batch_x = (double *)malloc(batch_max * sizeof(double));
+    double *batch_y = (double *)malloc(batch_max * sizeof(double));
+    double *batch_w = (double *)malloc(batch_max * sizeof(double));
+    double (*batch_cols)[TUI_MAX_COLS] = (double (*)[TUI_MAX_COLS])malloc(batch_max * sizeof(*batch_cols));
+    size_t *batch_ncols = (size_t *)malloc(batch_max * sizeof(size_t));
+    double *raw_buf = (double *)malloc(batch_max * 3 * sizeof(double));
     size_t batch_len = 0;
+
+    if (!batch_x || !batch_y || !batch_w || !batch_cols || !batch_ncols || !raw_buf) {
+        if (batch_x) free(batch_x);
+        if (batch_y) free(batch_y);
+        if (batch_w) free(batch_w);
+        if (batch_cols) free(batch_cols);
+        if (batch_ncols) free(batch_ncols);
+        if (raw_buf) free(raw_buf);
+        return NULL;
+    }
 
     double last_calc_time = get_time_now_sec();
     double last_flush_time = last_calc_time;
@@ -428,10 +469,8 @@ static void *ingest_worker_thread(void *arg) {
     while (is_engine_running(eng)) {
         if (eng->is_binary) {
             size_t n_vals_per_sample = eng->is_2d ? (eng->has_weights ? 3 : 2) : (eng->has_weights ? 2 : 1);
-            double raw_buf[64 * 3];
             size_t n_req = batch_max - batch_len;
             if (n_req == 0) n_req = batch_max;
-            if (n_req > 64) n_req = 64;
 
             size_t n_read = fread(raw_buf, sizeof(double) * n_vals_per_sample, n_req, eng->in_stream);
             if (n_read == 0) {
@@ -473,9 +512,7 @@ static void *ingest_worker_thread(void *arg) {
                                 histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
                             }
                         }
-                        for (size_t i = 0; i < batch_len; ++i) {
-                            reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
-                        }
+                        reservoir_push_batch(&eng->reservoir, (const double (*)[TUI_MAX_COLS])batch_cols, batch_ncols, batch_w, batch_len);
                         eng->total_samples += batch_len;
                         batch_len = 0;
                     }
@@ -552,9 +589,7 @@ static void *ingest_worker_thread(void *arg) {
                             histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
                         }
                     }
-                    for (size_t i = 0; i < batch_len; ++i) {
-                        reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
-                    }
+                    reservoir_push_batch(&eng->reservoir, (const double (*)[TUI_MAX_COLS])batch_cols, batch_ncols, batch_w, batch_len);
                     eng->total_samples += batch_len;
                     batch_len = 0;
                 }
@@ -586,7 +621,7 @@ static void *ingest_worker_thread(void *arg) {
             if (n_cols == 0) continue;
 
             for (size_t c = 0; c < TUI_MAX_COLS; ++c) {
-                batch_cols[batch_len][c] = (c < n_cols) ? parsed_cols[c] : 0.0;
+                batch_cols[batch_len][c] = (c < n_cols) ? parsed_cols[c] : (n_cols > 0 ? parsed_cols[0] : 0.0);
             }
             batch_ncols[batch_len] = n_cols;
             batch_len++;
@@ -641,9 +676,7 @@ static void *ingest_worker_thread(void *arg) {
                     histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
                 }
             }
-            for (size_t i = 0; i < batch_len; ++i) {
-                reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
-            }
+            reservoir_push_batch(&eng->reservoir, (const double (*)[TUI_MAX_COLS])batch_cols, batch_ncols, batch_w, batch_len);
             eng->total_samples += batch_len;
             histo_mutex_unlock(&eng->mutex);
             batch_len = 0;
@@ -697,14 +730,18 @@ static void *ingest_worker_thread(void *arg) {
                 histo_fill_n(eng->live_1d, batch_len, batch_x, NULL);
             }
         }
-        for (size_t i = 0; i < batch_len; ++i) {
-            reservoir_push(&eng->reservoir, batch_cols[i], batch_ncols[i], batch_w[i]);
-        }
+        reservoir_push_batch(&eng->reservoir, (const double (*)[TUI_MAX_COLS])batch_cols, batch_ncols, batch_w, batch_len);
         eng->total_samples += batch_len;
         histo_mutex_unlock(&eng->mutex);
         batch_len = 0;
     }
 
+    free(batch_x);
+    free(batch_y);
+    free(batch_w);
+    free(batch_cols);
+    free(batch_ncols);
+    free(raw_buf);
     return NULL;
 }
 
