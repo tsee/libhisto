@@ -4,6 +4,9 @@ Revision history for Perl extension Math::Histo::PDL.
         - Synchronize version and dependencies with Math::Histo 0.3.0 and libhisto 0.3.0.
         - Support weighted 1D/2D piddle ingestion and coordinate conversions with improved performance.
 
+0.2.1   2026-08-25
+        - Fix test assertions on long double and quadmath Perl builds using Test2 within() floating-point tolerance.
+
 0.2.0   2026-08-21
         - Initial release of Math::Histo::PDL distribution.
         - Zero-copy 1D and 2D piddle ingestion via get_dataref into libhisto fill_packed_f64.
