@@ -10,6 +10,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
+
+#if defined(_WIN32)
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {

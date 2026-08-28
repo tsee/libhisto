@@ -4,8 +4,20 @@
 
 #include "simd.h"
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 bool histo_simd_has_avx2(void) {
-#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#if (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86))
+#if defined(_MSC_VER)
+    int cpu_info[4] = {0};
+    __cpuid(cpu_info, 0);
+    int nIds = cpu_info[0];
+    if (nIds < 7) return false;
+    __cpuidex(cpu_info, 7, 0);
+    return (cpu_info[1] & (1 << 5)) != 0; /* AVX2 bit in EBX */
+#elif defined(__GNUC__) || defined(__clang__)
 #if defined(__has_builtin)
 #if __has_builtin(__builtin_cpu_supports)
     __builtin_cpu_init();
@@ -16,6 +28,9 @@ bool histo_simd_has_avx2(void) {
 #else
     __builtin_cpu_init();
     return __builtin_cpu_supports("avx2");
+#endif
+#else
+    return false;
 #endif
 #else
     return false;
@@ -23,7 +38,15 @@ bool histo_simd_has_avx2(void) {
 }
 
 bool histo_simd_has_avx512(void) {
-#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#if (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86))
+#if defined(_MSC_VER)
+    int cpu_info[4] = {0};
+    __cpuid(cpu_info, 0);
+    int nIds = cpu_info[0];
+    if (nIds < 7) return false;
+    __cpuidex(cpu_info, 7, 0);
+    return (cpu_info[1] & (1 << 16)) != 0; /* AVX512F bit in EBX */
+#elif defined(__GNUC__) || defined(__clang__)
 #if defined(__has_builtin)
 #if __has_builtin(__builtin_cpu_supports)
     __builtin_cpu_init();
@@ -34,6 +57,9 @@ bool histo_simd_has_avx512(void) {
 #else
     __builtin_cpu_init();
     return __builtin_cpu_supports("avx512f");
+#endif
+#else
+    return false;
 #endif
 #else
     return false;

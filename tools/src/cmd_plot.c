@@ -9,7 +9,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
-#include <unistd.h>
 #include <ctype.h>
 
 

@@ -15,12 +15,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if !defined(_WIN32)
 #include <strings.h>
+#include <unistd.h>
+#include <fcntl.h>
+#endif
 #include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 typedef enum {
     VIEW_1D_BARS = 0,

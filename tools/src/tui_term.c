@@ -13,15 +13,30 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <ctype.h>
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#include <conio.h>
+#ifndef STDIN_FILENO
+#define STDIN_FILENO 0
+#endif
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO 1
+#endif
+#ifndef isatty
+#define isatty _isatty
+#endif
+#else
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <poll.h>
-
-#if !defined(_WIN32)
 #include <termios.h>
 #include <fcntl.h>
+#endif
 
+#if !defined(_WIN32)
 static struct termios orig_termios;
 static bool term_is_raw = false;
 static volatile sig_atomic_t g_resized = 0;
@@ -38,10 +53,8 @@ static void sigint_handler(int sig) {
     tui_term_restore();
     _exit(0);
 }
-#endif
 
 int tui_term_get_tty_fd(void) {
-#if !defined(_WIN32)
     if (g_tty_fd >= 0) return g_tty_fd;
     if (isatty(STDIN_FILENO)) {
         g_tty_fd = STDIN_FILENO;
@@ -54,13 +67,9 @@ int tui_term_get_tty_fd(void) {
         }
     }
     return g_tty_fd;
-#else
-    return 0;
-#endif
 }
 
 bool tui_term_init(void) {
-#if !defined(_WIN32)
     int fd = tui_term_get_tty_fd();
     if (fd < 0) {
         return false;
@@ -75,12 +84,10 @@ bool tui_term_init(void) {
     sa_int.sa_handler = sigint_handler;
     sigaction(SIGINT, &sa_int, NULL);
     sigaction(SIGTERM, &sa_int, NULL);
-#endif
     return true;
 }
 
 bool tui_term_raw_enter(void) {
-#if !defined(_WIN32)
     if (term_is_raw) return true;
     int fd = tui_term_get_tty_fd();
     if (fd < 0) return false;
@@ -105,12 +112,10 @@ bool tui_term_raw_enter(void) {
     /* Enter alternate screen, hide cursor, and enable SGR 1006 mouse tracking */
     printf("\033[?1049h\033[?25l\033[?1000h\033[?1006h");
     fflush(stdout);
-#endif
     return true;
 }
 
 void tui_term_raw_leave(void) {
-#if !defined(_WIN32)
     if (!term_is_raw) return;
     int fd = tui_term_get_tty_fd();
     if (fd >= 0) {
@@ -120,23 +125,19 @@ void tui_term_raw_leave(void) {
     printf("\033[?1006l\033[?1000l\033[?25h\033[?1049l");
     fflush(stdout);
     term_is_raw = false;
-#endif
 }
 
 void tui_term_restore(void) {
-#if !defined(_WIN32)
     tui_term_raw_leave();
     if (g_tty_is_dev_tty && g_tty_fd >= 0) {
         close(g_tty_fd);
         g_tty_fd = -1;
         g_tty_is_dev_tty = false;
     }
-#endif
 }
 
 void tui_term_get_size(int *out_cols, int *out_rows) {
     int cols = 80, rows = 24;
-#if !defined(_WIN32)
     struct winsize ws;
     int fd = tui_term_get_tty_fd();
     if (fd >= 0 && ioctl(fd, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
@@ -151,7 +152,6 @@ void tui_term_get_size(int *out_cols, int *out_rows) {
         if (c_env) cols = atoi(c_env);
         if (l_env) rows = atoi(l_env);
     }
-#endif
     if (cols < 20) cols = 20;
     if (rows < 5) rows = 5;
     if (out_cols) *out_cols = cols;
@@ -161,7 +161,6 @@ void tui_term_get_size(int *out_cols, int *out_rows) {
 tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
     tui_key_event_t ev = { .type = TUI_KEY_NONE, .ch = 0, .mouse_x = 0, .mouse_y = 0, .mouse_btn = 0 };
 
-#if !defined(_WIN32)
     if (g_resized) {
         g_resized = 0;
         ev.type = TUI_KEY_RESIZE;
@@ -256,42 +255,145 @@ tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
                     default: break;
                 }
             }
-        } else if (seq[1] == 'O') {
-            switch (seq[2]) {
-                case 'H': ev.type = TUI_KEY_HOME; break;
-                case 'F': ev.type = TUI_KEY_END; break;
-                default: break;
-            }
+            return ev;
         }
         return ev;
     }
 
-    if (c == 3) {
-        ev.type = TUI_KEY_CTRL_C;
-        ev.ch = 3;
-        return ev;
-    }
-    if (c == 13 || c == 10) {
-        ev.type = TUI_KEY_ENTER;
-        ev.ch = '\n';
-        return ev;
-    }
-    if (c == 9) {
-        ev.type = TUI_KEY_TAB;
-        ev.ch = '\t';
-        return ev;
-    }
     if (c == 127 || c == 8) {
         ev.type = TUI_KEY_BACKSPACE;
         ev.ch = '\b';
-        return ev;
+    } else if (c == '\n' || c == '\r') {
+        ev.type = TUI_KEY_ENTER;
+        ev.ch = '\n';
+    } else if (c == '\t') {
+        ev.type = TUI_KEY_TAB;
+        ev.ch = '\t';
+    } else if ((unsigned char)c >= 32) {
+        ev.type = TUI_KEY_CHAR;
+        ev.ch = c;
     }
 
-    ev.type = TUI_KEY_CHAR;
-    ev.ch = (unsigned char)c;
-#endif
     return ev;
 }
+#else /* _WIN32 */
+static DWORD orig_in_mode = 0;
+static DWORD orig_out_mode = 0;
+static bool term_is_raw = false;
+
+int tui_term_get_tty_fd(void) {
+    return 0;
+}
+
+bool tui_term_init(void) {
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    return true;
+}
+
+bool tui_term_raw_enter(void) {
+    if (term_is_raw) return true;
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hIn == INVALID_HANDLE_VALUE || hOut == INVALID_HANDLE_VALUE) return false;
+
+    GetConsoleMode(hIn, &orig_in_mode);
+    GetConsoleMode(hOut, &orig_out_mode);
+
+    DWORD in_mode = orig_in_mode;
+    in_mode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+    in_mode |= ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT;
+    SetConsoleMode(hIn, in_mode);
+
+    DWORD out_mode = orig_out_mode;
+    out_mode |= ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(hOut, out_mode);
+
+    term_is_raw = true;
+    printf("\033[?1049h\033[?25l\033[?1000h\033[?1006h");
+    fflush(stdout);
+    return true;
+}
+
+void tui_term_raw_leave(void) {
+    if (!term_is_raw) return;
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hIn != INVALID_HANDLE_VALUE) SetConsoleMode(hIn, orig_in_mode);
+    if (hOut != INVALID_HANDLE_VALUE) SetConsoleMode(hOut, orig_out_mode);
+    printf("\033[?1006l\033[?1000l\033[?25h\033[?1049l");
+    fflush(stdout);
+    term_is_raw = false;
+}
+
+void tui_term_restore(void) {
+    tui_term_raw_leave();
+}
+
+void tui_term_get_size(int *out_cols, int *out_rows) {
+    int cols = 80, rows = 24;
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(hOut, &csbi)) {
+            cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+            rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+        }
+    }
+    if (cols < 20) cols = 20;
+    if (rows < 5) rows = 5;
+    if (out_cols) *out_cols = cols;
+    if (out_rows) *out_rows = rows;
+}
+
+tui_key_event_t tui_term_read_key(int tty_fd, int timeout_ms) {
+    (void)tty_fd;
+    tui_key_event_t ev = { .type = TUI_KEY_NONE, .ch = 0, .mouse_x = 0, .mouse_y = 0, .mouse_btn = 0 };
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    if (hIn == INVALID_HANDLE_VALUE) return ev;
+
+    DWORD res = WaitForSingleObject(hIn, (timeout_ms > 0) ? (DWORD)timeout_ms : 0);
+    if (res != WAIT_OBJECT_0) return ev;
+
+    INPUT_RECORD ir[32];
+    DWORD num_read = 0;
+    if (!ReadConsoleInputA(hIn, ir, 32, &num_read) || num_read == 0) return ev;
+
+    for (DWORD i = 0; i < num_read; ++i) {
+        if (ir[i].EventType == WINDOW_BUFFER_SIZE_EVENT) {
+            ev.type = TUI_KEY_RESIZE;
+            return ev;
+        }
+        if (ir[i].EventType == KEY_EVENT && ir[i].Event.KeyEvent.bKeyDown) {
+            WORD vk = ir[i].Event.KeyEvent.wVirtualKeyCode;
+            char ch = ir[i].Event.KeyEvent.uChar.AsciiChar;
+
+            if (vk == VK_UP) { ev.type = TUI_KEY_UP; return ev; }
+            if (vk == VK_DOWN) { ev.type = TUI_KEY_DOWN; return ev; }
+            if (vk == VK_LEFT) { ev.type = TUI_KEY_LEFT; return ev; }
+            if (vk == VK_RIGHT) { ev.type = TUI_KEY_RIGHT; return ev; }
+            if (vk == VK_HOME) { ev.type = TUI_KEY_HOME; return ev; }
+            if (vk == VK_END) { ev.type = TUI_KEY_END; return ev; }
+            if (vk == VK_PRIOR) { ev.type = TUI_KEY_PAGE_UP; return ev; }
+            if (vk == VK_NEXT) { ev.type = TUI_KEY_PAGE_DOWN; return ev; }
+            if (vk == VK_ESCAPE) { ev.type = TUI_KEY_ESC; ev.ch = '\033'; return ev; }
+            if (vk == VK_RETURN) { ev.type = TUI_KEY_ENTER; ev.ch = '\n'; return ev; }
+            if (vk == VK_BACK) { ev.type = TUI_KEY_BACKSPACE; ev.ch = '\b'; return ev; }
+            if (vk == VK_TAB) {
+                ev.type = TUI_KEY_TAB;
+                ev.ch = (ir[i].Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED) ? -1 : '\t';
+                return ev;
+            }
+            if (ch != 0) {
+                ev.type = TUI_KEY_CHAR;
+                ev.ch = ch;
+                return ev;
+            }
+        }
+    }
+    return ev;
+}
+#endif
 
 /* Frame buffer methods */
 void tui_frame_init(tui_frame_t *f, size_t initial_cap) {

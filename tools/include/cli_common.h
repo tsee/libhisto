@@ -13,7 +13,34 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#include <process.h>
+#ifndef STDIN_FILENO
+#define STDIN_FILENO 0
+#endif
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO 1
+#endif
+#ifndef STDERR_FILENO
+#define STDERR_FILENO 2
+#endif
+#ifndef isatty
+#define isatty _isatty
+#endif
+#ifndef fileno
+#define fileno _fileno
+#endif
+#ifndef usleep
+#define usleep(us) Sleep((DWORD)((us) / 1000 > 0 ? (us) / 1000 : 1))
+#endif
+#else
 #include <unistd.h>
+#endif
+
 #include "cli_opt.h"
 
 

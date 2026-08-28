@@ -3,11 +3,16 @@
  */
 
 #include "cli_common.h"
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
 #include <ctype.h>
 #include <math.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <sys/ioctl.h>
+#include <sys/time.h>
+#endif
 
 int cli_get_terminal_width(int default_width) {
     const char *col_env = getenv("COLUMNS");
@@ -15,7 +20,16 @@ int cli_get_terminal_width(int default_width) {
         int val = atoi(col_env);
         if (val > 10) return val;
     }
-#ifdef TIOCGWINSZ
+#if defined(_WIN32)
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(hOut, &csbi)) {
+            int w = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+            if (w > 10) return w;
+        }
+    }
+#elif defined(TIOCGWINSZ)
     struct winsize ws;
     if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
         if (ws.ws_col > 10) return (int)ws.ws_col;
@@ -30,7 +44,16 @@ int cli_get_terminal_height(int default_height) {
         int val = atoi(lines_env);
         if (val > 4) return val;
     }
-#ifdef TIOCGWINSZ
+#if defined(_WIN32)
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(hOut, &csbi)) {
+            int h = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+            if (h > 4) return h;
+        }
+    }
+#elif defined(TIOCGWINSZ)
     struct winsize ws;
     if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
         if (ws.ws_row > 4) return (int)ws.ws_row;
@@ -44,9 +67,21 @@ bool cli_is_stdout_tty(void) {
 }
 
 double cli_get_time_sec(void) {
+#if defined(_WIN32)
+    static LARGE_INTEGER freq;
+    static bool init_freq = false;
+    if (!init_freq) {
+        QueryPerformanceFrequency(&freq);
+        init_freq = true;
+    }
+    LARGE_INTEGER count;
+    QueryPerformanceCounter(&count);
+    return (double)count.QuadPart / (double)freq.QuadPart;
+#else
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
+#endif
 }
 
 /* ========================================================================= */

@@ -15,12 +15,13 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
-#include <unistd.h>
 #include <time.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
