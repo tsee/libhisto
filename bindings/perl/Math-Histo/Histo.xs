@@ -6,6 +6,7 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+#include "ppport.h"
 
 #include <histo/histo.h>
 #include <histo/histo2d.h>

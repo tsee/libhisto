@@ -12,6 +12,7 @@ LICENSE
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
+ppport.h
 README.md
 script/phisto
 t/01_basic.t
