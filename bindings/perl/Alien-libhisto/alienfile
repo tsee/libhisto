@@ -20,7 +20,7 @@ share {
             '-DCMAKE_BUILD_TYPE=Release',
             '-DLIBHISTO_BUILD_TOOLS=ON',
             '-DLIBHISTO_BUILD_TESTS=OFF',
-
+            '-DLIBHISTO_WARNINGS_AS_ERRORS=OFF',
             '-DLIBHISTO_BUILD_BENCHMARKS=OFF',
             '-DLIBHISTO_BUILD_EXAMPLES=OFF',
             '-DLIBHISTO_BUILD_DOCS=OFF',
