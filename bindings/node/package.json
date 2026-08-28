@@ -1,6 +1,6 @@
 {
   "name": "histo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "High-performance, memory-safe ISO C99 1D and 2D histogramming, KDE, DDSketch, and curve fitting library for Node.js",
   "main": "index.js",
   "types": "index.d.ts",
