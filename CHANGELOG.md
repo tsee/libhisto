@@ -9,25 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.3.0] - 2026-08-29
+
 ### Added
-- **bpftrace Output Stream Auto-Detection & Importer** (`tools/src/cli_common.c`, `tools/include/cli_common.h`):
-  - Added native auto-detection and parsing for `bpftrace` ASCII histogram tables (both power-of-two `@ = hist(...)` and linear `@ = lhist(...)`).
-  - Added support for unit multipliers (`K`, `M`, `G`, `T`, `ms`, `us`, `ns`, `KiB`, `MiB`) and BCC arrow format (`0 -> 1 : 10 |***|`).
-  - Enables direct piping from `bpftrace` into `histo plot`, `histo stats`, `histo fit`, `histo cmp`, `histo fill`, and `histo top`.
-- **Stream Pre-Scaling & Transformation** (`--scale-input=<factor>` / `-S <factor>`):
-  - Added `--scale-input` option across `histo fill`, `histo top`, and `histo plot` to scale raw incoming measurements on the fly (e.g. converting nanoseconds to microseconds with `--scale-input 1e-3` or `0.001`).
-- **High-Speed Memory-Mapped Shared Memory Ingestion** (`histo top --shm=<path>`, `tools/include/tui_shm.h`):
-  - Implemented lockless binary ring buffer shared memory ingestion protocol capable of processing >50,000,000 events/second.
-  - Fully cross-platform implementation with POSIX `shm_open`/`mmap` and Windows `CreateFileMapping`/`MapViewOfFile`.
-- **Raw Binary Stream Ingestion in `histo top`** (`--binary-f64` / `--binary`):
-  - Added `--binary-f64` (alias `--binary`) to `histo top` for high-throughput raw Little-Endian IEEE-754 binary double streaming from standard input or files (>50M events/sec).
-  - Fully supports both 1D and 2D bivariate live modes with `-w` sample weights.
+- **Interactive Terminal Monitor (`histo top`) High-Performance Overhaul**:
+  - Raw binary stream ingestion (`--binary-f64` / `--binary`) supporting >75,000,000 samples/sec with 1D and 2D weighted streaming.
+  - High-speed memory-mapped shared memory binary ring buffer (`histo top --shm=<path>`).
+  - Reservoir batch sampling and branchless ring updates reducing lock acquisition frequency by 64x.
+  - Pre-scaling factor support (`--scale-input=<factor>` / `-S <factor>`).
+- **bpftrace Output Stream Auto-Detection & Importer** (`tools/src/cli_common.c`):
+  - Native parsing for log2 (`@ = hist(...)`) and linear (`@ = lhist(...)`) bpftrace tables and BCC arrow format.
+  - Unit multiplier decoding (`ms`, `us`, `ns`, `K`, `M`, `G`, `T`, `KiB`, `MiB`).
+- **Universal Histogram Interface (UHI) Protocol in Python** (`bindings/python/histo/uhi.py`):
+  - Added full UHI protocol support across 1D and 2D histograms, including `HistogramAxis`, `.axes`, `.values()`, `.variances()`, `.counts()`, discrete/circular traits, and SciPy / boost-histogram converters.
+- **Node.js / TypeScript Bindings** (`bindings/node/`):
+  - High-performance N-API native addon with TypeScript definitions, zero-copy TypedArray ingestion, statistical moments, curve fitting, KDE, DDSketch, and wire serialization.
+- **Declarative, Table-Driven CLI Parser** (`tools/src/cli_opt.c`, `tools/include/cli_opt.h`):
+  - Replaced ad-hoc parsing across all CLI subcommands with a portable, type-safe option parser supporting attached values, negative floating-point arguments, flag bundling, and auto-generated help.
 - **Production eBPF Tracing Recipes** (`examples/ebpf/`):
-  - Added production-ready scripts: `vfs_read_latency.bt` (filesystem latency), `block_io_heatmap.bt` (2D block size vs latency), `tcp_rtt.bt` (TCP RTT latency), `runqlat.bt` (CPU scheduler latency), `page_faults.bt` (page fault latency).
-  - Added `examples/ebpf/README.md` with least-privilege capability setup (`CAP_BPF`, `CAP_PERFMON`).
-- **Comprehensive Unit & Integration Test Suites**:
-  - Added unit test suites `test_bpftrace_parser` and `test_shm_ring` in `tests/unit/`.
-  - Added integration tests for `--scale-input` and bpftrace execution pipelines in `tests/integration/test_cli.c`.
+  - Added latency profiling scripts for VFS read, block I/O heatmaps, TCP RTT, run queue latency, and page faults.
+
+### Fixed & Improved Portability
+- **Native Windows MSVC & Windows Console Support**:
+  - Added `<intrin.h>` `__cpuid` / `__cpuidex` dynamic AVX2 / AVX-512 detection under MSVC.
+  - Implemented Windows Console API raw mode and virtual terminal processing (`ENABLE_VIRTUAL_TERMINAL_PROCESSING`).
+  - Added MSVC C-mode `inline` shims and suppressed floating-point constant overflow warnings on `-INFINITY`.
+- **AArch64 / ARM SIMD Compilation**:
+  - Added `CheckCCompilerFlag` in CMake to prevent passing `-mavx2` / `-mfma` to ARM compilers.
+- **Perl Backward Compatibility (`Math-Histo`)**:
+  - Bundled `Devel::PPPort` `ppport.h` providing compatibility shims (`av_top_index`, `hv_stores`, etc.) for Perl 5.8 through 5.40+.
 
 
 ---
