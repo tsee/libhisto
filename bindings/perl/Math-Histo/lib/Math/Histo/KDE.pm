@@ -5,7 +5,7 @@ use warnings;
 use Math::Histo ();
 use Math::Histo::Constants ();
 
-our $VERSION = '0.2.1';
+our $VERSION = '0.3.0';
 
 my %KERNEL_MAP = (
     gaussian     => Math::Histo::Constants::HISTO_KDE_KERNEL_GAUSSIAN,

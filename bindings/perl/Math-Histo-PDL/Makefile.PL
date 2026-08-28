@@ -56,7 +56,7 @@ WriteMakefile(
         'ExtUtils::MakeMaker' => '6.52',
     },
     PREREQ_PM => {
-        'Math::Histo' => '0.2.1',
+        'Math::Histo' => '0.3.0',
         'PDL'         => '2.000',
         'Exporter'    => '5.57',
         'Carp'        => '0',

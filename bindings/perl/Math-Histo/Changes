@@ -1,7 +1,9 @@
 Revision history for Math-Histo
 
-0.2.1   2026-08-25
-        - Fix test suite failures on extended-precision Perl builds with long double and quadmath (__float128) NV types (GH #1).
+0.3.0   2026-08-29
+        - Bundle Devel::PPPort ppport.h for Perl XS backward compatibility (fixing undefined symbol av_top_index on Perl 5.8 through 5.16).
+        - Align with libhisto C core 0.3.0 with high-throughput batching, bpftrace stream detection, and declarative CLI parser.
+        - Add compatibility shims for MSVC and Windows Strawberry Perl environments.
         - Replace exact string equality comparisons on floating-point quantities with Test2 within() tolerance checks.
         - Eliminate bin boundary sampling resonance in t/02_stats.t.
 
