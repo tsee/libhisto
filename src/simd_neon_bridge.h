@@ -10,6 +10,10 @@
 #include <stdint.h>
 #include <math.h>
 
+#if defined(_MSC_VER) && !defined(__cplusplus) && !defined(inline)
+#define inline __inline
+#endif
+
 #if defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
 
 #include <arm_neon.h>

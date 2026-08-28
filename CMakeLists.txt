@@ -61,7 +61,7 @@ find_package(Threads REQUIRED)
 # Configure common warning flags
 add_library(histo_compiler_flags INTERFACE)
 if(MSVC)
-    target_compile_options(histo_compiler_flags INTERFACE /W4)
+    target_compile_options(histo_compiler_flags INTERFACE /W4 /wd4056 /wd4756 /wd4996)
     if(LIBHISTO_WARNINGS_AS_ERRORS)
         target_compile_options(histo_compiler_flags INTERFACE /WX)
     endif()

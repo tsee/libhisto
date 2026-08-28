@@ -15,6 +15,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if defined(_MSC_VER)
+#if !defined(__cplusplus) && !defined(inline)
+#define inline __inline
+#endif
+#pragma warning(disable: 4056)
+#pragma warning(disable: 4756)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

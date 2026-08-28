@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <time.h>
 
+#if defined(_MSC_VER) && !defined(__cplusplus) && !defined(inline)
+#define inline __inline
+#endif
+
 #define NUM_SAMPLES 10000000     /* 10 Million samples */
 #define AGG_ITERATIONS 10000     /* 10k iterations on 10k bins (100 Million bin operations) */
 #define FAST_ITERATIONS 1000000  /* 1 Million iterations for fast accessors */

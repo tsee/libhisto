@@ -1,10 +1,16 @@
-#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <math.h>
+
+#if !defined(_WIN32)
 #include <unistd.h>
 #include <signal.h>
-#include <math.h>
+#endif
+
+#if defined(_MSC_VER) && !defined(__cplusplus) && !defined(inline)
+#define inline __inline
+#endif
 
 /* Fast xorshift64* pseudo-random number generator (~1.2 ns per float) */
 static inline uint64_t xorshift64star(uint64_t *state) {
@@ -18,7 +24,9 @@ static inline uint64_t xorshift64star(uint64_t *state) {
 
 int main(void) {
     /* Ignore SIGPIPE so writer exits cleanly on pipe close */
+#ifdef SIGPIPE
     signal(SIGPIPE, SIG_DFL);
+#endif
 
     const size_t BATCH_SIZE = 4096;
     double buf[BATCH_SIZE];
