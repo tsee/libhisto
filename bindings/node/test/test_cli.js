@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { cli } = require('../index.js');
+const { cli, VERSION } = require('../index.js');
 
 test('CLI - Help and Version', () => {
   const resHelp = cli.run('--help');
@@ -14,7 +14,7 @@ test('CLI - Help and Version', () => {
 
   const resVer = cli.run('--version');
   assert.equal(resVer.exitCode, 0);
-  assert.ok(resVer.stdout.includes('0.2.0') || resVer.stderr.includes('0.2.0'));
+  assert.ok(resVer.stdout.includes(VERSION) || resVer.stderr.includes(VERSION));
 });
 
 test('CLI - Fill, Plot, Stats and Fit subcommands', () => {
