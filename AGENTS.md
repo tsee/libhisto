@@ -89,9 +89,10 @@ This document defines the operational workflow, engineering standards, and commu
   - Core C version resides in [`include/histo/version.h`](include/histo/version.h) (`HISTO_VERSION_*` macros) and [`CMakeLists.txt`](CMakeLists.txt) (`project(libhisto VERSION X.Y.Z)`).
   - Language bindings synchronize major/minor with core: `bindings/python/pyproject.toml`, `bindings/perl/Math-Histo/lib/Math/Histo.pm`, `bindings/perl/Alien-libhisto/lib/Alien/libhisto.pm`.
   - Automated version synchronization and verification is enforced via `python3 tools/scripts/bump_version.py --check`.
-- **Changelog Hygiene**:
+- **Changelog Hygiene & Strict History Preservation**:
   - Root [`CHANGELOG.md`](CHANGELOG.md) must be maintained under Keep a Changelog standards (`[Unreleased]`, `[X.Y.Z] - YYYY-MM-DD`), categorized across Core C, CLI, Python, and Perl.
-  - CPAN `Changes` files in `bindings/perl/*/Changes` must be updated on Perl binding releases following CPAN standards.
+  - CPAN `Changes` files in `bindings/perl/*/Changes` must be maintained on Perl binding releases following standard CPAN format.
+  - **MANDATORY RULE — NEVER DELETE HISTORICAL CHANGELOG ENTRIES**: Agents MUST NEVER delete, truncate, overwrite, or rewrite changelog entries for already released versions in [`CHANGELOG.md`](CHANGELOG.md) or any CPAN `Changes` files (`bindings/perl/*/Changes`). When preparing a release, ALWAYS prepend the new version block at the top while leaving all previous release sections completely intact. Automated verification is enforced by `python3 tools/scripts/bump_version.py --check`.
 - **Release Tagging**:
   - Coordinated monorepo releases: Annotated git tag `vX.Y.Z` (e.g., `v0.1.0`).
   - Independent out-of-band binding releases: Namespaced tags `perl-math-histo-vX.Y.Z`, `python-histo-vX.Y.Z`.

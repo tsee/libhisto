@@ -7,6 +7,7 @@ Version verification and bump automation for libhisto and all subpackages.
 import argparse
 import os
 import re
+import subprocess
 import sys
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -16,6 +17,21 @@ VERSION_H = os.path.join(REPO_ROOT, "include", "histo", "version.h")
 CMAKELIST_ROOT = os.path.join(REPO_ROOT, "CMakeLists.txt")
 PYPROJECT_TOML = os.path.join(REPO_ROOT, "bindings", "python", "pyproject.toml")
 NODE_PACKAGE_JSON = os.path.join(REPO_ROOT, "bindings", "node", "package.json")
+CHANGELOG_MD = os.path.join(REPO_ROOT, "CHANGELOG.md")
+PERL_CHANGES_FILES = {
+    "Alien-libhisto": (
+        os.path.join(REPO_ROOT, "bindings", "perl", "Alien-libhisto", "Changes"),
+        "perl-alien-libhisto-v",
+    ),
+    "Math-Histo": (
+        os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo", "Changes"),
+        "perl-math-histo-v",
+    ),
+    "Math-Histo-PDL": (
+        os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo-PDL", "Changes"),
+        "perl-math-histo-pdl-v",
+    ),
+}
 PERL_MATH_HISTO = os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo", "lib", "Math", "Histo.pm")
 PERL_ALIEN_HISTO = os.path.join(REPO_ROOT, "bindings", "perl", "Alien-libhisto", "lib", "Alien", "libhisto.pm")
 PERL_MATH_HISTO_PDL = os.path.join(REPO_ROOT, "bindings", "perl", "Math-Histo-PDL", "lib", "Math", "Histo", "PDL.pm")
@@ -106,6 +122,95 @@ def check_all_versions():
         else:
             print(f"[FAIL] Could not find $VERSION in {rel_path}")
             status = False
+
+    # 4. Changelog History Preservation Verification
+    if not check_changelogs():
+        status = False
+
+    return status
+
+
+def parse_semver_tuple(v_str):
+    m = re.match(r"^v?(\d+)\.(\d+)(?:\.(\d+))?", v_str)
+    if not m:
+        return (0, 0, 0)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+
+
+def get_git_tags():
+    try:
+        res = subprocess.run(
+            ["git", "tag", "-l"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return [t.strip() for t in res.stdout.splitlines() if t.strip()]
+    except Exception:
+        return []
+
+
+def check_changelogs():
+    status = True
+    git_tags = get_git_tags()
+
+    # 1. Root CHANGELOG.md
+    if not os.path.exists(CHANGELOG_MD):
+        print(f"[FAIL] Missing {CHANGELOG_MD}")
+        return False
+
+    with open(CHANGELOG_MD, "r", encoding="utf-8") as f:
+        changelog_content = f.read()
+
+    core_changelog_versions = re.findall(r"^##\s+\[(\d+\.\d+(?:\.\d+)?)\]", changelog_content, re.MULTILINE)
+    if not core_changelog_versions:
+        print("[FAIL] No version entries found in CHANGELOG.md")
+        status = False
+    else:
+        parsed = [parse_semver_tuple(v) for v in core_changelog_versions]
+        if parsed != sorted(parsed, reverse=True):
+            print(f"[FAIL] CHANGELOG.md versions are not in descending order: {core_changelog_versions}")
+            status = False
+
+        core_tags = [t[1:] for t in git_tags if re.match(r"^v\d+\.\d+\.\d+$", t)]
+        for tag_ver in core_tags:
+            if tag_ver not in core_changelog_versions:
+                print(f"[FAIL] Released tag v{tag_ver} is missing from CHANGELOG.md! Historical changelogs must NEVER be deleted.")
+                status = False
+        if status:
+            print(f"[OK] CHANGELOG.md: {len(core_changelog_versions)} versions tracked in descending order (history intact)")
+
+    # 2. Perl CPAN Changes files
+    for dist_name, (changes_path, tag_prefix) in PERL_CHANGES_FILES.items():
+        rel_path = os.path.relpath(changes_path, REPO_ROOT)
+        if not os.path.exists(changes_path):
+            print(f"[FAIL] Missing {rel_path}")
+            status = False
+            continue
+
+        with open(changes_path, "r", encoding="utf-8") as f:
+            changes_content = f.read()
+
+        changes_versions = re.findall(r"^(\d+\.\d+(?:\.\d+)?)\s+\d{4}-\d{2}-\d{2}", changes_content, re.MULTILINE)
+        if not changes_versions:
+            print(f"[FAIL] No version entries found in {rel_path}")
+            status = False
+            continue
+
+        parsed = [parse_semver_tuple(v) for v in changes_versions]
+        if parsed != sorted(parsed, reverse=True):
+            print(f"[FAIL] {rel_path} versions are not in descending order: {changes_versions}")
+            status = False
+
+        dist_tags = [t[len(tag_prefix):] for t in git_tags if t.startswith(tag_prefix)]
+        for tag_ver in dist_tags:
+            if tag_ver not in changes_versions:
+                print(f"[FAIL] Released tag {tag_prefix}{tag_ver} is missing from {rel_path}! Historical changelogs must NEVER be deleted.")
+                status = False
+
+        if status:
+            print(f"[OK] {rel_path}: {len(changes_versions)} releases tracked in descending order (history intact)")
 
     return status
 
