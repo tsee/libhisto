@@ -40,7 +40,7 @@ jobs:
 
       - name: Configure CMake (MSVC)
         if: matrix.compiler != 'mingw'
-        run: cmake -B build -S . -G "${{ matrix.generator }}" -A x64 -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLIBHISTO_ENABLE_FUZZING=ON
+        run: cmake -B build -S . -G "${{ matrix.generator }}" -A x64 -DLIBHISTO_ENABLE_FUZZING=ON
 
       - name: Configure CMake (MinGW)
         if: matrix.compiler == 'mingw'
@@ -97,8 +97,9 @@ jobs:
       - name: Validate Python Bindings
         run: |
           cd bindings/python
-          pip install . pytest numpy
-          pytest tests -v
+          python3 -m pip install numpy
+          python3 setup.py build_ext --inplace
+          PYTHONPATH=. python3 -m unittest discover -s tests -v
 
   # =========================================================================
   # 3. FreeBSD VM Matrix (BSD libc / strict POSIX)
@@ -115,7 +116,7 @@ jobs:
         with:
           usesh: true
           prepare: |
-            pkg install -y cmake ninja python3
+            pkg install -y cmake ninja python3 bash
           run: |
             cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIBHISTO_ENABLE_FUZZING=ON
             cmake --build build --parallel 4

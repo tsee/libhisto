@@ -11,6 +11,25 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# Enable C++ for optional C++ test suite if compiler is available and functional
+include(CheckLanguage)
+check_language(CXX)
+if(CMAKE_CXX_COMPILER)
+    if(MSVC)
+        enable_language(CXX OPTIONAL)
+    else()
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -x c++ /dev/null -o /dev/null
+            RESULT_VARIABLE _CXX_PROBE_RESULT
+            ERROR_QUIET
+            OUTPUT_QUIET
+        )
+        if(_CXX_PROBE_RESULT EQUAL 0)
+            enable_language(CXX OPTIONAL)
+        endif()
+    endif()
+endif()
+
 # Export compile commands for language servers
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

@@ -28,6 +28,12 @@ target_link_libraries(test_histo_cpp PRIVATE
     histo_compiler_flags
 )
 
+set_target_properties(test_histo_cpp PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
 if(UNIX AND NOT APPLE)
     target_link_libraries(test_histo_cpp PRIVATE m)
 endif()
