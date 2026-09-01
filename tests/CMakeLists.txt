@@ -43,13 +43,19 @@ if(Python3_FOUND)
                 --build-dir ${PROJECT_BINARY_DIR}
                 --compiler ${CMAKE_C_COMPILER}
     )
+    if(LIBHISTO_BUILD_TOOLS)
+        set(_doc_test_deps histo histo-cli)
+    else()
+        set(_doc_test_deps histo)
+    endif()
+
     add_custom_target(test_doc_examples
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_doc_examples.py
                 --source-dir ${PROJECT_SOURCE_DIR}
                 --build-dir ${PROJECT_BINARY_DIR}
                 --compiler ${CMAKE_C_COMPILER}
                 --verbose
-        DEPENDS histo histo-cli
+        DEPENDS ${_doc_test_deps}
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         COMMENT "Testing inline documentation code examples and CLI pipelines"
     )

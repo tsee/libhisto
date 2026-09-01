@@ -103,38 +103,41 @@ add_executable(test_kde
 target_link_libraries(test_kde PRIVATE histo unity)
 add_test(NAME test_kde COMMAND test_kde)
 
-# Unit Test: Interactive TUI Engine & Reservoir Cache
-add_executable(test_tui_engine
-    test_tui_engine.c
-)
-target_link_libraries(test_tui_engine PRIVATE histocli histo unity Threads::Threads)
-add_test(NAME test_tui_engine COMMAND test_tui_engine)
+# CLI and TUI Tool Unit Tests (only enabled when building tools)
+if(LIBHISTO_BUILD_TOOLS)
+    # Unit Test: Interactive TUI Engine & Reservoir Cache
+    add_executable(test_tui_engine
+        test_tui_engine.c
+    )
+    target_link_libraries(test_tui_engine PRIVATE histocli histo unity Threads::Threads)
+    add_test(NAME test_tui_engine COMMAND test_tui_engine)
 
-# Unit Test: CLI Palette Engine & Colormaps
-add_executable(test_palette
-    test_palette.c
-)
-target_link_libraries(test_palette PRIVATE histocli histo unity)
-add_test(NAME test_palette COMMAND test_palette)
+    # Unit Test: CLI Palette Engine & Colormaps
+    add_executable(test_palette
+        test_palette.c
+    )
+    target_link_libraries(test_palette PRIVATE histocli histo unity)
+    add_test(NAME test_palette COMMAND test_palette)
 
-# Unit Test: Declarative CLI Option Parsing Framework
-add_executable(test_cli_opt
-    test_cli_opt.c
-)
-target_link_libraries(test_cli_opt PRIVATE histocli histo unity)
-add_test(NAME test_cli_opt COMMAND test_cli_opt)
+    # Unit Test: Declarative CLI Option Parsing Framework
+    add_executable(test_cli_opt
+        test_cli_opt.c
+    )
+    target_link_libraries(test_cli_opt PRIVATE histocli histo unity)
+    add_test(NAME test_cli_opt COMMAND test_cli_opt)
 
-# Unit Test: bpftrace ASCII Table Parser
-add_executable(test_bpftrace_parser
-    test_bpftrace_parser.c
-)
-target_link_libraries(test_bpftrace_parser PRIVATE histocli histo unity)
-add_test(NAME test_bpftrace_parser COMMAND test_bpftrace_parser)
+    # Unit Test: bpftrace ASCII Table Parser
+    add_executable(test_bpftrace_parser
+        test_bpftrace_parser.c
+    )
+    target_link_libraries(test_bpftrace_parser PRIVATE histocli histo unity)
+    add_test(NAME test_bpftrace_parser COMMAND test_bpftrace_parser)
 
-# Unit Test: Shared Memory Ring Buffer IPC
-add_executable(test_shm_ring
-    test_shm_ring.c
-)
-target_link_libraries(test_shm_ring PRIVATE histocli histo unity Threads::Threads)
-add_test(NAME test_shm_ring COMMAND test_shm_ring)
+    # Unit Test: Shared Memory Ring Buffer IPC
+    add_executable(test_shm_ring
+        test_shm_ring.c
+    )
+    target_link_libraries(test_shm_ring PRIVATE histocli histo unity Threads::Threads)
+    add_test(NAME test_shm_ring COMMAND test_shm_ring)
+endif()
 
