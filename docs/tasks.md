@@ -22,6 +22,7 @@ This document tracks active work items, planned enhancements, and development ro
 - [x] **STAT-3**: Automated optimal bin width heuristics (Freedman-Diaconis, Scott, Sturges, Doane, Knuth's Bayesian rule).
 
 ### 3. Bindings & Ecosystem
+- [x] **CPP-1**: Zero-overhead, Google C++ Style Guide compliant modern C++ interface (`include/histo/*.hpp`, `#include <histo/histo.hpp>`, `tests/cpp/`, `make test-cpp`).
 - [ ] **BIND-1**: Explore R and Julia foreign function interface (FFI) bindings for `libhisto`.
 - [ ] **BIND-2**: Add Arrow / Polars zero-copy buffer interop in Python bindings.
 - [ ] **BIND-3**: CPAN release of `Math-Histo` v0.1.1 and `Alien-libhisto` v0.1.1.

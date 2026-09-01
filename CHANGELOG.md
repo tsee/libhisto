@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Zero-Overhead Modern C++ Interface** (`include/histo/*.hpp`, `#include <histo/histo.hpp>`):
+  - Strict **Google C++ Style Guide** compliance: exception-free architecture (`-fno-exceptions`), explicit single ownership RAII, move semantics, and `std::span` zero-copy ingestion.
+  - Exception-free `libhisto::Status` and `libhisto::Result<T>` outcome monads with `HISTO_ASSIGN_OR_RETURN` and `HISTO_RETURN_IF_ERROR` macros.
+  - Owning `libhisto::Histogram` (1D) and `libhisto::Histogram2D` (2D) handles with direct constructors, `std::initializer_list` and `std::span` ingestion, operators (`+=`, `*=`, `<<`), and binary serialization.
+  - Zero-overhead non-owning views `libhisto::HistogramView` and `libhisto::Histogram2DView` providing zero-copy interoperability over existing C `histo_t*` / `histo2d_t*` pointers (`sizeof(View) == sizeof(void*)`).
+  - Range-based `for` loop bin iterators (`for (const auto& bin : h)`).
+  - Streaming sketches (`libhisto::DDSketch`), continuous Kernel Density Estimation (`libhisto::KDE`), and non-linear curve fitting (`libhisto::Fit`).
+  - Decoupled C++ test suite (`tests/cpp/`, `make test-cpp`) that builds only when a C++ compiler is detected, ensuring basic C builds require zero C++ compiler dependencies.
+
 ---
 
 ## [0.3.0] - 2026-08-29

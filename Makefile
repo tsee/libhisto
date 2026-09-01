@@ -1,4 +1,4 @@
-.PHONY: all build test test-all test-doc-examples \
+.PHONY: all build test test-cpp test-all test-doc-examples \
         bindings bindings-test bindings-dist \
         build-perl-alien build-perl-histo build-perl-pdl build-perl \
         test-perl-alien test-perl-histo test-perl-pdl test-perl \
@@ -23,9 +23,14 @@ build:
 
 test: test-asan
 
-test-all: test-asan test-doc-examples test-perl test-perl-dist test-python test-python-dist test-node test-fuzz test-tsan memcheck docs
+test-cpp:
+	cmake -B $(BUILD_DIR) -S . -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(BUILD_DIR) --parallel $(JOBS)
+	ctest --test-dir $(BUILD_DIR) -R "test_histo_cpp" -j$(JOBS) --output-on-failure
+
+test-all: test-asan test-cpp test-doc-examples test-perl test-perl-dist test-python test-python-dist test-node test-fuzz test-tsan memcheck docs
 	@echo "======================================================================"
-	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, PERL, PYTHON & NODE BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
+	@echo " ALL TEST SUITES, SANITIZERS (ASan, UBSan, TSan), DOC TESTS, C++, PERL, PYTHON & NODE BINDINGS & DISTRIBUTIONS, MEMCHECK & DOCS PASSED"
 	@echo "======================================================================"
 
 test-doc-examples: build

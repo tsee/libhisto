@@ -111,6 +111,32 @@ int main(void) {
 }
 ```
 
+### Modern C++17 Example
+```cpp
+#include <iostream>
+#include <vector>
+#include <histo/histo.hpp>
+
+int main() {
+    // 1. Create a uniform histogram with RAII ownership
+    libhisto::Histogram h(10, 0.0, 100.0);
+
+    // 2. Ingest single samples, initializer lists, or spans
+    h.Fill(25.4);
+    h.Fill({10.5, 30.2, 50.0, 75.8});
+
+    // 3. Inspect summary metrics & iterate bins with range-for
+    std::cout << "Mean: " << h.mean() << ", StdDev: " << h.std_dev() << "\n";
+    for (const auto& bin : h) {
+        std::cout << "Bin [" << bin.lower_edge << ", " << bin.upper_edge 
+                  << "): " << bin.content << "\n";
+    }
+
+    // 4. Clean RAII teardown automatically handled at end of scope
+    return 0;
+}
+```
+
 ---
 
 ## Level 1: EDA & Summary Statistics
