@@ -17,6 +17,12 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(unity PUBLIC m)
 endif()
 
+find_library(EXECINFO_LIB execinfo)
+if(EXECINFO_LIB)
+    target_link_libraries(unity PUBLIC ${EXECINFO_LIB})
+    target_compile_definitions(unity PUBLIC UNITY_HAS_EXECINFO_LIB=1)
+endif()
+
 # Unit tests
 add_subdirectory(unit)
 

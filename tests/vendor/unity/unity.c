@@ -25,12 +25,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <unistd.h>
-#if defined(__has_include)
-#if __has_include(<execinfo.h>)
-#include <execinfo.h>
-#define UNITY_HAS_EXECINFO 1
-#endif
-#elif defined(__GLIBC__) || defined(__APPLE__)
+#if defined(__GLIBC__) || defined(__APPLE__) || defined(UNITY_HAS_EXECINFO_LIB)
 #include <execinfo.h>
 #define UNITY_HAS_EXECINFO 1
 #endif
