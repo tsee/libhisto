@@ -6,7 +6,7 @@
         build-python test-python python-dist test-python-dist \
         build-node test-node \
         test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs \
-        test-musl test-big-endian test-32bit test-32bit-native test-arm64 test-armv7 test-riscv64 \
+        test-hermetic test-musl test-big-endian test-32bit test-32bit-native test-arm64 test-armv7 test-riscv64 \
         test-matrix-local portability test-portability
 
 BUILD_DIR ?= build
@@ -152,6 +152,9 @@ bump-version:
 # ======================================================================
 # Multi-Architecture & Portability Test Targets
 # ======================================================================
+test-hermetic:
+	python3 tools/scripts/test_container.py --target hermetic -j $(JOBS)
+
 test-musl:
 	python3 tools/scripts/test_container.py --target musl -j $(JOBS)
 

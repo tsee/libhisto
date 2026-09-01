@@ -17,6 +17,17 @@ import time
 from pathlib import Path
 
 TARGETS = {
+    "hermetic": {
+        "description": "Minimal Hermetic Core C Environment (Debian x86_64, ISO C99 toolchain, zero interpreters)",
+        "image": "debian:bookworm-slim",
+        "platform": "linux/amd64",
+        "install_cmd": "apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc libc6-dev make cmake",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc libc6-dev make cmake",
+        "arch": "x86_64",
+        "endian": "little",
+        "bits": 64,
+        "cmake_flags": "-DLIBHISTO_BUILD_TOOLS=OFF -DLIBHISTO_BUILD_BENCHMARKS=OFF -DLIBHISTO_BUILD_EXAMPLES=OFF -DLIBHISTO_ENABLE_FUZZING=OFF",
+    },
     "musl": {
         "description": "Alpine Linux (x86_64, musl libc, strict ISO C99 verification)",
         "image": "alpine:latest",
@@ -99,7 +110,7 @@ ALIASES = {
     "32bit-native": "native-32bit",
 }
 
-ALL_LOCAL_TARGETS = ["musl", "s390x", "i386", "native-32bit", "arm64", "armv7", "riscv64"]
+ALL_LOCAL_TARGETS = ["hermetic", "musl", "s390x", "i386", "native-32bit", "arm64", "armv7", "riscv64"]
 
 
 def log(msg, color="1;34"):
@@ -255,10 +266,15 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
             effective_jobs = 4
             log(f"Notice: Clamped parallel concurrency to -j{effective_jobs} for emulated target '{target_name}' (QEMU user-mode stability safeguard).")
 
+    extra_cmake_flags = config.get("cmake_flags", "")
+    cmake_config_cmd = f"cmake -B {build_dir_name} -S . -DCMAKE_BUILD_TYPE={build_type}"
+    if extra_cmake_flags:
+        cmake_config_cmd += f" {extra_cmake_flags}"
+
     test_commands = [
         "ulimit -c unlimited || true",
         install_cmd,
-        f"cmake -B {build_dir_name} -S . -DCMAKE_BUILD_TYPE={build_type}",
+        cmake_config_cmd,
         f"cmake --build {build_dir_name} -j{effective_jobs}",
         f"ctest --test-dir {build_dir_name} -j{effective_jobs} --output-on-failure",
     ]

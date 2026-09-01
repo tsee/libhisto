@@ -84,6 +84,7 @@ Containerized testing via Docker or Podman with transparent QEMU user-mode emula
 
 | Target | Command | Image / Runtime | Key Validation in `libhisto` |
 | :--- | :--- | :--- | :--- |
+| **Hermetic Core C99** | `make test-hermetic` | `debian:bookworm-slim` (`linux/amd64`) | Minimal baseline toolchain (`gcc` + `make` + `cmake`); zero Python, Perl, Node, or external interpreters. |
 | **Strict C99 / Musl** | `make test-musl` | `alpine:latest` (`linux/amd64`) | `musl` libc compliance; catches non-standard GNU extension leaks. |
 | **Big-Endian Wire Format** | `make test-big-endian` | `ubuntu:24.04` (`linux/s390x`) | Endian byte-swapping macros and serialization wire format in [`src/serialize.c`](src/serialize.c). |
 | **32-Bit Userland** | `make test-32bit` | `debian:bookworm-slim` (`linux/386`) | 32-bit `size_t` limits and integer overflow in bin index math. |
