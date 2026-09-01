@@ -6,7 +6,15 @@
 ========================================================================= */
 
 #define _GNU_SOURCE 1
+#define _DEFAULT_SOURCE 1
+#define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200809L
+#ifndef __BSD_VISIBLE
+#define __BSD_VISIBLE 1
+#endif
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE 1
+#endif
 
 #include "unity.h"
 #include <stdio.h>

@@ -5,6 +5,21 @@
 #ifndef HISTO_CLI_COMMON_H
 #define HISTO_CLI_COMMON_H
 
+#if !defined(_WIN32)
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+#ifndef __BSD_VISIBLE
+#define __BSD_VISIBLE 1
+#endif
+#endif
+
 #include "histo/histo.h"
 #include "histo/histo2d.h"
 #include "histo/cli.h"
@@ -34,12 +49,21 @@
 #ifndef fileno
 #define fileno _fileno
 #endif
-#ifndef usleep
-#define usleep(us) Sleep((DWORD)((us) / 1000 > 0 ? (us) / 1000 : 1))
-#endif
 #else
 #include <unistd.h>
 #endif
+#include <time.h>
+
+static inline void histo_sleep_us(unsigned long us) {
+#if defined(_WIN32)
+    Sleep((DWORD)((us + 999) / 1000));
+#else
+    struct timespec req;
+    req.tv_sec = (time_t)(us / 1000000UL);
+    req.tv_nsec = (long)((us % 1000000UL) * 1000UL);
+    nanosleep(&req, NULL);
+#endif
+}
 
 #include "cli_opt.h"
 

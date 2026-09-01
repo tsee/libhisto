@@ -2,9 +2,15 @@
  * Unit tests for TUI engine: streaming, windowing, zoom/pan, and concurrency.
  */
 
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
-#define _DEFAULT_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
+#endif
 
 #include "unity.h"
 #include "tui_term.h"

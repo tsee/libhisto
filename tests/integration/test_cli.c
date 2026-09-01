@@ -2,8 +2,12 @@
  * Integration tests for CLI subcommands, input pipelines, and JSON output.
  */
 
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
-#define _DEFAULT_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
 
 #include "unity.h"
 #include "histo/histo.h"

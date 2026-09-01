@@ -2,8 +2,12 @@
  * Standalone regression test runner for fuzz targets without LLVM libFuzzer.
  */
 
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
-#define _DEFAULT_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
 
 #include "standalone_runner.h"
 #include <stdio.h>

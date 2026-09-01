@@ -2,6 +2,9 @@
  * Unit tests for bpftrace ASCII histogram parser and geometry reconstruction.
  */
 
+#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE 1
+
 #include "unity.h"
 #include "histo/histo.h"
 #include "cli_common.h"

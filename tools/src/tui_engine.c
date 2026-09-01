@@ -2,9 +2,15 @@
  * TUI state machine: background ingestion, viewport math, and rendering loop.
  */
 
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
-#define _DEFAULT_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
+#endif
 
 #include "tui_engine.h"
 #include "cli_common.h"
@@ -372,7 +378,7 @@ static void *ingest_worker_thread(void *arg) {
         while (is_engine_running(eng)) {
             size_t n = histo_shm_pop_batch(eng->shm.ring, raw_batch, max_b);
             if (n == 0) {
-                usleep(500);
+                histo_sleep_us(500);
                 double now = get_time_now_sec();
                 if (now - last_calc_time >= 0.25) {
                     histo_mutex_lock(&eng->mutex);
@@ -519,10 +525,10 @@ static void *ingest_worker_thread(void *arg) {
                     }
                     eng->finished_reading = true;
                     histo_mutex_unlock(&eng->mutex);
-                    usleep(20000);
+                    histo_sleep_us(20000);
                     continue;
                 }
-                usleep(500);
+                histo_sleep_us(500);
             } else {
                 double scale = (eng->scale_input > 0.0) ? eng->scale_input : 1.0;
                 for (size_t i = 0; i < n_read; ++i) {
@@ -596,7 +602,7 @@ static void *ingest_worker_thread(void *arg) {
                 }
                 eng->finished_reading = true;
                 histo_mutex_unlock(&eng->mutex);
-                usleep(20000);
+                histo_sleep_us(20000);
                 continue;
             }
 
