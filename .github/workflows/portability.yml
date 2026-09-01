@@ -136,28 +136,23 @@ jobs:
   hermetic-c99:
     name: Minimal Hermetic C99 (Debian baseline)
     runs-on: ubuntu-latest
-    container:
-      image: debian:bookworm-slim
     steps:
-      - name: Install minimal C toolchain (no external interpreters)
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends gcc libc6-dev make cmake git
-
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Configure CMake (Core Only)
+      - name: Run Hermetic Core C99 Build & Test in Debian Container
         run: |
-          cmake -B build -S . \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DLIBHISTO_BUILD_TOOLS=OFF \
-                -DLIBHISTO_BUILD_BENCHMARKS=OFF \
-                -DLIBHISTO_BUILD_EXAMPLES=OFF \
-                -DLIBHISTO_ENABLE_FUZZING=OFF
-
-      - name: Build Core C Library & Tests
-        run: cmake --build build --parallel 4
-
-      - name: Run Core C Test Suite
-        run: ctest --test-dir build --output-on-failure -j 4
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            debian:bookworm-slim \
+            sh -c "apt-get update -qq && \
+                   apt-get install -y -qq --no-install-recommends gcc libc6-dev make cmake && \
+                   cmake -B build-hermetic -S . \
+                         -DCMAKE_BUILD_TYPE=Release \
+                         -DLIBHISTO_BUILD_TOOLS=OFF \
+                         -DLIBHISTO_BUILD_BENCHMARKS=OFF \
+                         -DLIBHISTO_BUILD_EXAMPLES=OFF \
+                         -DLIBHISTO_ENABLE_FUZZING=OFF && \
+                   cmake --build build-hermetic --parallel 4 && \
+                   ctest --test-dir build-hermetic --output-on-failure -j 4"
