@@ -408,6 +408,10 @@ def main():
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
+    if sys.platform == "win32" and ("cl" in os.path.basename(args.compiler).lower() or not shutil.which("bash")):
+        print("Notice: Inline documentation example compilation test is skipped on native Windows MSVC.")
+        return 0
+
     cflags = ["-std=c99", "-Wall", "-Wextra", "-Werror", "-O2"]
 
     # Inherit target architecture flags (e.g. -m32) from CMakeCache.txt

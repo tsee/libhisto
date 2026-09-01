@@ -23,6 +23,7 @@ if os.path.exists(os.path.join(ROOT_DIR, "include", "histo", "histo.h")):
         os.path.join(ROOT_DIR, "src", "sketch.c"),
         os.path.join(ROOT_DIR, "src", "serialize.c"),
         os.path.join(ROOT_DIR, "src", "serialize_2d.c"),
+        os.path.join(ROOT_DIR, "src", "simd.c"),
         os.path.join(ROOT_DIR, "src", "simd_avx2.c"),
         os.path.join(ROOT_DIR, "src", "simd_avx512.c"),
         os.path.join(ROOT_DIR, "src", "simd_neon.c"),
@@ -57,6 +58,7 @@ else:
         os.path.join(BASE_DIR, "bundled", "src", "sketch.c"),
         os.path.join(BASE_DIR, "bundled", "src", "serialize.c"),
         os.path.join(BASE_DIR, "bundled", "src", "serialize_2d.c"),
+        os.path.join(BASE_DIR, "bundled", "src", "simd.c"),
         os.path.join(BASE_DIR, "bundled", "src", "simd_avx2.c"),
         os.path.join(BASE_DIR, "bundled", "src", "simd_avx512.c"),
         os.path.join(BASE_DIR, "bundled", "src", "simd_neon.c"),
@@ -76,9 +78,10 @@ else:
     ]
 
 
-extra_compile_args = ["-std=c99", "-O3"]
-if sys.platform != "win32":
-    extra_compile_args.extend(["-Wall", "-Wextra", "-pedantic", "-Wno-unused-parameter", "-Wno-unused-function"])
+if sys.platform == "win32":
+    extra_compile_args = ["/O2"]
+else:
+    extra_compile_args = ["-std=c99", "-O3", "-Wall", "-Wextra", "-pedantic", "-Wno-unused-parameter", "-Wno-unused-function"]
 
 libraries = ["m"] if sys.platform != "win32" else []
 
