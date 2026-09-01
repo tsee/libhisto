@@ -22,6 +22,7 @@
 #include <string.h>
 
 #if !defined(_WIN32)
+#include <sys/types.h>
 #include <signal.h>
 #include <unistd.h>
 #if defined(__has_include)

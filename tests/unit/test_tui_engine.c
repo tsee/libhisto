@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #if !defined(_WIN32)
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 

@@ -50,6 +50,7 @@
 #define fileno _fileno
 #endif
 #else
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 #include <time.h>
