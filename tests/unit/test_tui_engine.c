@@ -34,6 +34,19 @@
 #include <unistd.h>
 #endif
 
+static const char* get_temp_dir(void) {
+#if defined(_WIN32)
+    const char *tmp = getenv("TEMP");
+    if (!tmp) tmp = getenv("TMP");
+    if (!tmp) tmp = ".";
+    return tmp;
+#else
+    const char *tmp = getenv("TMPDIR");
+    if (!tmp) tmp = "/tmp";
+    return tmp;
+#endif
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -609,7 +622,7 @@ void test_tui_engine_snapshot_export_roundtrip(void) {
 
     /* Export binary snapshot to temp file */
     char bin_path[256];
-    snprintf(bin_path, sizeof(bin_path), "/tmp/test_snapshot_%d.histo", (int)getpid());
+    snprintf(bin_path, sizeof(bin_path), "%s/test_snapshot_%d.histo", get_temp_dir(), (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, bin_path, false));
 
     /* Read back file and deserialize */
@@ -631,11 +644,11 @@ void test_tui_engine_snapshot_export_roundtrip(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1.0, 25.5, d_mean);
     histo_destroy(deser);
     free(buf);
-    unlink(bin_path);
+    remove(bin_path);
 
     /* Export JSON snapshot */
     char json_path[256];
-    snprintf(json_path, sizeof(json_path), "/tmp/test_snapshot_%d.json", (int)getpid());
+    snprintf(json_path, sizeof(json_path), "%s/test_snapshot_%d.json", get_temp_dir(), (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, json_path, true));
 
     FILE *jfp = fopen(json_path, "r");
@@ -654,7 +667,7 @@ void test_tui_engine_snapshot_export_roundtrip(void) {
     TEST_ASSERT_EQUAL_UINT64(50, histo_num_entries(j_deser));
     histo_destroy(j_deser);
     free(jbuf);
-    unlink(json_path);
+    remove(json_path);
 
     tui_engine_free(&eng);
     fclose(in_fp);
@@ -814,7 +827,7 @@ void test_tui_engine_2d_snapshot_export_roundtrip(void) {
 
     /* Export 2D binary snapshot */
     char bin_path[256];
-    snprintf(bin_path, sizeof(bin_path), "/tmp/test_2d_snapshot_%d.histo", (int)getpid());
+    snprintf(bin_path, sizeof(bin_path), "%s/test_2d_snapshot_%d.histo", get_temp_dir(), (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, bin_path, false));
 
     FILE *bfp = fopen(bin_path, "rb");
@@ -834,11 +847,11 @@ void test_tui_engine_2d_snapshot_export_roundtrip(void) {
     TEST_ASSERT_EQUAL_UINT32(20, histo2d_nbins_y(deser2d));
     histo2d_destroy(deser2d);
     free(buf);
-    unlink(bin_path);
+    remove(bin_path);
 
     /* Export 2D JSON snapshot */
     char json_path[256];
-    snprintf(json_path, sizeof(json_path), "/tmp/test_2d_snapshot_%d.json", (int)getpid());
+    snprintf(json_path, sizeof(json_path), "%s/test_2d_snapshot_%d.json", get_temp_dir(), (int)getpid());
     TEST_ASSERT_TRUE(tui_engine_export_snapshot(&eng, json_path, true));
 
     FILE *jfp = fopen(json_path, "r");
@@ -857,7 +870,7 @@ void test_tui_engine_2d_snapshot_export_roundtrip(void) {
     TEST_ASSERT_EQUAL_UINT64(40, histo2d_num_entries(j_deser2d));
     histo2d_destroy(j_deser2d);
     free(jbuf);
-    unlink(json_path);
+    remove(json_path);
 
     tui_engine_free(&eng);
     fclose(in_fp);

@@ -17,9 +17,9 @@ set(CMAKE_C_EXTENSIONS OFF)
 include(CheckLanguage)
 check_language(CXX)
 if(CMAKE_CXX_COMPILER)
-    if(MSVC)
+    if(CMAKE_GENERATOR MATCHES "Visual Studio")
         enable_language(CXX OPTIONAL)
-    else()
+    elseif(NOT MSVC)
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -x c++ /dev/null -o /dev/null
             RESULT_VARIABLE _CXX_PROBE_RESULT
@@ -27,7 +27,7 @@ if(CMAKE_CXX_COMPILER)
             OUTPUT_QUIET
         )
         if(_CXX_PROBE_RESULT EQUAL 0)
-            enable_language(CXX OPTIONAL)
+            enable_language(CXX)
         endif()
     endif()
 endif()

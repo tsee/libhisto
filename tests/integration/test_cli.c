@@ -132,8 +132,21 @@ void test_json_corrupted_payload(void) {
 
 static unsigned int g_cli_tmp_counter = 0;
 
+static const char* get_temp_dir(void) {
+#if defined(_WIN32)
+    const char *tmp = getenv("TEMP");
+    if (!tmp) tmp = getenv("TMP");
+    if (!tmp) tmp = ".";
+    return tmp;
+#else
+    const char *tmp = getenv("TMPDIR");
+    if (!tmp) tmp = "/tmp";
+    return tmp;
+#endif
+}
+
 static void get_unique_tmp_path(char *buf, size_t bufsz, const char *tag, const char *ext) {
-    snprintf(buf, bufsz, "/tmp/histo_test_cli_%d_%u_%s%s", (int)getpid(), ++g_cli_tmp_counter, tag, ext ? ext : "");
+    snprintf(buf, bufsz, "%s/histo_test_cli_%d_%u_%s%s", get_temp_dir(), (int)getpid(), ++g_cli_tmp_counter, tag, ext ? ext : "");
 }
 
 void test_cli_execution_pipelines(void) {
@@ -654,20 +667,17 @@ void test_cli_dispatcher_and_help(void) {
 }
 
 void test_cli_scale_input(void) {
-    char data_path[] = "/tmp/histo_scale_test_XXXXXX";
-    int fd = mkstemp(data_path);
-    TEST_ASSERT_GREATER_OR_EQUAL(0, fd);
-    FILE *fp = fdopen(fd, "w");
+    char data_path[256];
+    char out_path[256];
+    get_unique_tmp_path(data_path, sizeof(data_path), "scale_test", ".txt");
+    get_unique_tmp_path(out_path, sizeof(out_path), "scale_out", ".json");
+
+    FILE *fp = fopen(data_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
 
     /* 1000000 ns, 2000000 ns, 3000000 ns */
     fprintf(fp, "1000000\n2000000\n3000000\n");
     fclose(fp);
-
-    char out_path[] = "/tmp/histo_scale_out_XXXXXX";
-    int fd_out = mkstemp(out_path);
-    TEST_ASSERT_GREATER_OR_EQUAL(0, fd_out);
-    close(fd_out);
 
     char *fill_args[] = {
         "histo-fill",
@@ -690,15 +700,17 @@ void test_cli_scale_input(void) {
     TEST_ASSERT_DOUBLE_WITHIN(50.0, 2000.0, mean);
 
     histo_destroy(h);
-    unlink(data_path);
-    unlink(out_path);
+    remove(data_path);
+    remove(out_path);
 }
 
 void test_cli_bpftrace_pipeline(void) {
-    char bpf_path[] = "/tmp/histo_bpf_test_XXXXXX";
-    int fd = mkstemp(bpf_path);
-    TEST_ASSERT_GREATER_OR_EQUAL(0, fd);
-    FILE *fp = fdopen(fd, "w");
+    char bpf_path[256];
+    char json_out[256];
+    get_unique_tmp_path(bpf_path, sizeof(bpf_path), "bpf_test", ".txt");
+    get_unique_tmp_path(json_out, sizeof(json_out), "bpf_json", ".json");
+
+    FILE *fp = fopen(bpf_path, "w");
     TEST_ASSERT_NOT_NULL(fp);
 
     fprintf(fp,
@@ -728,11 +740,6 @@ void test_cli_bpftrace_pipeline(void) {
     TEST_ASSERT_EQUAL_INT(0, cmd_fit_main(3, fit_args));
 
     /* Test 4: histo fill on bpftrace output to produce JSON */
-    char json_out[] = "/tmp/histo_bpf_json_XXXXXX";
-    int fd_json = mkstemp(json_out);
-    TEST_ASSERT_GREATER_OR_EQUAL(0, fd_json);
-    close(fd_json);
-
     char *fill_args[] = {"histo-fill", "--output=json", "-f", json_out, bpf_path};
     TEST_ASSERT_EQUAL_INT(0, cmd_fill_main(5, fill_args));
 
@@ -746,8 +753,8 @@ void test_cli_bpftrace_pipeline(void) {
     char *cmp_args[] = {"histo-cmp", bpf_path, bpf_path};
     TEST_ASSERT_EQUAL_INT(0, cmd_cmp_main(3, cmp_args));
 
-    unlink(bpf_path);
-    unlink(json_out);
+    remove(bpf_path);
+    remove(json_out);
 }
 
 int main(void) {
