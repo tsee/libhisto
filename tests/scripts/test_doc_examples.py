@@ -368,8 +368,9 @@ def test_cli_block(block, source_dir, build_dir, verbose):
             if verbose:
                 print(f"  Testing CLI {filepath}:{line} -> {cmd}")
             try:
+                shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
                 res = subprocess.run(
-                    ["bash", "-c", cmd],
+                    [shell_bin, "-c", cmd],
                     cwd=tmpdir,
                     env=env,
                     stdout=subprocess.PIPE,
