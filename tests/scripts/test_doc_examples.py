@@ -410,6 +410,17 @@ def main():
 
     cflags = ["-std=c99", "-Wall", "-Wextra", "-Werror", "-O2"]
 
+    # Inherit target architecture flags (e.g. -m32) from CMakeCache.txt
+    cmake_cache_file = os.path.join(args.build_dir, "CMakeCache.txt")
+    if os.path.exists(cmake_cache_file):
+        with open(cmake_cache_file, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if line.startswith("CMAKE_C_FLAGS:STRING=") or line.startswith("CMAKE_EXE_LINKER_FLAGS:STRING="):
+                    val = line.split("=", 1)[1].strip()
+                    for flag in val.split():
+                        if flag in ["-m32", "-m64", "-mabi=32", "-mabi=64"] and flag not in cflags:
+                            cflags.append(flag)
+
     # Discover all documentation markdown files
     doc_patterns = [
         os.path.join(args.source_dir, "README.md"),

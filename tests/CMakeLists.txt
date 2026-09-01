@@ -7,9 +7,10 @@ target_include_directories(unity PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/unity
 )
 
-# Enable full double precision assertion support in Unity
+# Enable full double precision and 64-bit integer assertion support in Unity
 target_compile_definitions(unity PUBLIC
     UNITY_INCLUDE_DOUBLE
+    UNITY_SUPPORT_64
 )
 
 if(UNIX AND NOT APPLE)
