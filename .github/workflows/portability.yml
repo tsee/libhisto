@@ -105,7 +105,7 @@ jobs:
       - name: Validate Python Bindings
         run: |
           cd bindings/python
-          python3 -m pip install --upgrade pip numpy
+          python3 -m pip install --upgrade pip setuptools wheel numpy
           python3 setup.py build_ext --inplace
           PYTHONPATH=. python3 -m unittest discover -s tests -v
 
