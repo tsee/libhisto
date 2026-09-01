@@ -157,7 +157,7 @@ include(CMakePackageConfigHelpers)
 # Public Headers
 install(DIRECTORY include/histo
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.h"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 # pkg-config file

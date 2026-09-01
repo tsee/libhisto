@@ -67,9 +67,9 @@ bool histo_simd_has_avx512(void) {
 }
 
 bool histo_simd_has_neon(void) {
-#if defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
+#if defined(__aarch64__) || defined(_M_ARM64)
     return true;
-#elif defined(LIBHISTO_ENABLE_NEON)
+#elif defined(LIBHISTO_ENABLE_NEON) && (defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86))
     return true;
 #else
     return false;

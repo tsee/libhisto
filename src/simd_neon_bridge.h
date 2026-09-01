@@ -14,7 +14,7 @@
 #define inline __inline
 #endif
 
-#if defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
+#if defined(__aarch64__) || defined(_M_ARM64)
 
 #include <arm_neon.h>
 

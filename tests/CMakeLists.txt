@@ -23,6 +23,17 @@ add_subdirectory(unit)
 # Integration tests
 add_subdirectory(integration)
 
+# C++ wrapper tests (only enabled when C++ compiler and cpp test directory are available)
+include(CheckLanguage)
+check_language(CXX)
+if(CMAKE_CXX_COMPILER AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp/CMakeLists.txt")
+    enable_language(CXX)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    add_subdirectory(cpp)
+endif()
+
 # Fuzzing harnesses
 if(LIBHISTO_ENABLE_FUZZING)
     add_subdirectory(fuzz)
