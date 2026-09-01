@@ -3,12 +3,12 @@
  */
 
 #include "simd.h"
+#if defined(LIBHISTO_ENABLE_NEON) && (defined(__aarch64__) || defined(_M_ARM64) || defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2))
+
+#include "simd_neon_bridge.h"
 #include "internal.h"
 #include "internal_2d.h"
-#include "simd_neon_bridge.h"
 #include <math.h>
-
-#ifdef LIBHISTO_ENABLE_NEON
 
 bool histo_fill_uniform_neon(histo_t *h, const double *x, size_t n) {
     size_t i = 0;

@@ -106,7 +106,7 @@ bool histo2d_fill_uniform_w2_avx512(histo2d_t *h, const double *x, const double 
 }
 #endif
 
-#if !defined(LIBHISTO_ENABLE_NEON)
+#if !defined(LIBHISTO_ENABLE_NEON) || (!defined(__aarch64__) && !defined(_M_ARM64) && !defined(__SSE2__) && !defined(_M_X64) && (!defined(_M_IX86_FP) || _M_IX86_FP < 2))
 bool histo_fill_uniform_neon(histo_t *h, const double *x, size_t n) {
     (void)h; (void)x; (void)n; return false;
 }
