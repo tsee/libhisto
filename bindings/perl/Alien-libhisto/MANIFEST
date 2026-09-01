@@ -43,6 +43,7 @@ bundled/tools/include/tui_term.h
 bundled/tools/include/tui_thread.h
 bundled/tools/scripts/bump_version.py
 bundled/tools/scripts/gen_terminal_svg.py
+bundled/tools/scripts/test_container.py
 bundled/tools/src/.tui_engine.c.swp
 bundled/tools/src/cli_common.c
 bundled/tools/src/cli_main.c

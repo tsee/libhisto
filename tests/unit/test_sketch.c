@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <string.h>
 
-void test_sketch_basic() {
+static void test_sketch_basic(void) {
     histo_sketch_t *s = histo_sketch_create(0.01, 1000);
     assert(s != NULL);
     
@@ -28,7 +28,7 @@ void test_sketch_basic() {
     histo_sketch_destroy(s);
 }
 
-void test_sketch_merge() {
+static void test_sketch_merge(void) {
     histo_sketch_t *s1 = histo_sketch_create(0.01, 1000);
     histo_sketch_t *s2 = histo_sketch_create(0.01, 1000);
     
@@ -42,7 +42,7 @@ void test_sketch_merge() {
     histo_sketch_destroy(s2);
 }
 
-void test_sketch_serialization() {
+static void test_sketch_serialization(void) {
     histo_sketch_t *s = histo_sketch_create(0.01, 1000);
     assert(s != NULL);
 
@@ -78,7 +78,7 @@ void test_sketch_serialization() {
     histo_sketch_destroy(restored);
 }
 
-void test_sketch_fractional_weights() {
+static void test_sketch_fractional_weights(void) {
     histo_sketch_t *s = histo_sketch_create(0.01, 1000);
     assert(s != NULL);
 
@@ -111,7 +111,7 @@ void test_sketch_fractional_weights() {
     histo_sketch_destroy(s);
 }
 
-void test_sketch_negative_symmetry() {
+static void test_sketch_negative_symmetry(void) {
     histo_sketch_t *s = histo_sketch_create(0.005, 1000);
     assert(s != NULL);
 
@@ -144,7 +144,7 @@ void test_sketch_negative_symmetry() {
     histo_sketch_destroy(s);
 }
 
-int main() {
+int main(void) {
     test_sketch_basic();
     test_sketch_merge();
     test_sketch_serialization();

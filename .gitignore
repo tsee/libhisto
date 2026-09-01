@@ -35,4 +35,5 @@ __pycache__/
 *.egg-info/
 dist/
 bindings/python/bundled/
+scratch/
 

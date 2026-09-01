@@ -228,7 +228,6 @@ void test_conservation_of_weight_1d_and_2d(void) {
 
         uint32_t rng = 998877;
         const size_t num_samples = 200000;
-        double total_injected_weight = 0.0;
 
         for (size_t i = 0; i < num_samples; ++i) {
             rng = rng * 1664525u + 1013904223u;
@@ -238,7 +237,6 @@ void test_conservation_of_weight_1d_and_2d(void) {
             double w = 1.0 + (double)(rng % 4) * 0.5;
 
             histo2d_fill_w(h2, x, y, w);
-            total_injected_weight += w;
         }
 
         double sum_cells = 0.0;
