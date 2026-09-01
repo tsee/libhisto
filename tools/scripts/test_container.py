@@ -20,6 +20,7 @@ TARGETS = {
     "musl": {
         "description": "Alpine Linux (x86_64, musl libc, strict ISO C99 verification)",
         "image": "alpine:latest",
+        "platform": "linux/amd64",
         "install_cmd": "apk add --no-cache build-base cmake",
         "install_full_cmd": "apk add --no-cache build-base cmake python3 py3-setuptools perl perl-dev",
         "arch": "x86_64",
@@ -28,7 +29,8 @@ TARGETS = {
     },
     "s390x": {
         "description": "Debian Linux (s390x IBM Z, 64-bit Big-Endian, wire format & byte-swapping)",
-        "image": "s390x/debian:bookworm-slim",
+        "image": "debian:bookworm-slim",
+        "platform": "linux/s390x",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
         "arch": "s390x",
@@ -37,7 +39,8 @@ TARGETS = {
     },
     "i386": {
         "description": "Debian Linux (i386, 32-bit x86 container, ILP32 data model & size_t limits)",
-        "image": "i386/debian:bookworm-slim",
+        "image": "debian:bookworm-slim",
+        "platform": "linux/386",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
         "arch": "i386",
@@ -46,7 +49,8 @@ TARGETS = {
     },
     "arm64": {
         "description": "Debian Linux (aarch64 / ARM64, ARM NEON SIMD acceleration)",
-        "image": "arm64v8/debian:bookworm-slim",
+        "image": "debian:bookworm-slim",
+        "platform": "linux/arm64",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
         "arch": "aarch64",
@@ -55,7 +59,8 @@ TARGETS = {
     },
     "armv7": {
         "description": "Debian Linux (arm32v7 / ARMv7, 32-bit ARM embedded architecture)",
-        "image": "arm32v7/debian:bookworm-slim",
+        "image": "debian:bookworm-slim",
+        "platform": "linux/arm/v7",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
         "arch": "armv7l",
@@ -64,7 +69,8 @@ TARGETS = {
     },
     "riscv64": {
         "description": "Debian Linux (riscv64, 64-bit RISC-V portable scalar fallback)",
-        "image": "riscv64/debian:bookworm-slim",
+        "image": "debian:bookworm-slim",
+        "platform": "linux/riscv64",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
         "arch": "riscv64",
@@ -74,6 +80,7 @@ TARGETS = {
     "native-32bit": {
         "description": "Host Native 32-bit x86 (-m32 multilib execution directly on Linux host)",
         "image": None,
+        "platform": None,
         "arch": "i686",
         "endian": "little",
         "bits": 32,
@@ -267,11 +274,15 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
         engine,
         "run",
         "--rm",
+    ]
+    if config.get("platform"):
+        docker_cmd.extend(["--platform", config["platform"]])
+    docker_cmd.extend([
         "-v", f"{repo_root}:/workspace",
         "-w", "/workspace",
         image,
         "sh", "-c", container_script,
-    ]
+    ])
 
     log(f"Starting target '{target_name}' [{config['description']}] using {engine} ({image})...")
     t0 = time.time()

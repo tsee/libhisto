@@ -442,7 +442,7 @@ histo_fill_n(h, N_SAMPLES, values, NULL);
 - **Endian Independence**: Wire formats enforce canonical Little-Endian representation with automatic byte-swapping on Big-Endian systems (`s390x`, `ppc64`).
 - **Data Model Portability**: Verified on both 32-bit (ILP32 / `i686`) and 64-bit (LP64 / LLP64) architectures.
 - **Strict C99 Compliance**: Zero dependencies beyond ISO C99 standard library; verified against `musl` libc in addition to `glibc`.
-- **Automated Multi-Arch Test Harness**: Run `make test-matrix-local` or `make portability` to validate across all emulated architectures (see [`CONTRIBUTING.md`](../CONTRIBUTING.md) for full developer documentation).
+- **Automated Multi-Arch Test Harness**: Run `make test-matrix-local` or `make portability` to validate across all emulated architectures (see `CONTRIBUTING.md` in repository root for full developer documentation).
 
 ---
 
