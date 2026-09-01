@@ -28,8 +28,8 @@ TARGETS = {
         "bits": 64,
     },
     "s390x": {
-        "description": "Debian Linux (s390x IBM Z, 64-bit Big-Endian, wire format & byte-swapping)",
-        "image": "debian:bookworm-slim",
+        "description": "Ubuntu Linux (s390x IBM Z, 64-bit Big-Endian, wire format & byte-swapping)",
+        "image": "ubuntu:24.04",
         "platform": "linux/s390x",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
@@ -48,8 +48,8 @@ TARGETS = {
         "bits": 32,
     },
     "arm64": {
-        "description": "Debian Linux (aarch64 / ARM64, ARM NEON SIMD acceleration)",
-        "image": "debian:bookworm-slim",
+        "description": "Ubuntu Linux (aarch64 / ARM64, ARM NEON SIMD acceleration)",
+        "image": "ubuntu:24.04",
         "platform": "linux/arm64",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
@@ -58,8 +58,8 @@ TARGETS = {
         "bits": 64,
     },
     "armv7": {
-        "description": "Debian Linux (arm32v7 / ARMv7, 32-bit ARM embedded architecture)",
-        "image": "debian:bookworm-slim",
+        "description": "Ubuntu Linux (arm32v7 / ARMv7, 32-bit ARM embedded architecture)",
+        "image": "ubuntu:24.04",
         "platform": "linux/arm/v7",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
@@ -68,8 +68,8 @@ TARGETS = {
         "bits": 32,
     },
     "riscv64": {
-        "description": "Debian Linux (riscv64, 64-bit RISC-V portable scalar fallback)",
-        "image": "debian:bookworm-slim",
+        "description": "Ubuntu Linux (riscv64, 64-bit RISC-V portable scalar fallback)",
+        "image": "ubuntu:24.04",
         "platform": "linux/riscv64",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
         "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",

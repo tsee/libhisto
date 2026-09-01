@@ -84,12 +84,12 @@ Containerized testing via Docker or Podman with transparent QEMU user-mode emula
 
 | Target | Command | Image / Runtime | Key Validation in `libhisto` |
 | :--- | :--- | :--- | :--- |
-| **Strict C99 / Musl** | `make test-musl` | `alpine:latest` | `musl` libc compliance; catches non-standard GNU extension leaks. |
-| **Big-Endian Wire Format** | `make test-big-endian` | `s390x/debian:bookworm-slim` | Endian byte-swapping macros and serialization wire format in [`src/serialize.c`](src/serialize.c). |
-| **32-Bit Userland** | `make test-32bit` | `i386/debian:bookworm-slim` | 32-bit `size_t` limits and integer overflow in bin index math. |
-| **ARM NEON SIMD** | `make test-arm64` | `arm64v8/debian:bookworm-slim` | ARM64 NEON vector acceleration in [`src/simd_neon.c`](src/simd_neon.c). |
-| **Embedded 32-Bit ARM** | `make test-armv7` | `arm32v7/debian:bookworm-slim` | 32-bit alignment and scalar/NEON fallback kernels. |
-| **RISC-V Architecture** | `make test-riscv64` | `riscv64/debian:bookworm-slim` | 64-bit RISC-V portable scalar math execution. |
+| **Strict C99 / Musl** | `make test-musl` | `alpine:latest` (`linux/amd64`) | `musl` libc compliance; catches non-standard GNU extension leaks. |
+| **Big-Endian Wire Format** | `make test-big-endian` | `ubuntu:24.04` (`linux/s390x`) | Endian byte-swapping macros and serialization wire format in [`src/serialize.c`](src/serialize.c). |
+| **32-Bit Userland** | `make test-32bit` | `debian:bookworm-slim` (`linux/386`) | 32-bit `size_t` limits and integer overflow in bin index math. |
+| **ARM NEON SIMD** | `make test-arm64` | `ubuntu:24.04` (`linux/arm64`) | ARM64 NEON vector acceleration in [`src/simd_neon.c`](src/simd_neon.c). |
+| **Embedded 32-Bit ARM** | `make test-armv7` | `ubuntu:24.04` (`linux/arm/v7`) | 32-bit alignment and scalar/NEON fallback kernels. |
+| **RISC-V Architecture** | `make test-riscv64` | `ubuntu:24.04` (`linux/riscv64`) | 64-bit RISC-V portable scalar math execution. |
 | **Full Local Matrix** | `make test-matrix-local` | *Runs all above targets* | Complete multi-architecture and libc validation pass. |
 
 #### Python 3 Test Harness CLI (`tools/scripts/test_container.py`)
