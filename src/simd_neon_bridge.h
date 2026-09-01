@@ -18,6 +18,13 @@
 
 #include <arm_neon.h>
 
+#if !defined(vmvnq_u64)
+static inline uint64x2_t histo_vmvnq_u64(uint64x2_t v) {
+    return vreinterpretq_u64_u32(vmvnq_u32(vreinterpretq_u32_u64(v)));
+}
+#define vmvnq_u64(v) histo_vmvnq_u64(v)
+#endif
+
 #else
 /* NEON bridge / emulation layer for x86_64 / other host targets */
 

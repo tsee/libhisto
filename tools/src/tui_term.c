@@ -4,6 +4,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
+#define _BSD_SOURCE
 #define _XOPEN_SOURCE 700
 
 #include "tui_term.h"
@@ -27,7 +28,14 @@
 #ifndef isatty
 #define isatty _isatty
 #endif
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
+#ifndef ENABLE_VIRTUAL_TERMINAL_INPUT
+#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x0200
+#endif
 #else
+#include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ioctl.h>
@@ -77,7 +85,9 @@ bool tui_term_init(void) {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = sigwinch_handler;
+#ifdef SIGWINCH
     sigaction(SIGWINCH, &sa, NULL);
+#endif
 
     struct sigaction sa_int;
     memset(&sa_int, 0, sizeof(sa_int));

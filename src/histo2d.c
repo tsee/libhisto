@@ -1042,7 +1042,7 @@ histo_status_t histo2d_profile_x(const histo2d_t *h, histo_t **out_profile_1d) {
             double w = h->bins[histo2d_linear_index(ix, iy, ny)];
             if (w <= 0.0) continue;
 
-            double cx, cy;
+            double cx = 0.0, cy = 0.0;
             histo2d_bin_center(h, ix, iy, &cx, &cy);
             (void)cx;
 
@@ -1065,7 +1065,7 @@ histo_status_t histo2d_profile_x(const histo2d_t *h, histo_t **out_profile_1d) {
             double w = h->bins[idx];
             if (w <= 0.0) continue;
 
-            double cx, cy;
+            double cx = 0.0, cy = 0.0;
             histo2d_bin_center(h, ix, iy, &cx, &cy);
             (void)cx;
 
@@ -1121,7 +1121,7 @@ histo_status_t histo2d_profile_y(const histo2d_t *h, histo_t **out_profile_1d) {
             double w = h->bins[histo2d_linear_index(ix, iy, ny)];
             if (w <= 0.0) continue;
 
-            double cx, cy;
+            double cx = 0.0, cy = 0.0;
             histo2d_bin_center(h, ix, iy, &cx, &cy);
             (void)cy;
 
@@ -1144,7 +1144,7 @@ histo_status_t histo2d_profile_y(const histo2d_t *h, histo_t **out_profile_1d) {
             double w = h->bins[idx];
             if (w <= 0.0) continue;
 
-            double cx, cy;
+            double cx = 0.0, cy = 0.0;
             histo2d_bin_center(h, ix, iy, &cx, &cy);
             (void)cy;
 

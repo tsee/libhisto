@@ -6,6 +6,10 @@
 
 #if defined(_MSC_VER)
 #include <intrin.h>
+#elif defined(__GNUC__) || defined(__clang__)
+#if (defined(__x86_64__) || defined(__i386__))
+#include <cpuid.h>
+#endif
 #endif
 
 bool histo_simd_has_avx2(void) {
@@ -17,18 +21,16 @@ bool histo_simd_has_avx2(void) {
     if (nIds < 7) return false;
     __cpuidex(cpu_info, 7, 0);
     return (cpu_info[1] & (1 << 5)) != 0; /* AVX2 bit in EBX */
-#elif defined(__GNUC__) || defined(__clang__)
-#if defined(__has_builtin)
-#if __has_builtin(__builtin_cpu_supports)
+#elif defined(__GNUC__) && (__GNUC__ >= 5 || defined(__clang__))
     __builtin_cpu_init();
-    return __builtin_cpu_supports("avx2");
-#else
+    return __builtin_cpu_supports("avx2") != 0;
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    if (__get_cpuid_max(0, NULL) >= 7) {
+        __cpuid_count(7, 0, eax, ebx, ecx, edx);
+        return (ebx & (1u << 5)) != 0; /* AVX2 bit 5 in EBX */
+    }
     return false;
-#endif
-#else
-    __builtin_cpu_init();
-    return __builtin_cpu_supports("avx2");
-#endif
 #else
     return false;
 #endif
@@ -46,18 +48,16 @@ bool histo_simd_has_avx512(void) {
     if (nIds < 7) return false;
     __cpuidex(cpu_info, 7, 0);
     return (cpu_info[1] & (1 << 16)) != 0; /* AVX512F bit in EBX */
-#elif defined(__GNUC__) || defined(__clang__)
-#if defined(__has_builtin)
-#if __has_builtin(__builtin_cpu_supports)
+#elif defined(__GNUC__) && (__GNUC__ >= 5 || defined(__clang__))
     __builtin_cpu_init();
-    return __builtin_cpu_supports("avx512f");
-#else
+    return __builtin_cpu_supports("avx512f") != 0;
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    if (__get_cpuid_max(0, NULL) >= 7) {
+        __cpuid_count(7, 0, eax, ebx, ecx, edx);
+        return (ebx & (1u << 16)) != 0; /* AVX512F bit 16 in EBX */
+    }
     return false;
-#endif
-#else
-    __builtin_cpu_init();
-    return __builtin_cpu_supports("avx512f");
-#endif
 #else
     return false;
 #endif
