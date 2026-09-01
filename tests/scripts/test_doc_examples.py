@@ -285,7 +285,10 @@ def test_c_block(block, source_dir, build_dir, compiler, cflags, verbose):
                     print(f"{i:4d}: {l}")
                 return False
 
-        run_res = subprocess.run([bin_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        exec_bin = bin_file
+        if not os.path.exists(exec_bin) and os.path.exists(exec_bin + ".exe"):
+            exec_bin += ".exe"
+        run_res = subprocess.run([exec_bin], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if run_res.returncode != 0:
             print(f"\n[FAIL] Execution error in {filepath}:{line} (exit code {run_res.returncode})")
             print(run_res.stderr)
@@ -308,6 +311,8 @@ def test_cli_block(block, source_dir, build_dir, verbose):
 
     tools_dir = os.path.abspath(os.path.join(build_dir, "tools"))
     histo_bin = os.path.join(tools_dir, "histo")
+    if not os.path.exists(histo_bin) and os.path.exists(histo_bin + ".exe"):
+        histo_bin += ".exe"
     if not os.path.exists(histo_bin):
         # When CLI tools are disabled (e.g. LIBHISTO_BUILD_TOOLS=OFF / hermetic core build),
         # CLI command execution is skipped gracefully while verifying all C examples.

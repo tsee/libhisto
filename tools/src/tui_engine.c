@@ -54,8 +54,18 @@ bool histo_shm_create(histo_shm_t *shm, const char *path, size_t capacity, uint3
     shm->size = total_size;
 
 #if defined(_WIN32) || defined(_WIN64)
+    const char *win_name = path;
+    while (*win_name == '/' || *win_name == '\\') win_name++;
+    char clean_name[256];
+    size_t ki = 0;
+    for (size_t i = 0; win_name[i] && ki < sizeof(clean_name) - 1; i++) {
+        clean_name[ki++] = (win_name[i] == '/' || win_name[i] == '\\') ? '_' : win_name[i];
+    }
+    clean_name[ki] = '\0';
+    const char *target_name = clean_name[0] ? clean_name : "histo_shm_default";
+
     HANDLE hMap = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
-                                     (DWORD)(total_size >> 32), (DWORD)(total_size & 0xFFFFFFFF), path);
+                                     (DWORD)(total_size >> 32), (DWORD)(total_size & 0xFFFFFFFF), target_name);
     if (!hMap) return false;
     shm->os_handle = (void *)hMap;
     shm->ring = (histo_shm_ring_t *)MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, total_size);
@@ -112,7 +122,17 @@ bool histo_shm_open(histo_shm_t *shm, const char *path) {
     shm->is_creator = false;
 
 #if defined(_WIN32) || defined(_WIN64)
-    HANDLE hMap = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, path);
+    const char *win_name = path;
+    while (*win_name == '/' || *win_name == '\\') win_name++;
+    char clean_name[256];
+    size_t ki = 0;
+    for (size_t i = 0; win_name[i] && ki < sizeof(clean_name) - 1; i++) {
+        clean_name[ki++] = (win_name[i] == '/' || win_name[i] == '\\') ? '_' : win_name[i];
+    }
+    clean_name[ki] = '\0';
+    const char *target_name = clean_name[0] ? clean_name : "histo_shm_default";
+
+    HANDLE hMap = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, target_name);
     if (!hMap) return false;
     shm->os_handle = (void *)hMap;
     histo_shm_ring_t *hdr = (histo_shm_ring_t *)MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, sizeof(histo_shm_ring_t));
