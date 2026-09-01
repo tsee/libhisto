@@ -259,11 +259,12 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
     install_cmd = config["install_full_cmd"] if full else config["install_cmd"]
 
     # QEMU user-mode multithreading safeguard: on foreign architectures, high parallel job counts
-    # can trigger signal/thread race conditions in QEMU. Clamp to a safe concurrency limit.
+    # can trigger signal/thread race conditions in QEMU (e.g. collect2 / as internal compiler errors).
     effective_jobs = jobs
     if config.get("arch") and is_foreign_arch(config["arch"]):
-        if jobs > 4:
-            effective_jobs = 4
+        max_emulated_jobs = 2 if config.get("arch") in ["s390x", "armv7l"] else 4
+        if jobs > max_emulated_jobs:
+            effective_jobs = max_emulated_jobs
             log(f"Notice: Clamped parallel concurrency to -j{effective_jobs} for emulated target '{target_name}' (QEMU user-mode stability safeguard).")
 
     extra_cmake_flags = config.get("cmake_flags", "")
@@ -275,7 +276,7 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
         "ulimit -c unlimited || true",
         install_cmd,
         cmake_config_cmd,
-        f"cmake --build {build_dir_name} -j{effective_jobs}",
+        f"(cmake --build {build_dir_name} -j{effective_jobs} || cmake --build {build_dir_name} -j1)",
         f"ctest --test-dir {build_dir_name} -j{effective_jobs} --output-on-failure",
     ]
 
