@@ -408,8 +408,8 @@ int main(void) {
 - **Branchless Masking**: Out-of-bounds (< min, >= max) and non-finite (`NaN` / `Inf`) samples are filtered with vector comparison masks.
 
 ```c
-#define N_SAMPLES 1000000
-double values[N_SAMPLES];
+#define N_SAMPLES 1000
+double values[N_SAMPLES] = {0.0};
 // Contiguous SIMD batch ingestion (~441 Mops/s on AVX-512 / AVX2)
 histo_fill_n(h, N_SAMPLES, values, NULL);
 ```
@@ -435,6 +435,14 @@ histo_fill_n(h, N_SAMPLES, values, NULL);
 | `histo2d_fill` (Uniform) | O(1) | O(1) | 2D coordinate lookup & Welford comoments |
 | `histo2d_project_x/y` | O(Nx * Ny) | O(Nx) or O(Ny) | Integrates across orthogonal axis |
 | `histo_sketch_insert` | O(1) | O(1) | DDSketch dynamic logarithmic mapping |
+
+### 6.3 Cross-Platform Architecture & Portability Verification
+
+`libhisto` is built to run identically across different CPU architectures, pointer models, endiannesses, and C standard libraries:
+- **Endian Independence**: Wire formats enforce canonical Little-Endian representation with automatic byte-swapping on Big-Endian systems (`s390x`, `ppc64`).
+- **Data Model Portability**: Verified on both 32-bit (ILP32 / `i686`) and 64-bit (LP64 / LLP64) architectures.
+- **Strict C99 Compliance**: Zero dependencies beyond ISO C99 standard library; verified against `musl` libc in addition to `glibc`.
+- **Automated Multi-Arch Test Harness**: Run `make test-matrix-local` or `make portability` to validate across all emulated architectures (see [`CONTRIBUTING.md`](../CONTRIBUTING.md) for full developer documentation).
 
 ---
 

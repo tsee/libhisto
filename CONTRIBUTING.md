@@ -41,26 +41,138 @@ Thank you for your interest in contributing to `libhisto`. This document outline
 
 ---
 
-## 5. Development Workflow & Verification Gate
+---
 
-`libhisto` provides granular and summary Makefile targets for core and multi-language development:
+## 5. Testing Strategy & Multi-Tier Verification
+
+`libhisto` enforces a 3-tier testing strategy ensuring portability across CPU architectures (x86_64, ARM64, s390x Big-Endian, RISC-V, 32-bit x86/ARM), operating systems, and C standard libraries:
+
+```
+ ┌────────────────────────────────────────────────────────┐
+ │ Tier 1: Fast Inner-Loop (Local Native, < 5s)           │  make test / make test-asan
+ ├────────────────────────────────────────────────────────┤
+ │ Tier 2: Local Hermetic Matrix (Docker/Podman, < 1m)    │  make test-matrix-local (s390x, musl, 32bit...)
+ ├────────────────────────────────────────────────────────┤
+ │ Tier 3: Pre-Release Portability Gate                   │  make portability (test-all + full matrix)
+ └────────────────────────────────────────────────────────┘
+```
+
+### 5.1 Tier 1: Local Native Inner-Loop (Host)
+
+Immediate feedback for day-to-day development using host compilers and dynamic instrumentation:
 
 ```bash
-# 1. Build and test Core C library and CLI tools
-make
-make test        # Runs core C tests under AddressSanitizer & UBSan
+# Core C library and CLI with ASan + UBSan
+make test
 
-# 2. Build and test all language bindings (Python, Perl, Node.js)
+# Thread safety & data race detection
+make test-tsan
+
+# Memory leak and uninitialized access checking
+make memcheck
+
+# Documentation inline examples validation
+make test-doc-examples
+
+# Rapid 32-bit pointer model validation via host multilib (-m32)
+make test-32bit-native
+```
+
+### 5.2 Tier 2: Local Hermetic Matrix (Containers & Emulation)
+
+Containerized testing via Docker or Podman with transparent QEMU user-mode emulation for foreign CPU architectures and alternative C runtimes:
+
+| Target | Command | Image / Runtime | Key Validation in `libhisto` |
+| :--- | :--- | :--- | :--- |
+| **Strict C99 / Musl** | `make test-musl` | `alpine:latest` | `musl` libc compliance; catches non-standard GNU extension leaks. |
+| **Big-Endian Wire Format** | `make test-big-endian` | `s390x/debian:bookworm-slim` | Endian byte-swapping macros and serialization wire format in [`src/serialize.c`](src/serialize.c). |
+| **32-Bit Userland** | `make test-32bit` | `i386/debian:bookworm-slim` | 32-bit `size_t` limits and integer overflow in bin index math. |
+| **ARM NEON SIMD** | `make test-arm64` | `arm64v8/debian:bookworm-slim` | ARM64 NEON vector acceleration in [`src/simd_neon.c`](src/simd_neon.c). |
+| **Embedded 32-Bit ARM** | `make test-armv7` | `arm32v7/debian:bookworm-slim` | 32-bit alignment and scalar/NEON fallback kernels. |
+| **RISC-V Architecture** | `make test-riscv64` | `riscv64/debian:bookworm-slim` | 64-bit RISC-V portable scalar math execution. |
+| **Full Local Matrix** | `make test-matrix-local` | *Runs all above targets* | Complete multi-architecture and libc validation pass. |
+
+#### Python 3 Test Harness CLI (`tools/scripts/test_container.py`)
+
+The test harness can also be invoked directly with granular options:
+
+```bash
+# List all available target architectures and profiles
+python3 tools/scripts/test_container.py --list
+
+# Run specific target with 8 parallel jobs
+python3 tools/scripts/test_container.py --target s390x -j 8
+
+# Run full suite (including language bindings) inside Alpine
+python3 tools/scripts/test_container.py --target musl --full
+
+# Clean up container build directories
+python3 tools/scripts/test_container.py --clean
+```
+
+### 5.3 Language Bindings & Monorepo Targets
+
+```bash
+# Build and test all language bindings (Python, Perl, Node.js)
 make bindings
 make bindings-test
 
-# 3. Run individual language bindings
+# Run individual language bindings
 make test-python
 make test-perl
 make test-node
 
-# 4. Run the complete monorepo pre-release test suite (Sanitizers, TSan, Valgrind, Distributions, Docs)
+# Run complete monorepo test suite (Sanitizers, TSan, Valgrind, Distributions, Docs)
 make test-all
 ```
 
+### 5.4 Pre-Release Portability Gate (`make portability`)
+
+Before tagging a release or merging major architectural modifications, run the complete portability gate:
+
+```bash
+make portability
+```
+This runs native `make test-all` (Release, ASan, UBSan, TSan, Valgrind, doc tests, hermetic Python/Perl/Node dist builds) followed by the complete multi-architecture and multi-libc container matrix in full mode.
+
+---
+
+## 6. Software Dependencies
+
+The development and test harnesses require the following toolchains:
+
+### Core C Toolchain
+| Tool | Minimum Version | Package Name (Debian/Ubuntu) | Purpose |
+| :--- | :--- | :--- | :--- |
+| **CMake** | 3.15+ | `cmake` | Build system configuration |
+| **GCC** or **Clang** | GCC 9+ / Clang 10+ | `build-essential` or `clang` | C99 compiler and linker |
+| **Multilib C Headers** | - | `gcc-multilib libc6-dev-i386` | Native 32-bit (`-m32`) testing |
+| **Valgrind** | 3.15+ | `valgrind` | Memory leak and corruption analysis (`make memcheck`) |
+| **Doxygen** | 1.9+ | `doxygen graphviz` | API documentation generation (`make docs`) |
+
+### Language Binding Toolchains (Optional for Core C, Required for `make test-all`)
+| Runtime / Tool | Minimum Version | Package / Setup | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Python 3** | 3.8+ | `python3 python3-dev python3-setuptools` | Python C-extension and test runner |
+| **NumPy** | 1.20+ | `python3-numpy` | Python buffer protocol and array tests |
+| **Perl** | 5.20+ | `perl libperl-dev` | XS bindings (`Math::Histo`, `Alien::libhisto`) |
+| **cpanminus** | - | `cpanminus` | Perl dependency management |
+| **Node.js & npm** | 16.0+ | `nodejs npm` | Native Node-API addon (`bindings/node`) |
+| **node-gyp** | - | `npm install -g node-gyp` | Node.js native compilation |
+
+### Container & Emulation Toolchain (Optional for Core C, Required for `test-matrix-local` & `portability`)
+| Tool | Setup Command | Purpose |
+| :--- | :--- | :--- |
+| **Docker** or **Podman** | `sudo apt install docker.io` or `podman` | Container runtime engine |
+| **QEMU User-Mode Binfmt** | `docker run --rm --privileged multiarch/qemu-user-static --reset -p yes` | Foreign CPU architecture emulation (s390x, ARM, RISC-V) |
+
+> **Docker / Podman Permissions Note**: 
+> - If using Docker, ensure your user has permission to communicate with the daemon socket: `sudo usermod -aG docker $USER` (requires logging out and back in).
+> - Alternatively, install **Podman** (`sudo apt install podman`), which runs completely rootless without requiring daemon socket permissions. `test_container.py` auto-detects and uses whichever engine is working.
+
+---
+
+## 7. AI Agent Guidelines
+
 For AI agents working on the codebase, please review the operational rules in [`AGENTS.md`](AGENTS.md).
+
