@@ -19,18 +19,19 @@ jobs:
       matrix:
         include:
           - compiler: msvc
-            generator: "Visual Studio 17 2022"
             build_type: Release
           - compiler: msvc-debug
-            generator: "Visual Studio 17 2022"
             build_type: Debug
           - compiler: mingw
-            generator: "Ninja"
             build_type: Release
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up MSVC Developer Command Prompt
+        if: matrix.compiler != 'mingw'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Set up MSYS2 MinGW-w64 (if MinGW build)
         if: matrix.compiler == 'mingw'
@@ -42,15 +43,19 @@ jobs:
 
       - name: Configure CMake (MSVC)
         if: matrix.compiler != 'mingw'
-        run: cmake -B build -S . -G "${{ matrix.generator }}" -A x64 -DLIBHISTO_ENABLE_FUZZING=ON
+        run: |
+          cmake -B build -S . -G "Ninja" \
+                -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+                -DCMAKE_C_COMPILER=cl \
+                -DLIBHISTO_ENABLE_FUZZING=ON
 
       - name: Build C Library & Tests (MSVC)
         if: matrix.compiler != 'mingw'
-        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+        run: cmake --build build --parallel 4
 
       - name: Run Test Suite (MSVC)
         if: matrix.compiler != 'mingw'
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j 4
+        run: ctest --test-dir build --output-on-failure -j 4
 
       - name: Configure CMake (MinGW)
         if: matrix.compiler == 'mingw'
