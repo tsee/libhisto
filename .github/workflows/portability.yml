@@ -32,31 +32,43 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Ninja & MinGW (if MinGW build)
+      - name: Set up MSYS2 MinGW-w64 (if MinGW build)
         if: matrix.compiler == 'mingw'
-        uses: ashutoshvarma/setup-ninja@master
+        uses: msys2/setup-msys2@v2
         with:
-          version: 1.11.1
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 
       - name: Configure CMake (MSVC)
         if: matrix.compiler != 'mingw'
         run: cmake -B build -S . -G "${{ matrix.generator }}" -A x64 -DLIBHISTO_ENABLE_FUZZING=ON
 
+      - name: Build C Library & Tests (MSVC)
+        if: matrix.compiler != 'mingw'
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+
+      - name: Run Test Suite (MSVC)
+        if: matrix.compiler != 'mingw'
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j 4
+
       - name: Configure CMake (MinGW)
         if: matrix.compiler == 'mingw'
-        shell: bash
+        shell: msys2 {0}
         run: |
           cmake -B build -S . -G "Ninja" \
                 -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-                -DCMAKE_C_COMPILER=gcc \
-                -DCMAKE_CXX_COMPILER=g++ \
                 -DLIBHISTO_ENABLE_FUZZING=ON
 
-      - name: Build C Library & Tests
-        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+      - name: Build C Library & Tests (MinGW)
+        if: matrix.compiler == 'mingw'
+        shell: msys2 {0}
+        run: cmake --build build --parallel 4
 
-      - name: Run Test Suite
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j 4
+      - name: Run Test Suite (MinGW)
+        if: matrix.compiler == 'mingw'
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure -j 4
 
   # =========================================================================
   # 2. macOS Apple Silicon Native (Apple Clang / ARM64 NEON)
@@ -78,10 +90,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Build Tools
-        run: |
-          brew install cmake ninja
-
       - name: Configure CMake
         run: |
           cmake -B build -S . -G Ninja \
@@ -97,7 +105,7 @@ jobs:
       - name: Validate Python Bindings
         run: |
           cd bindings/python
-          python3 -m pip install numpy
+          python3 -m pip install --upgrade pip numpy
           python3 setup.py build_ext --inplace
           PYTHONPATH=. python3 -m unittest discover -s tests -v
 

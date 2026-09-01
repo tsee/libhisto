@@ -14,8 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <unistd.h>
-#include <getopt.h>
 
 void setUp(void) {}
 void tearDown(void) {}

@@ -56,7 +56,7 @@ set(TOOL_ALIASES histo-fill histo-plot histo-stats histo-fit histo-cmp histo-top
 if(WIN32)
     foreach(alias ${TOOL_ALIASES})
         add_custom_command(TARGET histo-cli POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:histo-cli> ${CMAKE_CURRENT_BINARY_DIR}/${alias}.exe
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:histo-cli> $<TARGET_FILE_DIR:histo-cli>/${alias}.exe
             COMMENT "Creating CLI alias copy ${alias}.exe -> histo.exe"
         )
     endforeach()
