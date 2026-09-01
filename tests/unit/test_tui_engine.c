@@ -18,7 +18,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#include <process.h>
+#define pipe(fds) _pipe((fds), 4096, _O_BINARY)
+#define write _write
+#define close _close
+#define getpid _getpid
+#define usleep(usec) Sleep((DWORD)((usec) / 1000 > 0 ? (usec) / 1000 : 1))
+#else
 #include <sys/types.h>
 #include <unistd.h>
 #endif

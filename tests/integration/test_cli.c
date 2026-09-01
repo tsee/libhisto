@@ -19,6 +19,16 @@
 #include <string.h>
 #include <math.h>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <process.h>
+#define getpid _getpid
+int optind = 1;
+#else
+#include <unistd.h>
+#endif
+
 void setUp(void) {}
 void tearDown(void) {}
 
