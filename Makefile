@@ -5,7 +5,9 @@
         perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-perl-dist \
         build-python test-python python-dist test-python-dist \
         build-node test-node \
-        test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs
+        test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs \
+        test-musl test-big-endian test-32bit test-32bit-native test-arm64 test-armv7 test-riscv64 \
+        test-matrix-local portability test-portability
 
 BUILD_DIR ?= build
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -104,27 +106,27 @@ test-node: build-node
 
 
 
-test-asan:
+asan test-asan:
 	cmake -B $(BUILD_DIR)-asan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON -DLIBHISTO_ENABLE_FUZZING=ON
 	cmake --build $(BUILD_DIR)-asan --parallel $(JOBS)
 	ctest --test-dir $(BUILD_DIR)-asan -j$(JOBS) --output-on-failure
 
-test-fuzz:
+fuzz test-fuzz:
 	cmake -B $(BUILD_DIR)-fuzz -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_ASAN=ON -DLIBHISTO_ENABLE_FUZZING=ON
 	cmake --build $(BUILD_DIR)-fuzz --parallel $(JOBS)
 	ctest --test-dir $(BUILD_DIR)-fuzz -R "fuzz_" -j$(JOBS) --output-on-failure
 
-test-tsan:
+tsan test-tsan:
 	cmake -B $(BUILD_DIR)-tsan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_TSAN=ON
 	cmake --build $(BUILD_DIR)-tsan --parallel $(JOBS)
 	ctest --test-dir $(BUILD_DIR)-tsan -j$(JOBS) --output-on-failure
 
-test-msan:
-	cmake -B $(BUILD_DIR)-msan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_MSAN=ON
+msan test-msan:
+	CC=clang cmake -B $(BUILD_DIR)-msan -S . -DCMAKE_BUILD_TYPE=Debug -DLIBHISTO_ENABLE_MSAN=ON
 	cmake --build $(BUILD_DIR)-msan --parallel $(JOBS)
 	ctest --test-dir $(BUILD_DIR)-msan -j$(JOBS) --output-on-failure
 
-memcheck test-valgrind:
+valgrind memcheck test-valgrind:
 	cmake -B $(BUILD_DIR)-valgrind -S . -DCMAKE_BUILD_TYPE=Debug
 	cmake --build $(BUILD_DIR)-valgrind --parallel $(JOBS)
 	cd $(BUILD_DIR)-valgrind && ctest -T memcheck -E "test_doc_examples|test_perl_dist|test_python|test_python_dist" --output-on-failure
@@ -142,6 +144,40 @@ bump-version:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-version VERSION=X.Y.Z"; exit 1; fi
 	python3 tools/scripts/bump_version.py --set $(VERSION)
 
+# ======================================================================
+# Multi-Architecture & Portability Test Targets
+# ======================================================================
+test-musl:
+	python3 tools/scripts/test_container.py --target musl -j $(JOBS)
+
+test-big-endian:
+	python3 tools/scripts/test_container.py --target s390x -j $(JOBS)
+
+test-32bit:
+	python3 tools/scripts/test_container.py --target i386 -j $(JOBS)
+
+test-32bit-native:
+	python3 tools/scripts/test_container.py --target native-32bit -j $(JOBS)
+
+test-arm64:
+	python3 tools/scripts/test_container.py --target arm64 -j $(JOBS)
+
+test-armv7:
+	python3 tools/scripts/test_container.py --target armv7 -j $(JOBS)
+
+test-riscv64:
+	python3 tools/scripts/test_container.py --target riscv64 -j $(JOBS)
+
+test-matrix-local:
+	python3 tools/scripts/test_container.py --target all -j $(JOBS)
+
+portability test-portability: test-all
+	@echo "======================================================================"
+	@echo " RUNNING FULL MULTI-ARCHITECTURE CONTAINER PORTABILITY MATRIX"
+	@echo "======================================================================"
+	python3 tools/scripts/test_container.py --target all --full -j $(JOBS)
+
 clean:
-	rm -rf $(BUILD_DIR) $(BUILD_DIR)-*
+	-rm -rf $(BUILD_DIR) $(BUILD_DIR)-* 2>/dev/null
+	python3 tools/scripts/test_container.py --clean 2>/dev/null || true
 
