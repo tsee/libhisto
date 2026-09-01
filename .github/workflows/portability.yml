@@ -1,0 +1,125 @@
+name: Cross-Platform & Non-Linux Matrix CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # =========================================================================
+  # 1. Windows Native Matrix (MSVC 2022 & MinGW-w64)
+  # =========================================================================
+  windows-matrix:
+    name: Windows (${{ matrix.compiler }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: msvc
+            generator: "Visual Studio 17 2022"
+            build_type: Release
+          - compiler: msvc-debug
+            generator: "Visual Studio 17 2022"
+            build_type: Debug
+          - compiler: mingw
+            generator: "Ninja"
+            build_type: Release
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ninja & MinGW (if MinGW build)
+        if: matrix.compiler == 'mingw'
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+
+      - name: Configure CMake (MSVC)
+        if: matrix.compiler != 'mingw'
+        run: |
+          cmake -B build -S . -G "${{ matrix.generator }}" -A x64 `
+                -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+                -DLIBHISTO_ENABLE_FUZZING=ON
+
+      - name: Configure CMake (MinGW)
+        if: matrix.compiler == 'mingw'
+        shell: bash
+        run: |
+          cmake -B build -S . -G "Ninja" \
+                -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+                -DCMAKE_C_COMPILER=gcc \
+                -DCMAKE_CXX_COMPILER=g++ \
+                -DLIBHISTO_ENABLE_FUZZING=ON
+
+      - name: Build C Library & Tests
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+
+      - name: Run Test Suite
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j 4
+
+  # =========================================================================
+  # 2. macOS Apple Silicon Native (Apple Clang / ARM64 NEON)
+  # =========================================================================
+  macos-native:
+    name: macOS ARM64 (${{ matrix.build_type }})
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [ Release, Debug ]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python & Dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Build Tools
+        run: |
+          brew install cmake ninja
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . -G Ninja \
+                -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+                -DLIBHISTO_ENABLE_FUZZING=ON
+
+      - name: Build Core C Library & Tests
+        run: cmake --build build --parallel 4
+
+      - name: Run C Test Suite
+        run: ctest --test-dir build --output-on-failure -j 4
+
+      - name: Validate Python Bindings
+        run: |
+          cd bindings/python
+          pip install . pytest numpy
+          pytest tests -v
+
+  # =========================================================================
+  # 3. FreeBSD VM Matrix (BSD libc / strict POSIX)
+  # =========================================================================
+  freebsd-vm:
+    name: FreeBSD 14.0 (Clang / BSD libc)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run FreeBSD VM Build & Test
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y cmake ninja python3 py39-setuptools
+          run: |
+            cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIBHISTO_ENABLE_FUZZING=ON
+            cmake --build build --parallel 4
+            ctest --test-dir build --output-on-failure -j 4
