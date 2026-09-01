@@ -21,8 +21,8 @@ TARGETS = {
         "description": "Alpine Linux (x86_64, musl libc, strict ISO C99 verification)",
         "image": "alpine:latest",
         "platform": "linux/amd64",
-        "install_cmd": "apk add --no-cache build-base cmake",
-        "install_full_cmd": "apk add --no-cache build-base cmake python3 py3-setuptools perl perl-dev",
+        "install_cmd": "apk add --no-cache build-base cmake gdb",
+        "install_full_cmd": "apk add --no-cache build-base cmake gdb python3 py3-setuptools perl perl-dev",
         "arch": "x86_64",
         "endian": "little",
         "bits": 64,
@@ -31,8 +31,8 @@ TARGETS = {
         "description": "Ubuntu Linux (s390x IBM Z, 64-bit Big-Endian, wire format & byte-swapping)",
         "image": "ubuntu:24.04",
         "platform": "linux/s390x",
-        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
+        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
         "arch": "s390x",
         "endian": "big",
         "bits": 64,
@@ -41,8 +41,8 @@ TARGETS = {
         "description": "Debian Linux (i386, 32-bit x86 container, ILP32 data model & size_t limits)",
         "image": "debian:bookworm-slim",
         "platform": "linux/386",
-        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
+        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
         "arch": "i386",
         "endian": "little",
         "bits": 32,
@@ -51,8 +51,8 @@ TARGETS = {
         "description": "Ubuntu Linux (aarch64 / ARM64, ARM NEON SIMD acceleration)",
         "image": "ubuntu:24.04",
         "platform": "linux/arm64",
-        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
+        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
         "arch": "aarch64",
         "endian": "little",
         "bits": 64,
@@ -61,8 +61,8 @@ TARGETS = {
         "description": "Ubuntu Linux (arm32v7 / ARMv7, 32-bit ARM embedded architecture)",
         "image": "ubuntu:24.04",
         "platform": "linux/arm/v7",
-        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
+        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
         "arch": "armv7l",
         "endian": "little",
         "bits": 32,
@@ -71,8 +71,8 @@ TARGETS = {
         "description": "Ubuntu Linux (riscv64, 64-bit RISC-V portable scalar fallback)",
         "image": "ubuntu:24.04",
         "platform": "linux/riscv64",
-        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake python3 python3-setuptools perl libperl-dev",
+        "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
         "arch": "riscv64",
         "endian": "little",
         "bits": 64,
@@ -242,16 +242,25 @@ def run_native_32bit(repo_root, jobs, build_type="Release", full=False):
 
 
 def run_container_target(repo_root, target_name, config, engine, jobs, build_type="Release", full=False):
-    """Run build and test inside a container target."""
+    """Run build and test inside a container target with enhanced crash reporting."""
     image = config["image"]
     build_dir_name = f"build-container-{target_name}"
     install_cmd = config["install_full_cmd"] if full else config["install_cmd"]
 
+    # QEMU user-mode multithreading safeguard: on foreign architectures, high parallel job counts
+    # can trigger signal/thread race conditions in QEMU. Clamp to a safe concurrency limit.
+    effective_jobs = jobs
+    if config.get("arch") and is_foreign_arch(config["arch"]):
+        if jobs > 4:
+            effective_jobs = 4
+            log(f"Notice: Clamped parallel concurrency to -j{effective_jobs} for emulated target '{target_name}' (QEMU user-mode stability safeguard).")
+
     test_commands = [
+        "ulimit -c unlimited || true",
         install_cmd,
         f"cmake -B {build_dir_name} -S . -DCMAKE_BUILD_TYPE={build_type}",
-        f"cmake --build {build_dir_name} -j{jobs}",
-        f"ctest --test-dir {build_dir_name} -j{jobs} --output-on-failure",
+        f"cmake --build {build_dir_name} -j{effective_jobs}",
+        f"ctest --test-dir {build_dir_name} -j{effective_jobs} --output-on-failure",
     ]
 
     if full:
@@ -274,6 +283,7 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
         engine,
         "run",
         "--rm",
+        "--ulimit", "core=-1",
     ]
     if config.get("platform"):
         docker_cmd.extend(["--platform", config["platform"]])
@@ -286,7 +296,62 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
 
     log(f"Starting target '{target_name}' [{config['description']}] using {engine} ({image})...")
     t0 = time.time()
-    subprocess.run(docker_cmd, check=True)
+    try:
+        subprocess.run(docker_cmd, check=True)
+    except subprocess.CalledProcessError as err:
+        elapsed = time.time() - t0
+        log_error(f"Target '{target_name}' FAILED with exit code {err.returncode} after {elapsed:.2f}s.")
+
+        # If a crash / segfault / abort occurred (exit code 139=SIGSEGV, 134=SIGABRT, 132=SIGILL, 136=SIGFPE),
+        # run a post-mortem diagnostic pass in the container to extract GDB stack traces and core dumps.
+        if err.returncode in [139, 134, 132, 136, 2, 1]:
+            sig_name = {139: "SIGSEGV (Segmentation Fault)", 134: "SIGABRT (Abort)", 132: "SIGILL (Illegal Instruction)", 136: "SIGFPE (Floating Point Exception)"}.get(err.returncode, f"Error {err.returncode}")
+            print("\n" + "=" * 75)
+            log_error(f"AUTOMATED CRASH INSPECTION & POST-MORTEM DIAGNOSTICS: {sig_name}")
+            print("=" * 75)
+            print(f"Target Architecture : {config.get('arch')} ({config.get('bits', 64)}-bit {config.get('endian', 'little')}-endian)")
+            print(f"Container Image     : {image} ({config.get('platform', 'native')})")
+            print(f"Build Directory     : {build_dir_name}")
+            print("=" * 75)
+
+            debug_script = (
+                "echo '--- Active System & Core Pattern ---' && "
+                "uname -a && "
+                "cat /proc/sys/kernel/core_pattern 2>/dev/null || true && "
+                "echo '--- Core Dump Search & GDB Backtrace ---' && "
+                "CORE_FILE=$(find . /tmp /var/crash /workspace -name 'core*' -o -name '*.core' 2>/dev/null | head -n 1) && "
+                "if [ -n \"$CORE_FILE\" ]; then "
+                "  echo \"Found Core Dump: $CORE_FILE\" && "
+                "  BIN_FILE=$(find " + build_dir_name + " -type f -executable -not -name '*.sh' 2>/dev/null | head -n 1) && "
+                "  if command -v gdb >/dev/null 2>&1 && [ -n \"$BIN_FILE\" ]; then "
+                "    echo \"Inspecting with GDB against binary: $BIN_FILE...\" && "
+                "    gdb --batch -ex 'set pagination off' -ex 'bt full' -ex 'thread apply all bt full' \"$BIN_FILE\" \"$CORE_FILE\" 2>/dev/null || true; "
+                "  fi; "
+                "else "
+                "  echo 'Note: No local core file saved in container volume (host kernel may handle core dumps via systemd-coredump or kernel pipe).'; "
+                "fi && "
+                "if [ \"" + str(err.returncode) + "\" = \"139\" ] && [ \"" + str(is_foreign_arch(config.get("arch", ""))) + "\" = \"True\" ]; then "
+                "  echo '--- QEMU Emulation Note ---' && "
+                "  echo 'A SIGSEGV during multi-threaded build under QEMU user-mode emulation is typically caused by QEMU binfmt thread limit exhaustion.' && "
+                "  echo 'Remedy: Retry with lower concurrency (e.g. -j 2 or -j 1) or upgrade host qemu-user-static.'; "
+                "fi"
+            )
+            inspect_cmd = [engine, "run", "--rm"]
+            if config.get("platform"):
+                inspect_cmd.extend(["--platform", config["platform"]])
+            inspect_cmd.extend([
+                "-v", f"{repo_root}:/workspace",
+                "-w", "/workspace",
+                image,
+                "sh", "-c", debug_script
+            ])
+            try:
+                subprocess.run(inspect_cmd, timeout=30)
+            except Exception:
+                pass
+            print("=" * 75 + "\n")
+        raise err
+
     elapsed = time.time() - t0
     log_success(f"Target '{target_name}' PASSED in {elapsed:.2f}s")
     return True

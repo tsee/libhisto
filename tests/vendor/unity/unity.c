@@ -5,7 +5,100 @@
     SPDX-License-Identifier: MIT
 ========================================================================= */
 
+#define _GNU_SOURCE 1
+#define _POSIX_C_SOURCE 200809L
+
 #include "unity.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#if !defined(_WIN32)
+#include <signal.h>
+#include <unistd.h>
+#if defined(__GLIBC__) || defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
+#include <execinfo.h>
+#define UNITY_HAS_EXECINFO 1
+#endif
+
+static void unity_crash_signal_handler(int sig, siginfo_t *info, void *ucontext) {
+    (void)ucontext;
+    const char *sig_name = "UNKNOWN_SIGNAL";
+    switch (sig) {
+        case SIGSEGV: sig_name = "SIGSEGV (Segmentation Fault)"; break;
+        case SIGABRT: sig_name = "SIGABRT (Abort / Assertion Failure)"; break;
+        case SIGBUS:  sig_name = "SIGBUS (Bus Error / Invalid Alignment)"; break;
+        case SIGFPE:  sig_name = "SIGFPE (Floating Point Exception)"; break;
+        case SIGILL:  sig_name = "SIGILL (Illegal Instruction)"; break;
+    }
+
+    fprintf(stderr, "\n======================================================================\n");
+    fprintf(stderr, " FATAL TEST RUNNER CRASH: %s (Signal %d)\n", sig_name, sig);
+    fprintf(stderr, "======================================================================\n");
+    fprintf(stderr, " Test File    : %s\n", Unity.TestFile ? Unity.TestFile : "unknown");
+    fprintf(stderr, " Active Test  : %s\n", Unity.CurrentTestName ? Unity.CurrentTestName : "(before/after test)");
+    fprintf(stderr, " Test Line    : %u\n", (unsigned int)Unity.CurrentTestLineNumber);
+    if (info && (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL || sig == SIGFPE)) {
+        fprintf(stderr, " Fault Address: %p\n", info->si_addr);
+    }
+    fprintf(stderr, " Pointer Size : %zu-bit (sizeof(void*) = %zu)\n", sizeof(void*) * 8, sizeof(void*));
+    fprintf(stderr, " System Arch  : ");
+#if defined(__x86_64__) || defined(_M_X64)
+    fprintf(stderr, "x86_64 (64-bit x86)\n");
+#elif defined(__i386__) || defined(_M_IX86)
+    fprintf(stderr, "i386 (32-bit x86)\n");
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    fprintf(stderr, "aarch64 (64-bit ARM)\n");
+#elif defined(__arm__) || defined(_M_ARM)
+    fprintf(stderr, "arm (32-bit ARM)\n");
+#elif defined(__s390x__)
+    fprintf(stderr, "s390x (64-bit IBM Z, Big-Endian)\n");
+#elif defined(__riscv)
+    fprintf(stderr, "riscv (RISC-V)\n");
+#else
+    fprintf(stderr, "unknown\n");
+#endif
+
+#if defined(UNITY_HAS_EXECINFO)
+    fprintf(stderr, "----------------------------------------------------------------------\n");
+    fprintf(stderr, " STACK BACKTRACE:\n");
+    void *stack[64];
+    int depth = backtrace(stack, 64);
+    if (depth > 0) {
+        backtrace_symbols_fd(stack, depth, STDERR_FILENO);
+    } else {
+        fprintf(stderr, "  (no stack frames recorded)\n");
+    }
+#endif
+    fprintf(stderr, "======================================================================\n\n");
+    fflush(stderr);
+
+    /* Restore default handler and re-raise */
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL;
+    sigaction(sig, &sa, NULL);
+    raise(sig);
+}
+
+static void unity_install_crash_handlers(void) {
+    static int installed = 0;
+    if (installed) return;
+    installed = 1;
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = unity_crash_signal_handler;
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sigemptyset(&sa.sa_mask);
+
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGABRT, &sa, NULL);
+    sigaction(SIGBUS, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
+    sigaction(SIGILL, &sa, NULL);
+}
+#endif
 
 #ifndef UNITY_PROGMEM
 #define UNITY_PROGMEM
@@ -2519,6 +2612,9 @@ void UnitySetTestFile(const char* filename)
 /*-----------------------------------------------*/
 void UnityBegin(const char* filename)
 {
+#if !defined(_WIN32)
+    unity_install_crash_handlers();
+#endif
     Unity.TestFile = filename;
     Unity.CurrentTestName = NULL;
     Unity.CurrentTestLineNumber = 0;
