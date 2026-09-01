@@ -6,6 +6,8 @@ project(libhisto
     LANGUAGES C
 )
 
+include(GNUInstallDirs)
+
 # Standard C99
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -171,7 +173,6 @@ endif()
 # ------------------------------------------------------------------------------
 # Installation, Export Targets & Packaging
 # ------------------------------------------------------------------------------
-include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 # Public Headers
