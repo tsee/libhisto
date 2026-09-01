@@ -70,6 +70,9 @@ static void assert_histograms_2d_equal(const histo2d_t *h1, const histo2d_t *h2)
 
 void test_neon_uniform_in_range(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     const size_t sizes[] = {1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 31, 32, 63, 64, 127, 128, 513};
     size_t num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
@@ -105,6 +108,9 @@ void test_neon_uniform_in_range(void) {
 
 void test_neon_exact_edges(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     double edges[] = {
         0.0, 0.0 + 1e-15,
         9.99999999999999, 10.0, 10.00000000000001,
@@ -138,6 +144,9 @@ void test_neon_exact_edges(void) {
 
 void test_neon_out_of_range_and_specials(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     double specials[] = {
         -INFINITY, -1e308, -500.0, -0.000001,
         10.0, 25.0, 50.0, 75.0,
@@ -168,6 +177,9 @@ void test_neon_out_of_range_and_specials(void) {
 
 void test_neon_weighted_w2(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     const size_t sizes[] = {1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 31, 32, 63, 64, 127, 128, 513};
     size_t num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
@@ -214,6 +226,9 @@ void test_neon_weighted_w2(void) {
 
 void test_neon_2d_uniform_in_range(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     const size_t n = 64;
     double x[64], y[64];
     for (size_t i = 0; i < n; ++i) {
@@ -242,6 +257,9 @@ void test_neon_2d_uniform_in_range(void) {
 
 void test_neon_2d_weighted_w2(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     const size_t sizes[] = {1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 31, 32, 63, 64, 127, 128, 513};
     size_t num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
@@ -292,6 +310,9 @@ void test_neon_2d_weighted_w2(void) {
 
 void test_neon_2d_all_regions_and_specials(void) {
 #ifdef LIBHISTO_ENABLE_NEON
+    if (!histo_simd_has_neon()) {
+        TEST_IGNORE_MESSAGE("NEON CPU instructions not supported on host");
+    }
     /* Test samples hitting all 9 regions in 2D plus IEEE specials */
     double x_vals[] = {
         50.0,   /* center */
@@ -673,7 +694,13 @@ void test_simd_dispatch_equivalence_2d(void) {
 void test_simd_arbitrary_buffer_sizes_and_alignments(void) {
     const size_t sizes[] = {0, 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 100, 1000, 10007};
     const size_t num_sizes = sizeof(sizes) / sizeof(sizes[0]);
-    const size_t offsets[] = {0, 1, 2, 3, 4, 7};
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86) || defined(__aarch64__) || defined(_M_ARM64)
+    /* On x86 and AArch64 hardware unaligned byte offsets are supported */
+    const size_t offsets[] = {0, 1, 2, 3, 4, 7, 8, 16};
+#else
+    /* On strict-alignment architectures (e.g. 32-bit ARMv7), offsets are aligned to sizeof(double) */
+    const size_t offsets[] = {0, 8, 16, 24, 32};
+#endif
     const size_t num_offsets = sizeof(offsets) / sizeof(offsets[0]);
 
     const size_t max_n = 10007;

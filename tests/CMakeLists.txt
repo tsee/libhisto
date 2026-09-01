@@ -23,15 +23,28 @@ add_subdirectory(unit)
 # Integration tests
 add_subdirectory(integration)
 
-# C++ wrapper tests (only enabled when C++ compiler and cpp test directory are available)
-include(CheckLanguage)
-check_language(CXX)
-if(CMAKE_CXX_COMPILER AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp/CMakeLists.txt")
-    enable_language(CXX)
-    set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-    add_subdirectory(cpp)
+# C++ wrapper tests (only enabled when working C++ compiler and cpp test directory are available)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp/CMakeLists.txt")
+    include(CheckLanguage)
+    check_language(CXX)
+    if(CMAKE_CXX_COMPILER)
+        # Probe whether C++ compiler can successfully link with active compiler flags (e.g. -m32 multilib)
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -x c++ /dev/null -o /dev/null
+            RESULT_VARIABLE _CXX_PROBE_RESULT
+            ERROR_QUIET
+            OUTPUT_QUIET
+        )
+        if(_CXX_PROBE_RESULT EQUAL 0)
+            enable_language(CXX)
+            set(CMAKE_CXX_STANDARD 17)
+            set(CMAKE_CXX_STANDARD_REQUIRED ON)
+            set(CMAKE_CXX_EXTENSIONS OFF)
+            add_subdirectory(cpp)
+        else()
+            message(STATUS "C++ compiler probe failed (missing multilib C++ runtime or incompatible flags); skipping C++ wrapper tests.")
+        endif()
+    endif()
 endif()
 
 # Fuzzing harnesses
