@@ -387,21 +387,29 @@ def test_cli_block(block, source_dir, build_dir, verbose):
         subprocess.run(
             [histo_bin, "fill", "--min", "0", "--max", "100", "-n", "50", "-o", "json", "-f", os.path.join(tmpdir, "background.json")],
             input="\n".join(str(i) for i in range(100)),
+            cwd=tmpdir,
+            env=env,
             text=True
         )
         subprocess.run(
             [histo_bin, "fill", "--min", "0", "--max", "100", "-n", "50", "-o", "json", "-f", os.path.join(tmpdir, "data.json")],
             input="\n".join(str(i) for i in range(100)),
+            cwd=tmpdir,
+            env=env,
             text=True
         )
         subprocess.run(
             [histo_bin, "fill", "--min", "0", "--max", "100", "-n", "50", "-o", "binary", "-f", os.path.join(tmpdir, "data.bin")],
             input="\n".join(str(i) for i in range(100)),
+            cwd=tmpdir,
+            env=env,
             text=True
         )
         subprocess.run(
             [histo_bin, "fill", "--min", "0", "--max", "100", "-n", "50", "-o", "binary", "-f", os.path.join(tmpdir, "sparse_counts.bin")],
             input="\n".join(str(i) for i in range(100)),
+            cwd=tmpdir,
+            env=env,
             text=True
         )
 
@@ -410,6 +418,21 @@ def test_cli_block(block, source_dir, build_dir, verbose):
                 continue
             if any(k in cmd for k in ["histo top", "histo-top", "tail -F", "pg_log_stream", "simulation_engine"]):
                 continue
+            if sys.platform == "win32":
+                # On Windows, shell pipelines generating sample streams via python3 -c fail with
+                # OSError [Errno 22] (pipe buffer flushing limits in Windows CRT), and piping data
+                # through shell pipes (cat file | ...) suffers from CRLF translation and quote escaping.
+                # Denylist these fragile Windows shell pipelines to preserve clean, idiomatic documentation.
+                if any(frag in cmd for frag in [
+                    "python3 -c",
+                    ".bin |",
+                    ".bin|",
+                    "cat ",
+                    "echo ",
+                ]):
+                    if verbose:
+                        print(f"  [SKIP win32] CLI Pipeline {filepath}:{line} -> {cmd}")
+                    continue
             if verbose:
                 print(f"  Testing CLI {filepath}:{line} -> {cmd}")
             try:
