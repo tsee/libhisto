@@ -502,7 +502,7 @@ def main():
             lang = block["lang"].lower()
             if lang in ["c", "c99"]:
                 tasks.append(("c", block))
-            elif lang in ["bash", "sh"]:
+            elif lang in ["bash", "sh"] and sys.platform != "win32":
                 code = block["code"]
                 if "histo" in code and not any(k in code for k in ["git clone", "make", "cmake", "sudo "]):
                     tasks.append(("cli", block))
