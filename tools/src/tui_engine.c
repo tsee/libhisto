@@ -270,9 +270,21 @@ size_t histo_shm_pop_batch(histo_shm_ring_t *ring, void *out_entries, size_t max
 /* ========================================================================= */
 
 static double get_time_now_sec(void) {
+#if defined(_WIN32)
+    static LARGE_INTEGER freq;
+    static int has_freq = 0;
+    if (!has_freq) {
+        QueryPerformanceFrequency(&freq);
+        has_freq = 1;
+    }
+    LARGE_INTEGER count;
+    QueryPerformanceCounter(&count);
+    return (double)count.QuadPart / (double)freq.QuadPart;
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+#endif
 }
 
 static void reservoir_init(tui_reservoir_t *r, size_t cap, bool is_2d, bool has_weights) {
