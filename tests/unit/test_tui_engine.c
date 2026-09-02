@@ -408,6 +408,9 @@ void test_tui_engine_zoom_pan_2d(void) {
 }
 
 void test_tui_term_mouse_and_shift_tab_parsing(void) {
+#if defined(_WIN32)
+    TEST_IGNORE_MESSAGE("TTY pipe simulation of ANSI escape sequences not applicable on Windows (Win32 Console API is used)");
+#else
     int fds[2];
     TEST_ASSERT_EQUAL(0, pipe(fds));
 
@@ -444,6 +447,7 @@ void test_tui_term_mouse_and_shift_tab_parsing(void) {
 
     close(fds[0]);
     close(fds[1]);
+#endif
 }
 
 void test_tui_engine_multi_column_switching(void) {

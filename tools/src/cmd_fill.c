@@ -514,7 +514,7 @@ int histo_cli_fill(int argc, char **argv, FILE *out, FILE *err) {
     histo_t *h = NULL;
     if (!auto_range) {
         if (var_edges && n_edges >= 2) {
-            h = histo_create_variable(n_edges - 1, var_edges, flags);
+            h = histo_create_variable((uint32_t)(n_edges - 1), var_edges, flags);
         } else {
             if (range_min >= range_max) {
                 range_min = 0.0;

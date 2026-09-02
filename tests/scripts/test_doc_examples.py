@@ -17,6 +17,13 @@ import subprocess
 import sys
 import tempfile
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass
+
 def extract_code_blocks(filepath):
     """Extract code blocks with line numbers and languages from a markdown file."""
     with open(filepath, "r", encoding="utf-8") as f:
@@ -339,22 +346,34 @@ def test_cli_block(block, source_dir, build_dir, verbose):
         # Prepend tmpdir and tools_dir to PATH for child processes
         env["PATH"] = f"{tmpdir}{os.pathsep}{tools_dir}{os.pathsep}{env.get('PATH', '')}"
 
-        # If 'python3' is missing in PATH, create a portable wrapper shim pointing to sys.executable
-        if not shutil.which("python3"):
-            shim_sh = os.path.join(tmpdir, "python3")
-            with open(shim_sh, "w", encoding="utf-8") as f:
-                f.write(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
-            try:
-                os.chmod(shim_sh, 0o755)
-            except OSError:
-                pass
-            if sys.platform == "win32":
-                shim_bat = os.path.join(tmpdir, "python3.bat")
-                with open(shim_bat, "w", encoding="utf-8") as f:
-                    f.write(f'@"{sys.executable}" %*\n')
-                shim_cmd = os.path.join(tmpdir, "python3.cmd")
-                with open(shim_cmd, "w", encoding="utf-8") as f:
-                    f.write(f'@"{sys.executable}" %*\n')
+        # Copy histo executable and alias tools directly into tmpdir so they are unconditionally in PATH/CWD
+        for exe_base in ["histo", "histo-fill", "histo-plot", "histo-stats", "histo-fit", "histo-cmp", "histo-top"]:
+            for name in [exe_base, exe_base + ".exe"]:
+                src = os.path.join(tools_dir, name)
+                if os.path.exists(src):
+                    dst = os.path.join(tmpdir, name)
+                    if not os.path.exists(dst):
+                        try:
+                            shutil.copy2(src, dst)
+                        except OSError:
+                            pass
+
+        # Create portable python3 wrapper shims pointing to sys.executable with forward slashes
+        py_exec_posix = sys.executable.replace("\\", "/")
+        shim_sh = os.path.join(tmpdir, "python3")
+        with open(shim_sh, "w", encoding="utf-8") as f:
+            f.write(f'#!/bin/sh\nexec "{py_exec_posix}" "$@"\n')
+        try:
+            os.chmod(shim_sh, 0o755)
+        except OSError:
+            pass
+        if sys.platform == "win32":
+            shim_bat = os.path.join(tmpdir, "python3.bat")
+            with open(shim_bat, "w", encoding="utf-8") as f:
+                f.write(f'@"{sys.executable}" %*\n')
+            shim_cmd = os.path.join(tmpdir, "python3.cmd")
+            with open(shim_cmd, "w", encoding="utf-8") as f:
+                f.write(f'@"{sys.executable}" %*\n')
 
         # Pre-generate standard fixture files commonly referenced in documentation
         with open(os.path.join(tmpdir, "data.txt"), "w") as f:
@@ -395,8 +414,11 @@ def test_cli_block(block, source_dir, build_dir, verbose):
                 print(f"  Testing CLI {filepath}:{line} -> {cmd}")
             try:
                 shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
+                posix_tmp = tmpdir.replace("\\", "/")
+                posix_tools = tools_dir.replace("\\", "/")
+                shell_cmd = f'export PATH="{posix_tmp}:{posix_tools}:$PATH"; {cmd}'
                 res = subprocess.run(
-                    [shell_bin, "-c", cmd],
+                    [shell_bin, "-c", shell_cmd],
                     cwd=tmpdir,
                     env=env,
                     stdout=subprocess.PIPE,
@@ -428,6 +450,12 @@ def run_task(task, source_dir, build_dir, compiler, cflags, verbose):
         return ("cli", block, ok)
 
 def main():
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except AttributeError:
+            pass
     parser = argparse.ArgumentParser(description="Extract, compile, and test all documentation code and CLI examples.")
     parser.add_argument("--source-dir", default=os.path.abspath("."), help="Path to libhisto repository root")
     parser.add_argument("--build-dir", default=os.path.abspath("build"), help="Path to CMake build directory")
