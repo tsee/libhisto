@@ -336,6 +336,26 @@ def test_cli_block(block, source_dir, build_dir, verbose):
             current_cmd = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
+        # Prepend tmpdir and tools_dir to PATH for child processes
+        env["PATH"] = f"{tmpdir}{os.pathsep}{tools_dir}{os.pathsep}{env.get('PATH', '')}"
+
+        # If 'python3' is missing in PATH, create a portable wrapper shim pointing to sys.executable
+        if not shutil.which("python3"):
+            shim_sh = os.path.join(tmpdir, "python3")
+            with open(shim_sh, "w", encoding="utf-8") as f:
+                f.write(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+            try:
+                os.chmod(shim_sh, 0o755)
+            except OSError:
+                pass
+            if sys.platform == "win32":
+                shim_bat = os.path.join(tmpdir, "python3.bat")
+                with open(shim_bat, "w", encoding="utf-8") as f:
+                    f.write(f'@"{sys.executable}" %*\n')
+                shim_cmd = os.path.join(tmpdir, "python3.cmd")
+                with open(shim_cmd, "w", encoding="utf-8") as f:
+                    f.write(f'@"{sys.executable}" %*\n')
+
         # Pre-generate standard fixture files commonly referenced in documentation
         with open(os.path.join(tmpdir, "data.txt"), "w") as f:
             f.write("\n".join(str(i) for i in range(100)) + "\n")
