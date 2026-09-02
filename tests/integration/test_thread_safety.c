@@ -4,7 +4,7 @@
 
 #include "unity.h"
 #include "histo/histo.h"
-#include <pthread.h>
+#include "tui_thread.h"
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
@@ -67,12 +67,12 @@ void test_concurrent_readers(void) {
     histo_integral(h, 0, histo_nbins(h)-1, &args.expected_integral);
     histo_serialize_binary(h, &args.expected_buf, &args.expected_size);
 
-    pthread_t threads[NUM_THREADS];
+    histo_thread_t threads[NUM_THREADS];
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_create(&threads[i], NULL, reader_worker, &args);
+        TEST_ASSERT_EQUAL(0, histo_thread_create(&threads[i], reader_worker, &args));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
+        histo_thread_join(threads[i]);
     }
 
     histo_free_buffer(args.expected_buf);
@@ -108,16 +108,16 @@ void test_parallel_map_reduce_accumulation(void) {
     }
 
     // Parallel
-    pthread_t threads[NUM_THREADS];
+    histo_thread_t threads[NUM_THREADS];
     map_reduce_args_t args[NUM_THREADS];
     for (int i = 0; i < NUM_THREADS; i++) {
         args[i].thread_id = i;
         args[i].local_histo = histo_create_uniform(100, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
-        pthread_create(&threads[i], NULL, worker_fill, &args[i]);
+        TEST_ASSERT_EQUAL(0, histo_thread_create(&threads[i], worker_fill, &args[i]));
     }
     
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
+        histo_thread_join(threads[i]);
         histo_add(par_histo, args[i].local_histo);
         histo_destroy(args[i].local_histo);
     }
@@ -194,12 +194,12 @@ void test_concurrent_cloning_and_serialization(void) {
     clone_args_t args;
     args.base_histo = h;
     
-    pthread_t threads[NUM_THREADS];
+    histo_thread_t threads[NUM_THREADS];
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_create(&threads[i], NULL, worker_clone, &args);
+        TEST_ASSERT_EQUAL(0, histo_thread_create(&threads[i], worker_clone, &args));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
+        histo_thread_join(threads[i]);
     }
     
     histo_destroy(h);

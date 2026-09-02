@@ -440,15 +440,21 @@ def test_cli_block(block, source_dir, build_dir, verbose):
                 posix_tmp = tmpdir.replace("\\", "/")
                 posix_tools = tools_dir.replace("\\", "/")
                 shell_cmd = f'export PATH="{posix_tmp}:{posix_tools}:$PATH"; {cmd}'
-                res = subprocess.run(
-                    [shell_bin, "-c", shell_cmd],
-                    cwd=tmpdir,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=10
-                )
+                for attempt in range(3):
+                    res = subprocess.run(
+                        [shell_bin, "-c", shell_cmd],
+                        cwd=tmpdir,
+                        env=env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=10
+                    )
+                    if res.returncode != 0 and "Text file busy" in res.stderr and attempt < 2:
+                        import time
+                        time.sleep(0.1 * (attempt + 1))
+                        continue
+                    break
             except subprocess.TimeoutExpired:
                 print(f"\n[FAIL] CLI execution timed out in {filepath}:{line}")
                 print(f"Command: {cmd}")
