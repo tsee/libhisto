@@ -27,10 +27,14 @@
 #include <fcntl.h>
 #include <process.h>
 #define pipe(fds) _pipe((fds), 4096, _O_BINARY)
-#define write _write
+#define write(fd, buf, count) _write((fd), (buf), (unsigned int)(count))
 #define close _close
 #define getpid _getpid
 #define usleep(usec) Sleep((DWORD)((usec) / 1000 > 0 ? (usec) / 1000 : 1))
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
 #else
 #include <sys/types.h>
 #include <unistd.h>
