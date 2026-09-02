@@ -43,11 +43,7 @@ jobs:
 
       - name: Configure CMake (MSVC)
         if: matrix.compiler != 'mingw'
-        run: |
-          cmake -B build -S . -G "Ninja" \
-                -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-                -DCMAKE_C_COMPILER=cl \
-                -DLIBHISTO_ENABLE_FUZZING=ON
+        run: cmake -B build -S . -G "Ninja" -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_C_COMPILER=cl -DLIBHISTO_ENABLE_FUZZING=ON
 
       - name: Build C Library & Tests (MSVC)
         if: matrix.compiler != 'mingw'
