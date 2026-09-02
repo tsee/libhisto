@@ -10,6 +10,7 @@ with QEMU binfmt emulation and native host multilib.
 import argparse
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -33,7 +34,7 @@ TARGETS = {
         "image": "alpine:latest",
         "platform": "linux/amd64",
         "install_cmd": "apk add --no-cache build-base cmake bash gdb",
-        "install_full_cmd": "apk add --no-cache build-base cmake bash gdb python3 py3-setuptools perl perl-dev",
+        "install_full_cmd": "apk add --no-cache build-base cmake bash gdb python3 python3-dev py3-setuptools",
         "arch": "x86_64",
         "endian": "little",
         "bits": 64,
@@ -43,7 +44,7 @@ TARGETS = {
         "image": "ubuntu:24.04",
         "platform": "linux/s390x",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-dev python3-setuptools perl libperl-dev",
         "arch": "s390x",
         "endian": "big",
         "bits": 64,
@@ -53,7 +54,7 @@ TARGETS = {
         "image": "debian:bookworm-slim",
         "platform": "linux/386",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-dev python3-setuptools perl libperl-dev",
         "arch": "i386",
         "endian": "little",
         "bits": 32,
@@ -63,7 +64,7 @@ TARGETS = {
         "image": "ubuntu:24.04",
         "platform": "linux/arm64",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-dev python3-setuptools perl libperl-dev",
         "arch": "aarch64",
         "endian": "little",
         "bits": 64,
@@ -73,7 +74,7 @@ TARGETS = {
         "image": "ubuntu:24.04",
         "platform": "linux/arm/v7",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-dev python3-setuptools perl libperl-dev",
         "arch": "armv7l",
         "endian": "little",
         "bits": 32,
@@ -83,7 +84,7 @@ TARGETS = {
         "image": "ubuntu:24.04",
         "platform": "linux/riscv64",
         "install_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb",
-        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-setuptools perl libperl-dev",
+        "install_full_cmd": "apt-get update -qq && apt-get install -y -qq build-essential cmake gdb python3 python3-dev python3-setuptools perl libperl-dev",
         "arch": "riscv64",
         "endian": "little",
         "bits": 64,
@@ -112,6 +113,9 @@ ALIASES = {
 
 ALL_LOCAL_TARGETS = ["hermetic", "musl", "s390x", "i386", "native-32bit", "arm64", "armv7", "riscv64"]
 
+# Flag whether container execution requires "sg docker -c" group elevation
+USE_SG_DOCKER = False
+
 
 def log(msg, color="1;34"):
     if sys.stdout.isatty():
@@ -128,10 +132,18 @@ def log_error(msg):
     log(msg, color="1;31")
 
 
+def exec_container_cmd(cmd, **kwargs):
+    """Execute container command, applying sg docker elevation if necessary."""
+    if USE_SG_DOCKER and cmd[0] == "docker":
+        wrapped = ["sg", "docker", "-c", " ".join(shlex.quote(a) for a in cmd)]
+        return subprocess.run(wrapped, **kwargs)
+    return subprocess.run(cmd, **kwargs)
+
+
 def test_engine_connectivity(engine):
     """Test if container engine binary exists and can communicate with daemon/socket."""
     if not shutil.which(engine):
-        return False, f"'{engine}' binary not found in PATH"
+        return False, f"'{engine}' binary not found in PATH", False
     try:
         res = subprocess.run(
             [engine, "info"],
@@ -141,21 +153,33 @@ def test_engine_connectivity(engine):
             timeout=10
         )
         if res.returncode == 0:
-            return True, ""
-        return False, res.stderr.strip()
+            return True, "", False
+        if engine == "docker" and shutil.which("sg") and "permission denied" in res.stderr.lower():
+            sg_res = subprocess.run(
+                ["sg", "docker", "-c", f"{engine} info"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+            if sg_res.returncode == 0:
+                return True, "", True
+        return False, res.stderr.strip(), False
     except Exception as e:
-        return False, str(e)
+        return False, str(e), False
 
 
 def detect_container_engine(preferred="auto"):
     """Detect an available and working container engine (docker or podman)."""
+    global USE_SG_DOCKER
     candidates = ["docker", "podman"] if preferred == "auto" else [preferred]
     errors = {}
 
     for engine in candidates:
         if shutil.which(engine):
-            ok, err = test_engine_connectivity(engine)
+            ok, err, use_sg = test_engine_connectivity(engine)
             if ok:
+                USE_SG_DOCKER = use_sg
                 return engine
             errors[engine] = err
 
@@ -191,7 +215,6 @@ def ensure_binfmt_registered(engine, targets_to_run):
     if platform.system() != "Linux":
         return
 
-    # Check if any target actually requires foreign architecture emulation
     foreign_targets = [
         t for t in targets_to_run
         if TARGETS[t].get("arch") and is_foreign_arch(TARGETS[t]["arch"])
@@ -209,7 +232,7 @@ def ensure_binfmt_registered(engine, targets_to_run):
     log("Registering QEMU user-mode binfmt handlers via multiarch/qemu-user-static...")
     try:
         cmd = [engine, "run", "--rm", "--privileged", "multiarch/qemu-user-static", "--reset", "-p", "yes"]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        exec_container_cmd(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     except Exception as e:
         log_error(f"Warning: Failed to auto-register binfmt handlers ({e}). Foreign architectures may fail if not pre-configured.")
 
@@ -258,8 +281,6 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
     build_dir_name = f"build-container-{target_name}"
     install_cmd = config["install_full_cmd"] if full else config["install_cmd"]
 
-    # QEMU user-mode multithreading safeguard: on foreign architectures, high parallel job counts
-    # can trigger signal/thread race conditions in QEMU (e.g. collect2 / as internal compiler errors).
     effective_jobs = jobs
     if config.get("arch") and is_foreign_arch(config["arch"]):
         max_emulated_jobs = 2 if config.get("arch") in ["s390x", "armv7l"] else 4
@@ -272,8 +293,19 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
     if extra_cmake_flags:
         cmake_config_cmd += f" {extra_cmake_flags}"
 
+    # Ensure stale binding artifacts from earlier targets or aborted runs are cleaned first
+    pre_clean_cmd = (
+        "rm -rf bindings/python/build bindings/python/histo/*.so "
+        "bindings/perl/Alien-libhisto/Makefile bindings/perl/Alien-libhisto/blib "
+        "bindings/perl/Alien-libhisto/_Inline bindings/perl/Alien-libhisto/_alien "
+        "bindings/perl/Math-Histo/Makefile bindings/perl/Math-Histo/blib "
+        "bindings/perl/Math-Histo/_Inline bindings/perl/Math-Histo/*.o "
+        "bindings/perl/Math-Histo/*.so 2>/dev/null || true"
+    )
+
     test_commands = [
         "ulimit -c unlimited || true",
+        pre_clean_cmd,
         install_cmd,
         cmake_config_cmd,
         f"(cmake --build {build_dir_name} -j{effective_jobs} || cmake --build {build_dir_name} -j1)",
@@ -282,17 +314,24 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
 
     if full:
         test_commands.append(
-            "if [ -f bindings/python/setup.py ]; then "
-            "  cd bindings/python && python3 setup.py build_ext --inplace && "
-            "  PYTHONPATH=. python3 -m unittest discover -s tests -v && cd ../..; "
+            "if command -v python3 >/dev/null 2>&1 && python3 -c 'import setuptools' >/dev/null 2>&1 && [ -f bindings/python/setup.py ]; then "
+            "  echo '==> Running Python bindings test in container...' && "
+            "  (cd bindings/python && rm -rf build histo/*.so && python3 setup.py build_ext --inplace && PYTHONPATH=. python3 -m unittest discover -s tests -v) && "
+            "  (rm -rf bindings/python/build bindings/python/histo/*.so 2>/dev/null || true); "
             "fi"
         )
         test_commands.append(
-            "if [ -f bindings/perl/Alien-libhisto/Makefile.PL ]; then "
-            "  cd bindings/perl/Alien-libhisto && perl Makefile.PL && make test && cd ../../.. && "
-            "  cd bindings/perl/Math-Histo && perl Makefile.PL && make test && cd ../../..; "
+            "if command -v perl >/dev/null 2>&1 && perl -MAlien::Build::MM -e 1 >/dev/null 2>&1 && perl -MAlien::cmake3 -e 1 >/dev/null 2>&1 && [ -f bindings/perl/Alien-libhisto/Makefile.PL ]; then "
+            "  echo '==> Running Perl bindings test in container...' && "
+            "  (cd bindings/perl/Alien-libhisto && perl Makefile.PL && make && make test && (make realclean 2>/dev/null || true)) && "
+            "  (cd bindings/perl/Math-Histo && perl Makefile.PL && make && make test && (make realclean 2>/dev/null || true)); "
             "fi"
         )
+
+    # Post-clean and restore ownership to host user so zero root-owned artifacts remain
+    post_chown_cmd = f"chown -R {os.getuid()}:{os.getgid()} /workspace 2>/dev/null || true"
+    test_commands.append(pre_clean_cmd)
+    test_commands.append(post_chown_cmd)
 
     container_script = " && ".join(test_commands)
 
@@ -301,6 +340,7 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
         "run",
         "--rm",
         "--ulimit", "core=-1",
+        "-e", "DEBIAN_FRONTEND=noninteractive",
     ]
     if config.get("platform"):
         docker_cmd.extend(["--platform", config["platform"]])
@@ -314,13 +354,11 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
     log(f"Starting target '{target_name}' [{config['description']}] using {engine} ({image})...")
     t0 = time.time()
     try:
-        subprocess.run(docker_cmd, check=True)
+        exec_container_cmd(docker_cmd, check=True)
     except subprocess.CalledProcessError as err:
         elapsed = time.time() - t0
         log_error(f"Target '{target_name}' FAILED with exit code {err.returncode} after {elapsed:.2f}s.")
 
-        # If a crash / segfault / abort occurred (exit code 139=SIGSEGV, 134=SIGABRT, 132=SIGILL, 136=SIGFPE),
-        # run a post-mortem diagnostic pass in the container to extract GDB stack traces and core dumps.
         if err.returncode in [139, 134, 132, 136, 2, 1]:
             sig_name = {139: "SIGSEGV (Segmentation Fault)", 134: "SIGABRT (Abort)", 132: "SIGILL (Illegal Instruction)", 136: "SIGFPE (Floating Point Exception)"}.get(err.returncode, f"Error {err.returncode}")
             print("\n" + "=" * 75)
@@ -336,7 +374,7 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
                 "uname -a && "
                 "cat /proc/sys/kernel/core_pattern 2>/dev/null || true && "
                 "echo '--- Core Dump Search & GDB Backtrace ---' && "
-                "CORE_FILE=$(find . /tmp /var/crash /workspace -name 'core*' -o -name '*.core' 2>/dev/null | head -n 1) && "
+                "CORE_FILE=$(find /tmp /var/crash \"" + build_dir_name + "\" -name 'core*' -o -name '*.core' 2>/dev/null | head -n 1) && "
                 "if [ -n \"$CORE_FILE\" ]; then "
                 "  echo \"Found Core Dump: $CORE_FILE\" && "
                 "  BIN_FILE=$(find " + build_dir_name + " -type f -executable -not -name '*.sh' 2>/dev/null | head -n 1) && "
@@ -353,7 +391,7 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
                 "  echo 'Remedy: Retry with lower concurrency (e.g. -j 2 or -j 1) or upgrade host qemu-user-static.'; "
                 "fi"
             )
-            inspect_cmd = [engine, "run", "--rm"]
+            inspect_cmd = [engine, "run", "--rm", "-e", "DEBIAN_FRONTEND=noninteractive"]
             if config.get("platform"):
                 inspect_cmd.extend(["--platform", config["platform"]])
             inspect_cmd.extend([
@@ -363,11 +401,16 @@ def run_container_target(repo_root, target_name, config, engine, jobs, build_typ
                 "sh", "-c", debug_script
             ])
             try:
-                subprocess.run(inspect_cmd, timeout=30)
+                exec_container_cmd(inspect_cmd, timeout=30)
             except Exception:
                 pass
             print("=" * 75 + "\n")
         raise err
+    finally:
+        try:
+            exec_container_cmd([engine, "run", "--rm", "-v", f"{repo_root}:/workspace", "alpine:latest", "sh", "-c", post_chown_cmd], timeout=15)
+        except Exception:
+            pass
 
     elapsed = time.time() - t0
     log_success(f"Target '{target_name}' PASSED in {elapsed:.2f}s")
@@ -439,11 +482,10 @@ def main():
             if p.is_dir():
                 shutil.rmtree(p, ignore_errors=True)
                 if p.is_dir():
-                    # If local removal fails due to container root ownership, attempt cleanup via container engine
                     engine = detect_container_engine()
                     if engine:
                         try:
-                            subprocess.run([engine, "run", "--rm", "-v", f"{repo_root}:/workspace", "alpine:latest", "rm", "-rf", f"/workspace/{p.name}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            exec_container_cmd([engine, "run", "--rm", "-v", f"{repo_root}:/workspace", "alpine:latest", "rm", "-rf", f"/workspace/{p.name}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         except Exception:
                             pass
         if (repo_root / "build-x86_32").is_dir():
