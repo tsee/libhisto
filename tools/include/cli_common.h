@@ -51,7 +51,14 @@
 #ifndef fileno
 #define fileno _fileno
 #endif
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
 #else
+#include <strings.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
