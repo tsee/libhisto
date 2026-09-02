@@ -184,7 +184,7 @@ int main(void) {
     uint8_t fit_seed[256];
     memset(fit_seed, 0, sizeof(fit_seed));
     fit_seed[0] = 0; // type 0
-    for(int i=1; i<256; i++) fit_seed[i] = i;
+    for(int i=1; i<256; i++) fit_seed[i] = (uint8_t)i;
     write_file("tests/fuzz/corpus/fit/seed1.bin", fit_seed, sizeof(fit_seed));
 
     histo_destroy(h_unif);
