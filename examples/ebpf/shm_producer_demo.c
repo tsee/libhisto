@@ -8,8 +8,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#define usleep(usec) Sleep((DWORD)((usec) / 1000 > 0 ? (usec) / 1000 : 1))
+#else
 #include <sys/types.h>
 #include <unistd.h>
+#endif
 #include <math.h>
 #include <signal.h>
 #include "../../tools/include/tui_shm.h"
