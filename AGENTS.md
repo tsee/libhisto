@@ -61,6 +61,14 @@ This document defines the operational workflow, engineering standards, and commu
   - Compilers: GCC, Clang, MSVC.
   - Platforms: Linux, Windows, macOS, BSD, embedded targets.
   - Clean compilation with strict flags (e.g., `-Wall -Wextra -Werror -pedantic`).
+- **Portability Review Checklist (Cross-Platform & Architecture Fragility)**:
+  Before committing changes, agents MUST review code against these recurring cross-platform failure modes:
+  - **MSVC (`/W4 /WX`)**: Zero shadowing (`C4456`/`C4457`: never reuse parameter or outer-scope names), no VLAs, explicit signed/unsigned casts (`size_t` vs `uint32_t`), `#define _USE_MATH_DEFINES` before `<math.h>`, and isolate POSIX headers (`unistd.h`, `termios.h`, `sys/mman.h`) behind `_WIN32` platform shims.
+  - **Clang / macOS / FreeBSD (`-pedantic -Werror`)**: Strict standard conformance (e.g., C++17 constexpr unions must initialize a variant member), no glibc-only headers (`features.h`), and guard OS-specific libc prototypes (e.g. `pthread_setname_np`).
+  - **Windows Shell & MinGW**: Never embed unescaped UNIX shell pipelines or assumptions about `python3` vs `python` in cross-platform test runners; handle CRLF line endings and `.exe` path extensions.
+  - **32-Bit Systems (`-m32`)**: Never assume `sizeof(size_t) == 8` or `sizeof(void*) == 8`; use `uintptr_t` for pointer math and standard `PRIu64`/`PRIx64` format specifiers.
+  - **Endian Independence**: Multibyte binary wire formats and hash/sketch serializers MUST use explicit canonical endian conversion (`histo_swap_*` / fixed little-endian); never `memcpy` raw multi-byte structs directly to wire buffers.
+  - **Toolchain Probes**: In CMake, optional toolchains or languages (e.g. C++) MUST verify link capability (`${CMAKE_EXE_LINKER_FLAGS}`) using `enable_language(... OPTIONAL)` and realistic test sources before activating build targets.
 - **Endian Independence**:
   - Must run correctly on both Little-Endian and Big-Endian architectures.
   - Serialization / deserialization formats must enforce explicit, deterministic byte ordering (e.g., canonical little-endian or network byte order) to allow portable data interchange across machines.
