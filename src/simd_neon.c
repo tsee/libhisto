@@ -691,20 +691,5 @@ bool histo2d_fill_uniform_w2_neon(histo2d_t *h, const double *x, const double *y
     return had_non_finite;
 }
 
-#else
-
-bool histo_fill_uniform_neon(histo_t *h, const double *x, size_t n) {
-    (void)h; (void)x; (void)n; return false;
-}
-bool histo_fill_uniform_w2_neon(histo_t *h, const double *x, const double *weights, size_t n) {
-    (void)h; (void)x; (void)weights; (void)n; return false;
-}
-bool histo2d_fill_uniform_neon(histo2d_t *h2d, const double *x, const double *y, size_t n) {
-    (void)h2d; (void)x; (void)y; (void)n; return false;
-}
-bool histo2d_fill_uniform_w2_neon(histo2d_t *h2d, const double *x, const double *y, const double *weights, size_t n) {
-    (void)h2d; (void)x; (void)y; (void)weights; (void)n; return false;
-}
-
 #endif /* Vector arch support */
 #endif /* LIBHISTO_ENABLE_NEON */

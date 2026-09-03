@@ -88,14 +88,14 @@ histo2d_t* histo2d_create(const histo2d_axis_t *x_axis,
     }
 
     size_t data_bytes = (size_t)total_cells * sizeof(double);
-    h->bins = (double*)histo2d_alloc_aligned(data_bytes);
+    h->bins = (double*)histo_alloc_aligned(data_bytes);
     if (!h->bins) {
         histo2d_destroy(h);
         return NULL;
     }
 
     if (flags & HISTO_FLAG_TRACK_SUMW2) {
-        h->sum_w2 = (double*)histo2d_alloc_aligned(data_bytes);
+        h->sum_w2 = (double*)histo_alloc_aligned(data_bytes);
         if (!h->sum_w2) {
             histo2d_destroy(h);
             return NULL;
@@ -151,8 +151,8 @@ histo2d_t* histo2d_create_variable_uniform(uint32_t nx, const double *xedges,
 
 void histo2d_destroy(histo2d_t *h) {
     if (!h) return;
-    histo2d_free_aligned(h->bins);
-    histo2d_free_aligned(h->sum_w2);
+    histo_free_aligned(h->bins);
+    histo_free_aligned(h->sum_w2);
     free(h->x_axis.bin_edges);
     free(h->y_axis.bin_edges);
     free(h);
