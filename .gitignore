@@ -37,3 +37,16 @@ dist/
 bindings/python/bundled/
 scratch/
 
+# Editor swap and backup files
+*.swp
+*.swo
+*~
+.#*
+
+# Perl build artifacts
+blib/
+_alien/
+*.bs
+MYMETA.*
+pm_to_blib
+Makefile.old
