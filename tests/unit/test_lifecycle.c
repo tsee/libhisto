@@ -157,6 +157,28 @@ void test_status_strings(void) {
     TEST_ASSERT_NOT_NULL(histo_status_str((histo_status_t)999));
 }
 
+void test_accessors(void) {
+    TEST_ASSERT_EQUAL_UINT32(0, histo_flags(NULL));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, histo_underflow_sum_w2(NULL));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, histo_overflow_sum_w2(NULL));
+
+    histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2);
+    TEST_ASSERT_NOT_NULL(h);
+    TEST_ASSERT_EQUAL_UINT32(HISTO_FLAG_TRACK_SUMW2, histo_flags(h));
+
+    /* Fill underflow with weight 2.5: sum_w2 += 6.25 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_w(h, -5.0, 2.5));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 2.5, histo_underflow(h));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 6.25, histo_underflow_sum_w2(h));
+
+    /* Fill overflow with weight 3.0: sum_w2 += 9.0 */
+    TEST_ASSERT_EQUAL(HISTO_OK, histo_fill_w(h, 150.0, 3.0));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 3.0, histo_overflow(h));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 9.0, histo_overflow_sum_w2(h));
+
+    histo_destroy(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_create_uniform_valid);
@@ -167,5 +189,6 @@ int main(void) {
     RUN_TEST(test_clone_and_empty_clone);
     RUN_TEST(test_reset);
     RUN_TEST(test_status_strings);
+    RUN_TEST(test_accessors);
     return UNITY_END();
 }

@@ -586,6 +586,17 @@ histo_status_t histo2d_region_content(const histo2d_t *h, histo2d_region_t regio
     return HISTO_OK;
 }
 
+double histo2d_region_sum_w2(const histo2d_t *h, histo2d_region_t region) {
+    if (!h || (int)region < 0 || region >= HISTO2D_REGION_COUNT) {
+        return 0.0;
+    }
+    return h->guards[region].sum_w2;
+}
+
+uint32_t histo2d_flags(const histo2d_t *h) {
+    return h ? h->flags : 0;
+}
+
 uint64_t histo2d_nan_count(const histo2d_t *h) {
     return h ? h->n_nan : 0;
 }

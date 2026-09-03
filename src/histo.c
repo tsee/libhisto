@@ -686,8 +686,20 @@ double histo_underflow(const histo_t *h) {
     return h ? h->underflow_weight : 0.0;
 }
 
+double histo_underflow_sum_w2(const histo_t *h) {
+    return h ? h->underflow_sum_w2 : 0.0;
+}
+
 double histo_overflow(const histo_t *h) {
     return h ? h->overflow_weight : 0.0;
+}
+
+double histo_overflow_sum_w2(const histo_t *h) {
+    return h ? h->overflow_sum_w2 : 0.0;
+}
+
+uint32_t histo_flags(const histo_t *h) {
+    return h ? h->flags : 0;
 }
 
 uint64_t histo_nan_count(const histo_t *h) {

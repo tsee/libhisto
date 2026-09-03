@@ -253,6 +253,13 @@ void test_histo2d_9_guard_regions(void) {
     histo2d_region_content(h, HISTO2D_REGION_SOUTH_WEST, &w, &c);
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 9.0, w); TEST_ASSERT_EQUAL_UINT64(1, c);
 
+    /* Test accessors: flags and region_sum_w2 */
+    TEST_ASSERT_EQUAL_UINT32(HISTO_FLAG_TRACK_SUMW2, histo2d_flags(h));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 4.0, histo2d_region_sum_w2(h, HISTO2D_REGION_EAST));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 9.0, histo2d_region_sum_w2(h, HISTO2D_REGION_NORTH));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 16.0, histo2d_region_sum_w2(h, HISTO2D_REGION_SOUTH));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, histo2d_region_sum_w2(NULL, HISTO2D_REGION_NORTH));
+
     /* In-range total weight should only be the center weight */
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 10.0, histo2d_total_weight(h));
     TEST_ASSERT_EQUAL_UINT64(1, histo2d_num_entries(h));
