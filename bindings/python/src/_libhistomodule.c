@@ -16,8 +16,6 @@
 #include "histo/cli.h"
 #include "histo/version.h"
 #include "histo/types.h"
-#include "internal.h"
-#include "internal_2d.h"
 
 /* ------------------------------------------------------------------------- */
 /* Exception types                                                           */
@@ -362,7 +360,7 @@ static PyObject *Histo1D_underflow(Histo1DObject *self, void *closure) {
 static PyObject *Histo1D_underflow_sum_w2(Histo1DObject *self, void *closure) {
     (void)closure;
     if (!self->h) return PyFloat_FromDouble(0.0);
-    return PyFloat_FromDouble(self->h->underflow_sum_w2);
+    return PyFloat_FromDouble(histo_underflow_sum_w2(self->h));
 }
 
 static PyObject *Histo1D_overflow(Histo1DObject *self, void *closure) {
@@ -373,7 +371,7 @@ static PyObject *Histo1D_overflow(Histo1DObject *self, void *closure) {
 static PyObject *Histo1D_overflow_sum_w2(Histo1DObject *self, void *closure) {
     (void)closure;
     if (!self->h) return PyFloat_FromDouble(0.0);
-    return PyFloat_FromDouble(self->h->overflow_sum_w2);
+    return PyFloat_FromDouble(histo_overflow_sum_w2(self->h));
 }
 
 static PyObject *Histo1D_nan_count(Histo1DObject *self, void *closure) {
@@ -488,7 +486,7 @@ static PyObject *Histo1D_rms(Histo1DObject *self, void *closure) {
 static PyObject *Histo1D_flags(Histo1DObject *self, void *closure) {
     (void)closure;
     if (!self->h) return PyLong_FromUnsignedLong(0);
-    return PyLong_FromUnsignedLong(self->h->flags);
+    return PyLong_FromUnsignedLong(histo_flags(self->h));
 }
 
 static PyGetSetDef Histo1D_getsetters[] = {
@@ -1503,7 +1501,7 @@ static PyObject *Histo2D_correlation(Histo2DObject *self, void *closure) { (void
 static PyObject *Histo2D_flags(Histo2DObject *self, void *closure) {
     (void)closure;
     if (!self->h2d) return PyLong_FromUnsignedLong(0);
-    return PyLong_FromUnsignedLong(self->h2d->flags);
+    return PyLong_FromUnsignedLong(histo2d_flags(self->h2d));
 }
 
 static PyGetSetDef Histo2D_getsetters[] = {
@@ -1612,7 +1610,7 @@ static PyObject *Histo2D_region_sum_w2(Histo2DObject *self, PyObject *args) {
         PyErr_SetString(PyExc_ValueError, "Invalid region index (must be 0..8)");
         return NULL;
     }
-    return PyFloat_FromDouble(self->h2d->guards[region].sum_w2);
+    return PyFloat_FromDouble(histo2d_region_sum_w2(self->h2d, (histo2d_region_t)region));
 }
 
 static PyObject *Histo2D_region_count(Histo2DObject *self, PyObject *args) {
@@ -1622,7 +1620,10 @@ static PyObject *Histo2D_region_count(Histo2DObject *self, PyObject *args) {
         PyErr_SetString(PyExc_ValueError, "Invalid region index (must be 0..8)");
         return NULL;
     }
-    return PyLong_FromUnsignedLongLong(self->h2d->guards[region].count);
+    double w = 0.0;
+    uint64_t c = 0;
+    histo2d_region_content(self->h2d, (histo2d_region_t)region, &w, &c);
+    return PyLong_FromUnsignedLongLong(c);
 }
 
 static PyObject *Histo2D_integral(Histo2DObject *self, PyObject *args) {
