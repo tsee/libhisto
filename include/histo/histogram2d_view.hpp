@@ -199,7 +199,7 @@ class Histogram2DView {
     return Histogram(prof);
   }
 
- protected:
+ private:
   const histo2d_t* handle_;
 };
 

@@ -21,7 +21,7 @@ if(CMAKE_CXX_COMPILER)
         enable_language(CXX OPTIONAL)
     elseif(NOT MSVC)
         execute_process(
-            COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -x c++ /dev/null -o /dev/null
+            COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -x c++ -c /dev/null -o /dev/null
             RESULT_VARIABLE _CXX_PROBE_RESULT
             ERROR_QUIET
             OUTPUT_QUIET

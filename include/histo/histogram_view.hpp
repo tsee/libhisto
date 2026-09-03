@@ -46,9 +46,9 @@ class BinIterator {
   using pointer = void;
   using reference = Bin;
 
-  constexpr BinIterator() noexcept : view_(nullptr), index_(0) {}
-  constexpr BinIterator(const HistogramView* view, uint32_t index) noexcept
-      : view_(view), index_(index) {}
+  constexpr BinIterator() noexcept : handle_(nullptr), index_(0) {}
+  constexpr BinIterator(const histo_t* handle, uint32_t index) noexcept
+      : handle_(handle), index_(index) {}
 
   Bin operator*() const noexcept;
 
@@ -64,7 +64,7 @@ class BinIterator {
   }
 
   constexpr bool operator==(const BinIterator& other) const noexcept {
-    return view_ == other.view_ && index_ == other.index_;
+    return handle_ == other.handle_ && index_ == other.index_;
   }
 
   constexpr bool operator!=(const BinIterator& other) const noexcept {
@@ -72,7 +72,7 @@ class BinIterator {
   }
 
  private:
-  const HistogramView* view_;
+  const histo_t* handle_;
   uint32_t index_;
 };
 
@@ -246,28 +246,26 @@ class HistogramView {
   }
 
   BinIterator begin() const noexcept {
-    return BinIterator(this, 0);
+    return BinIterator(handle_, 0);
   }
 
   BinIterator end() const noexcept {
-    return BinIterator(this, nbins());
+    return BinIterator(handle_, nbins());
   }
 
- protected:
+ private:
   const histo_t* handle_;
 };
 
 inline Bin BinIterator::operator*() const noexcept {
-  if (!view_ || !view_->is_valid()) {
+  if (!handle_) {
     return Bin{index_, 0.0, 0.0, 0.0, 0.0};
   }
-  return Bin{
-      index_,
-      view_->bin_low_edge(index_),
-      view_->bin_high_edge(index_),
-      view_->bin_content(index_),
-      view_->bin_error(index_)
-  };
+  double lower = 0.0, upper = 0.0, content = 0.0, error = 0.0;
+  histo_bin_bounds(handle_, index_, &lower, &upper);
+  histo_bin_content(handle_, index_, &content);
+  histo_bin_error(handle_, index_, &error);
+  return Bin{index_, lower, upper, content, error};
 }
 
 }  // namespace libhisto
