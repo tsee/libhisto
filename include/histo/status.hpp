@@ -179,8 +179,9 @@ class Result {
 
  private:
   union Storage {
+    char dummy;
     T value;
-    constexpr Storage() noexcept {}
+    constexpr Storage() noexcept : dummy(0) {}
     ~Storage() noexcept {}
   } storage_;
 

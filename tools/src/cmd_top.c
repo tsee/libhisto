@@ -1009,14 +1009,14 @@ int histo_cli_top(int argc, char **argv, FILE *out, FILE *err) {
                         if (cur_h) {
                             uint32_t nb = histo_nbins(cur_h);
                             if (clicked_row < (int)nb) {
-                                double edge_low = 0.0, edge_high = 0.0, cnt = 0.0, err = 0.0;
+                                double edge_low = 0.0, edge_high = 0.0, cnt = 0.0, bin_err = 0.0;
                                 histo_bin_bounds(cur_h, (uint32_t)clicked_row, &edge_low, &edge_high);
                                 histo_bin_content(cur_h, (uint32_t)clicked_row, &cnt);
-                                histo_bin_error(cur_h, (uint32_t)clicked_row, &err);
+                                histo_bin_error(cur_h, (uint32_t)clicked_row, &bin_err);
                                 double tot = histo_total_weight(cur_h);
                                 double pct = tot > 0.0 ? (cnt / tot * 100.0) : 0.0;
                                 snprintf(st.status_msg, sizeof(st.status_msg), "Bin %d [%.2f, %.2f): Count=%.2f (%.1f%%) ±%.2f",
-                                         clicked_row, edge_low, edge_high, cnt, pct, err);
+                                         clicked_row, edge_low, edge_high, cnt, pct, bin_err);
                                 st.status_msg_time = cli_get_time_sec();
                             }
                         }

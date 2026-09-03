@@ -17,17 +17,20 @@ set(CMAKE_C_EXTENSIONS OFF)
 include(CheckLanguage)
 check_language(CXX)
 if(CMAKE_CXX_COMPILER)
-    if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    if(MSVC)
         enable_language(CXX OPTIONAL)
-    elseif(NOT MSVC)
+    else()
+        set(_CXX_PROBE_FILE "${CMAKE_BINARY_DIR}/cxx_probe.cpp")
+        file(WRITE "${_CXX_PROBE_FILE}" "int main(){return 0;}\n")
         execute_process(
-            COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -x c++ -c /dev/null -o /dev/null
+            COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} ${CMAKE_EXE_LINKER_FLAGS} "${_CXX_PROBE_FILE}" -o /dev/null
             RESULT_VARIABLE _CXX_PROBE_RESULT
             ERROR_QUIET
             OUTPUT_QUIET
         )
+        file(REMOVE "${_CXX_PROBE_FILE}")
         if(_CXX_PROBE_RESULT EQUAL 0)
-            enable_language(CXX)
+            enable_language(CXX OPTIONAL)
         endif()
     endif()
 endif()
