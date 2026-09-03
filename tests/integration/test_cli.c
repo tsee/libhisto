@@ -34,12 +34,26 @@ int optind = 1;
 void setUp(void) {}
 void tearDown(void) {}
 
-/* Forward declarations of command entrypoints if linking tools object */
-extern int cmd_fill_main(int argc, char **argv);
-extern int cmd_plot_main(int argc, char **argv);
-extern int cmd_stats_main(int argc, char **argv);
-extern int cmd_cmp_main(int argc, char **argv);
-extern int cmd_top_main(int argc, char **argv);
+#include "histo/cli.h"
+
+static inline int cmd_fill_main(int argc, char **argv) {
+    return histo_cli_fill(argc, argv, stdout, stderr);
+}
+static inline int cmd_plot_main(int argc, char **argv) {
+    return histo_cli_plot(argc, argv, stdout, stderr);
+}
+static inline int cmd_stats_main(int argc, char **argv) {
+    return histo_cli_stats(argc, argv, stdout, stderr);
+}
+static inline int cmd_fit_main(int argc, char **argv) {
+    return histo_cli_fit(argc, argv, stdout, stderr);
+}
+static inline int cmd_cmp_main(int argc, char **argv) {
+    return histo_cli_cmp(argc, argv, stdout, stderr);
+}
+static inline int cmd_top_main(int argc, char **argv) {
+    return histo_cli_top(argc, argv, stdout, stderr);
+}
 
 void test_json_serialization_roundtrip_uniform(void) {
     histo_t *h = histo_create_uniform(10, 0.0, 100.0, HISTO_FLAG_TRACK_SUMW2 | HISTO_FLAG_EXACT_MOMENTS);
@@ -210,8 +224,6 @@ void test_cli_execution_pipelines(void) {
     remove(out_bin);
     remove(out_bin2);
 }
-
-extern int cmd_fit_main(int argc, char **argv);
 
 void test_cli_fit_pipeline(void) {
     char *help_argv[] = {"histo-fit", "--help"};

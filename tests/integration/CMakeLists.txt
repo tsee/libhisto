@@ -28,7 +28,7 @@ add_test(NAME test_migration COMMAND test_migration)
 
 if(LIBHISTO_BUILD_TOOLS)
     add_executable(test_cli test_cli.c)
-    target_link_libraries(test_cli PRIVATE histo_tools_lib unity)
+    target_link_libraries(test_cli PRIVATE histocli unity)
     add_test(NAME test_cli COMMAND test_cli)
 endif()
 

@@ -491,39 +491,6 @@ void tui_frame_free(tui_frame_t *f) {
     f->cap = 0;
 }
 
-void tui_term_get_color(double fraction, bool monochrome, char *out_ansi, size_t max_len) {
-    if (!out_ansi || max_len == 0) return;
-    out_ansi[0] = '\0';
-    if (monochrome) return;
-
-    if (fraction < 0.0) fraction = 0.0;
-    if (fraction > 1.0) fraction = 1.0;
-
-    int r = 0, g = 0, b = 0;
-    if (fraction < 0.25) {
-        double t = fraction / 0.25;
-        r = 0;
-        g = (int)(t * 255.0);
-        b = 255;
-    } else if (fraction < 0.5) {
-        double t = (fraction - 0.25) / 0.25;
-        r = 0;
-        g = 255;
-        b = (int)((1.0 - t) * 255.0);
-    } else if (fraction < 0.75) {
-        double t = (fraction - 0.5) / 0.25;
-        r = (int)(t * 255.0);
-        g = 255;
-        b = 0;
-    } else {
-        double t = (fraction - 0.75) / 0.25;
-        r = 255;
-        g = (int)((1.0 - t) * 255.0);
-        b = 0;
-    }
-    snprintf(out_ansi, max_len, "\033[38;2;%d;%d;%dm", r, g, b);
-}
-
 int tui_visual_width(const char *str) {
     if (!str) return 0;
     int cols = 0;

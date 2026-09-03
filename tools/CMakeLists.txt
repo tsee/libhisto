@@ -34,9 +34,6 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     endif()
 endif()
 
-# Alias for backwards compatibility with tests
-add_library(histo_tools_lib ALIAS histocli)
-
 add_executable(histo-cli
     src/main.c
 )

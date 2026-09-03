@@ -75,17 +75,6 @@ void test_tui_frame_buffer(void) {
     TEST_ASSERT_NULL(frame.buf);
 }
 
-void test_tui_color_and_mono(void) {
-    char color_ansi[64];
-    tui_term_get_color(0.5, false, color_ansi, sizeof(color_ansi));
-    TEST_ASSERT_TRUE(strlen(color_ansi) > 0);
-    TEST_ASSERT_TRUE(strstr(color_ansi, "\033[38;2;") != NULL);
-
-    char mono_ansi[64];
-    tui_term_get_color(0.5, true, mono_ansi, sizeof(mono_ansi));
-    TEST_ASSERT_EQUAL_STRING("", mono_ansi);
-}
-
 void test_tui_engine_streaming_and_snapshot(void) {
     int fds[2];
     TEST_ASSERT_EQUAL(0, pipe(fds));
@@ -983,7 +972,6 @@ void test_tui_engine_binary_streaming(void) {
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tui_frame_buffer);
-    RUN_TEST(test_tui_color_and_mono);
     RUN_TEST(test_tui_visual_width);
     RUN_TEST(test_tui_render_row_geometry);
     RUN_TEST(test_tui_engine_streaming_and_snapshot);

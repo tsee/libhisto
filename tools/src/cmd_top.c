@@ -451,9 +451,7 @@ static void render_1d_bars_viewport(tui_frame_t *f, const tui_state_t *st, const
         }
 
         char color_ansi[32] = "";
-        if (st->monochrome) {
-            tui_term_get_color(frac, true, color_ansi, sizeof(color_ansi));
-        } else {
+        if (!st->monochrome) {
             histo_palette_sample_ansi_fg(st->palette, frac, color_ansi, sizeof(color_ansi));
         }
 
@@ -745,7 +743,10 @@ static void handle_command(tui_state_t *st, tui_engine_t *eng, const char *cmd) 
 
 #include "cli_opt.h"
 
-int cmd_top_main(int argc, char **argv) {
+int histo_cli_top(int argc, char **argv, FILE *out, FILE *err) {
+    if (!out) out = stdout;
+    if (!err) err = stderr;
+    (void)out;
     bool is_2d = false;
     uint32_t nbins = 50;
     uint32_t xbins = 0, ybins = 0;
@@ -834,12 +835,12 @@ int cmd_top_main(int argc, char **argv) {
 
     int rc = cli_opt_parse(&parser, argc, argv, 1);
     if (rc < 0) {
-        cli_opt_print_help(&parser, stdout);
+        cli_opt_print_help(&parser, out);
         cli_opt_free(&parser);
         return 0;
     }
     if (rc > 0) {
-        fprintf(stderr, "%s\n", cli_opt_error(&parser));
+        fprintf(err, "%s\n", cli_opt_error(&parser));
         cli_opt_free(&parser);
         return 1;
     }
@@ -866,7 +867,7 @@ int cmd_top_main(int argc, char **argv) {
     if (file_arg && strcmp(file_arg, "-") != 0) {
         in_fp = fopen(file_arg, "r");
         if (!in_fp) {
-            fprintf(stderr, "Error: Cannot open input file '%s'\n", file_arg);
+            fprintf(err, "Error: Cannot open input file '%s'\n", file_arg);
             return 1;
         }
     }
@@ -875,20 +876,20 @@ int cmd_top_main(int argc, char **argv) {
     if (shm_path) {
         if (is_2d) {
             if (!tui_engine_init_shm(&eng, shm_path, true, xbins, xmin, xmax, flags)) {
-                fprintf(stderr, "Error: Failed to attach to shared memory ring buffer '%s'\n", shm_path);
+                fprintf(err, "Error: Failed to attach to shared memory ring buffer '%s'\n", shm_path);
                 if (in_fp != stdin) fclose(in_fp);
                 return 1;
             }
         } else {
             if (!tui_engine_init_shm(&eng, shm_path, false, nbins, rmin, rmax, flags)) {
-                fprintf(stderr, "Error: Failed to attach to shared memory ring buffer '%s'\n", shm_path);
+                fprintf(err, "Error: Failed to attach to shared memory ring buffer '%s'\n", shm_path);
                 if (in_fp != stdin) fclose(in_fp);
                 return 1;
             }
         }
     } else if (is_2d) {
         if (!tui_engine_init(&eng, in_fp, true, xbins, xmin, xmax, flags, has_weights)) {
-            fprintf(stderr, "Error: Failed to initialize 2D TUI engine.\n");
+            fprintf(err, "Error: Failed to initialize 2D TUI engine.\n");
             if (in_fp != stdin) fclose(in_fp);
             return 1;
         }
@@ -898,7 +899,7 @@ int cmd_top_main(int argc, char **argv) {
         }
     } else {
         if (!tui_engine_init(&eng, in_fp, false, nbins, rmin, rmax, flags, has_weights)) {
-            fprintf(stderr, "Error: Failed to initialize TUI engine.\n");
+            fprintf(err, "Error: Failed to initialize TUI engine.\n");
             if (in_fp != stdin) fclose(in_fp);
             return 1;
         }
@@ -922,7 +923,7 @@ int cmd_top_main(int argc, char **argv) {
     eng.w_col = (has_weights && w_col == 2 && is_2d) ? 3 : w_col;
 
     if (!tui_term_init() || !tui_term_raw_enter()) {
-        fprintf(stderr, "Error: Failed to initialize terminal raw mode.\n");
+        fprintf(err, "Error: Failed to initialize terminal raw mode.\n");
         tui_engine_free(&eng);
         if (in_fp != stdin) fclose(in_fp);
         return 1;
