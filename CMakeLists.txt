@@ -79,6 +79,10 @@ endif()
 # Standard Doxygen integration
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(NOT Python3_EXECUTABLE)
+        find_program(Python3_EXECUTABLE NAMES python3 python)
+    endif()
     set(LIBHISTO_BUILD_DOCS ON CACHE BOOL "Build Doxygen documentation" FORCE)
 endif()
 

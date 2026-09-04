@@ -6,24 +6,24 @@ This guide details the curve fitting and non-linear regression capabilities in `
 
 ## 1. CLI: `histo fit`
 
-The `histo fit` command-line tool fits parametric models directly to streaming data or serialized histograms (`.bin` or `.json`), producing formatted parameter estimates, standard errors, 95% confidence intervals, \f$\chi^2/\mathrm{NDF}\f$ goodness-of-fit metrics, and visual ASCII curve overlays.
+The `histo fit` command-line tool fits parametric models directly to streaming data or serialized histograms (`.bin` or `.json`), producing formatted parameter estimates, standard errors, 95% confidence intervals, $\chi^2/\mathrm{NDF}$ goodness-of-fit metrics, and visual ASCII curve overlays.
 
 
 ### 1.1 Supported Built-in Models
 
 | Model Name | CLI Flag | Formula | Parameters |
 | :--- | :--- | :--- | :--- |
-| **Gaussian** | `-m gaussian` | \f$ f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right) \f$ | [0] Amplitude (A), [1] Mean (μ), [2] Std Dev (σ) |
-| **Exponential** | `-m exponential` | \f$ f(x) = A \cdot \exp(-\lambda x) + C \f$ | [0] Amplitude (A), [1] Decay Rate (λ), [2] Baseline (C) |
-| **Polynomial** | `-m polynomial -d N` | \f$ f(x) = \sum_{k=0}^N c_k x^k \f$ | [0] c0, [1] c1, ..., [N] cN (Degree 0 to 10) |
-| **Breit-Wigner** | `-m breit-wigner` | \f$ f(x) = \frac{A}{\pi} \frac{\Gamma/2}{(x - M)^2 + (\Gamma/2)^2} \f$ | [0] Area Scale (A), [1] Peak Mass (M), [2] FWHM (Γ) |
-| **Power Law** | `-m power-law` | \f$ f(x) = A \cdot (x - x_0)^k \f$ | [0] Amplitude (A), [1] Exponent (k), [2] Origin (x0) |
-| **Log-Normal** | `-m lognormal` | \f$ f(x) = \frac{A}{x\sigma\sqrt{2\pi}} \exp\left(-\frac{(\ln x - \mu)^2}{2\sigma^2}\right) \f$ | [0] Scale (A), [1] Log-Mean (μ), [2] Log-Std (σ) |
-| **Gauss + Linear** | `-m gauss+linear` | \f$ f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right) + c_0 + c_1 x \f$ | [0] Amp (A), [1] Mean (μ), [2] Std (σ), [3] c0, [4] c1 |
-| **Weibull** | `-m weibull` | \f$ f(x) = A \frac{k}{\lambda} \left(\frac{x}{\lambda}\right)^{k-1} \exp\left(-\left(\frac{x}{\lambda}\right)^k\right) \f$ | [0] Scale (A), [1] Shape (k), [2] Scale (λ) |
-| **Gamma / Erlang** | `-m gamma` | \f$ f(x) = A \frac{x^{k-1} \exp(-x/\theta)}{\Gamma(k) \theta^k} \f$ | [0] Scale (A), [1] Shape (k), [2] Scale (θ) |
-| **Poisson** | `-m poisson` | \f$ f(x) = A \frac{\lambda^x \exp(-\lambda)}{\Gamma(x + 1)} \f$ | [0] Scale (A), [1] Rate (λ) |
-| **Laplace** | `-m laplace` | \f$ f(x) = \frac{A}{2b} \exp\left(-\frac{\lvert x - \mu \rvert}{b}\right) \f$ | [0] Scale (A), [1] Location (μ), [2] Diversity (b) |
+| **Gaussian** | `-m gaussian` | $f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right)$ | [0] Amplitude (A), [1] Mean (μ), [2] Std Dev (σ) |
+| **Exponential** | `-m exponential` | $f(x) = A \cdot \exp(-\lambda x) + C$ | [0] Amplitude (A), [1] Decay Rate (λ), [2] Baseline (C) |
+| **Polynomial** | `-m polynomial -d N` | $f(x) = \sum_{k=0}^N c_k x^k$ | [0] c0, [1] c1, ..., [N] cN (Degree 0 to 10) |
+| **Breit-Wigner** | `-m breit-wigner` | $f(x) = \frac{A}{\pi} \frac{\Gamma/2}{(x - M)^2 + (\Gamma/2)^2}$ | [0] Area Scale (A), [1] Peak Mass (M), [2] FWHM (Γ) |
+| **Power Law** | `-m power-law` | $f(x) = A \cdot (x - x_0)^k$ | [0] Amplitude (A), [1] Exponent (k), [2] Origin (x0) |
+| **Log-Normal** | `-m lognormal` | $f(x) = \frac{A}{x\sigma\sqrt{2\pi}} \exp\left(-\frac{(\ln x - \mu)^2}{2\sigma^2}\right)$ | [0] Scale (A), [1] Log-Mean (μ), [2] Log-Std (σ) |
+| **Gauss + Linear** | `-m gauss+linear` | $f(x) = A \cdot \exp\left(-\frac{(x - \mu)^2}{2\sigma^2}\right) + c_0 + c_1 x$ | [0] Amp (A), [1] Mean (μ), [2] Std (σ), [3] c0, [4] c1 |
+| **Weibull** | `-m weibull` | $f(x) = A \frac{k}{\lambda} \left(\frac{x}{\lambda}\right)^{k-1} \exp\left(-\left(\frac{x}{\lambda}\right)^k\right)$ | [0] Scale (A), [1] Shape (k), [2] Scale (λ) |
+| **Gamma / Erlang** | `-m gamma` | $f(x) = A \frac{x^{k-1} \exp(-x/\theta)}{\Gamma(k) \theta^k}$ | [0] Scale (A), [1] Shape (k), [2] Scale (θ) |
+| **Poisson** | `-m poisson` | $f(x) = A \frac{\lambda^x \exp(-\lambda)}{\Gamma(x + 1)}$ | [0] Scale (A), [1] Rate (λ) |
+| **Laplace** | `-m laplace` | $f(x) = \frac{A}{2b} \exp\left(-\frac{\lvert x - \mu \rvert}{b}\right)$ | [0] Scale (A), [1] Location (μ), [2] Diversity (b) |
 
 
 ### 1.2 CLI Usage Recipes
@@ -162,15 +162,18 @@ int main(void) {
 
 ## 3. Statistical Formulations & Loss Functions
 
-### 3.1 Chi-Square Minimization (\f$ \chi^2 \f$)
+### 3.1 Chi-Square Minimization ($\chi^2$)
 Standard weighted least squares accounting for per-bin variance:
-\f[
+
+$$
 \chi^2(\mathbf{p}) = \sum_{i=1}^N \frac{(y_i - f(x_i; \mathbf{p}))^2}{\sigma_i^2}
-\f]
-where \f$\sigma_i^2 = \sum w_i^2\f$ if tracked, or \f$\max(y_i, 1.0)\f$ for unweighted counts.
+$$
+
+where $\sigma_i^2 = \sum w_i^2$ if tracked, or $\max(y_i, 1.0)$ for unweighted counts.
 
 ### 3.2 Poisson Maximum Likelihood Estimation (Cash Deviance)
 For sparse or low-count histograms where Gaussian approximations fail, Cash Poisson deviance minimizes:
-\f[
+
+$$
 -2 \ln \lambda(\mathbf{p}) = 2 \sum_{i=1}^N \left[ f(x_i; \mathbf{p}) - y_i + y_i \ln\left(\frac{y_i}{f(x_i; \mathbf{p})}\right) \right]
-\f]
+$$

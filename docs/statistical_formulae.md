@@ -29,6 +29,7 @@ M_{2, k} = M_{2, k-1} + w_k \cdot \delta_k \cdot (x_k - \mu_k)
 $$
 
 **Numerical Protection**: To prevent floating-point inaccuracies from driving $M_2$ slightly negative (e.g., when observing identical samples), $M_2$ is strictly clamped:
+
 $$
 M_2 \leftarrow \max(0.0, M_2)
 $$
@@ -60,6 +61,7 @@ $$
 $$
 
 For any $x$ in bin $k$, the relative error is analytically bounded by $\alpha$:
+
 $$
 \frac{|x - \hat{q}|}{|x|} \le \alpha
 $$
@@ -110,6 +112,7 @@ $$
 
 **Full Width at Half Maximum (FWHM)**:
 Given a peak maximum $y_{\max} = w_m$, the threshold is $y_{\text{half}} = y_{\max} / 2$. The algorithm scans outward from $m$ to find the crossing points $x_{\text{left}}$ and $x_{\text{right}}$ via linear interpolation between the adjacent bin centers bridging the threshold.
+
 $$
 \text{FWHM} = \max(0.0, x_{\text{right}} - x_{\text{left}})
 $$
@@ -130,9 +133,11 @@ $$
 
 **Median Absolute Deviation (MAD)**:
 A robust measure of variability:
+
 $$
 \text{MAD} = \text{median}(|x - \text{median}(x)|)
 $$
+
 Computed in optimal $O(N)$ deterministic time and $O(1)$ auxiliary space via a two-pointer monotonic merge over pre-sorted histogram bins, expanding outward from the median bin without memory allocations or comparison sorting.
 
 ---
@@ -145,18 +150,21 @@ These metrics quantify the dissimilarity between two histograms $H_1, H_2$ with 
 
 **Kolmogorov-Smirnov ($D$) Metric**:
 The maximum absolute difference between the empirical cumulative distribution functions $F_1(x)$ and $F_2(x)$:
+
 $$
 D = \max_{0 \le i < N} |F_1(i) - F_2(i)|
 $$
 
 **1D Wasserstein / Earth Mover's Distance ($W_1$)**:
 The $L_1$ distance between the cumulative distribution functions:
+
 $$
 W_1 = \sum_{i=0}^{N-1} |F_1(i) - F_2(i)| \cdot \Delta x_i
 $$
 
 **Kullback-Leibler (KL) Divergence**:
 The relative entropy, clamped against singularities using a numerical floor $\epsilon = 10^{-12}$ for $Q_i = 0$:
+
 $$
 D_{\text{KL}}(P \parallel Q) = \sum_{i=0}^{N-1} P_i \ln \frac{P_i}{\max(Q_i, \epsilon)}
 $$

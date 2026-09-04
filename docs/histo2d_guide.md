@@ -1,6 +1,6 @@
 # 2-Dimensional Histograms & Spatial Telemetry Guide {#histo2d_guide}
 
-This guide details the 2-Dimensional Histogramming capabilities of `libhisto` (`include/histo/histo2d.h` and the CLI `histo fill --2d`). `libhisto` supports all 4 binning grid combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region out-of-bounds guard partitioning, online bivariate Welford covariance \f$\mathrm{Cov}(X, Y)\f$, Pearson correlation \f$\rho_{xy}\f$, 1D marginal projections, sub-interval slices, profile histograms, and 24-bit TrueColor terminal heatmaps.
+This guide details the 2-Dimensional Histogramming capabilities of `libhisto` (`include/histo/histo2d.h` and the CLI `histo fill --2d`). `libhisto` supports all 4 binning grid combinations (Uniform-Uniform, Variable-Variable, Uniform-Variable, Variable-Uniform), 9-region out-of-bounds guard partitioning, online bivariate Welford covariance $\mathrm{Cov}(X, Y)$, Pearson correlation $\rho_{xy}$, 1D marginal projections, sub-interval slices, profile histograms, and 24-bit TrueColor terminal heatmaps.
 
 
 ---

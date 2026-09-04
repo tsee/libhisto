@@ -25,8 +25,7 @@ All coordinates, weights, and statistical accumulators in `libhisto` utilize sta
 
 ### 2.1 Standard Half-Open Interval Rule
 `libhisto` adheres strictly to the standard **half-open interval convention** $[x_{\text{lower}}, x_{\text{upper}})$:
-- A sample $x$ belongs to bin $i$ if and only if:
-  $$x_{\text{lower}, i} \le x < x_{\text{upper}, i}$$
+- A sample $x$ belongs to bin $i$ if and only if: $x_{\text{lower}, i} \le x < x_{\text{upper}, i}$.
 - **Lower Edge Inclusivity**: If $x = x_{\min}$, $x$ belongs to bin $0$.
 - **Upper Edge Exclusivity**: If $x = x_{\max}$, $x$ is categorized as **overflow** ($x \ge x_{\max}$).
 

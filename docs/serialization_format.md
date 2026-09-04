@@ -101,13 +101,16 @@ Payloads begin immediately at offset `0x0100` (256):
    - $9 \times 8$ bytes: `uint64_t` fill counts for each of the 9 regions.
 
 ### 2.3 2D Buffer Sizing Calculation
-$$\begin{aligned}
-\text{Size}_{\text{v3}} = 256 &+ (\text{is\_var\_x} ? (N_x + 1) \times 8 : 0) \\
-&+ (\text{is\_var\_y} ? (N_y + 1) \times 8 : 0) \\
+
+$$
+\begin{aligned}
+\text{Size}_{\text{v3}} = 256 &+ (\text{is\_var\_x} \mathbin{?} (N_x + 1) \times 8 : 0) \\
+&+ (\text{is\_var\_y} \mathbin{?} (N_y + 1) \times 8 : 0) \\
 &+ (N_x \times N_y) \times 8 \\
-&+ (\text{has\_sumw2} ? (N_x \times N_y) \times 8 : 0) \\
-&+ 9 \times 8 + (\text{has\_sumw2} ? 9 \times 8 : 0) + 9 \times 8
-\end{aligned}$$
+&+ (\text{has\_sumw2} \mathbin{?} (N_x \times N_y) \times 8 : 0) \\
+&+ 9 \times 8 + (\text{has\_sumw2} \mathbin{?} 9 \times 8 : 0) + 9 \times 8
+\end{aligned}
+$$
 
 ---
 
