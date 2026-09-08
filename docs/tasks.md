@@ -38,4 +38,7 @@ This document tracks active work items, planned enhancements, and development ro
 ---
 
 ## Milestone History
+- **v0.4.0** (2026-09-08): Modern C++17 interface (`include/histo/*.hpp`), public C accessors (`histo_flags`, `sum_w2`, 2D guards), Python encapsulation, multi-architecture portability runner, 32-bit/MSVC/FreeBSD matrix fixes, and GitHub Markdown math rendering across manuals.
+- **v0.3.0** (2026-08-29): High-performance binary & SHM streaming for `histo top`, bpftrace auto-detection, declarative CLI option parser, Python UHI protocol, and Node.js / TypeScript bindings.
+- **v0.2.0** (2026-08-21): Continuous KDE engine, 6 new curve fitting models, automated binning heuristics (FD, Scott, Sturges, Doane, Knuth), and Math::Histo::PDL distribution.
 - **v0.1.0** (2026-08-20): Initial release of core 1D/2D C library, Levenberg-Marquardt fitting, DDSketch, SIMD (AVX2, AVX-512, NEON), CLI toolkit, Python and Perl bindings.

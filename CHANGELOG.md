@@ -9,8 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - 2026-09-08
+
 ### Added
-- **Zero-Overhead Modern C++ Interface** (`include/histo/*.hpp`, `#include <histo/histo.hpp>`):
+- **Zero-Overhead Modern C++17 Interface** (`include/histo/*.hpp`, `#include <histo/histo.hpp>`):
   - Strict **Google C++ Style Guide** compliance: exception-free architecture (`-fno-exceptions`), explicit single ownership RAII, move semantics, and `std::span` zero-copy ingestion.
   - Exception-free `libhisto::Status` and `libhisto::Result<T>` outcome monads with `HISTO_ASSIGN_OR_RETURN` and `HISTO_RETURN_IF_ERROR` macros.
   - Owning `libhisto::Histogram` (1D) and `libhisto::Histogram2D` (2D) handles with direct constructors, `std::initializer_list` and `std::span` ingestion, operators (`+=`, `*=`, `<<`), and binary serialization.
@@ -18,6 +22,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Range-based `for` loop bin iterators (`for (const auto& bin : h)`).
   - Streaming sketches (`libhisto::DDSketch`), continuous Kernel Density Estimation (`libhisto::KDE`), and non-linear curve fitting (`libhisto::Fit`).
   - Decoupled C++ test suite (`tests/cpp/`, `make test-cpp`) that builds only when a C++ compiler is detected, ensuring basic C builds require zero C++ compiler dependencies.
+- **Core C Public Accessors**:
+  - Added `histo_flags()`, `histo_underflow_sum_w2()`, and `histo_overflow_sum_w2()` to `include/histo/histo.h`.
+  - Added `histo2d_flags()`, `histo2d_region_sum_w2()`, and `histo2d_region_content()` to `include/histo/histo2d.h`.
+- **Minimal Hermetic C99 Baseline Target** (`make test-hermetic`):
+  - Added minimal containerized Debian bookworm-slim baseline verification verifying pure C99 compilation and execution without external interpreter dependencies.
+- **Python 3 Multi-Architecture Portability Test Harness** (`tools/scripts/test_container.py`):
+  - Added multi-architecture emulation and testing targets (`make test-matrix-local`, `make test-32bit-native`, `make test-32bit`, `make test-arm64`, `make test-s390x`, `make test-riscv64`, `make test-armv7`).
+  - Added crash signal backtrace handler and container post-mortem diagnostics.
+
+### Changed & Refactored
+- **Python Binding Encapsulation** (`bindings/python/src/_libhistomodule.c`):
+  - Fully decoupled Python C extension from internal headers (`internal.h`, `internal_2d.h`), utilizing public C accessors for flags, region contents, and variances.
+- **Core C Cleanups & Numerical Optimization**:
+  - Replaced $O(N \log N)$ sorting and dynamic allocations in `histo_estimate_bins_sturges` and `histo_estimate_bins_scott` with single-pass $O(N)$ Welford accumulators.
+  - Pruned dead migration step symbols in `src/serialize.c` and redundant allocation wrappers in `src/internal_2d.h`.
+- **CLI Toolkit Standardization**:
+  - Standardized `histo_cli_top(int argc, char **argv, FILE *out, FILE *err)` signature for customizable stream output.
+  - Removed obsolete `cmd_*_main` legacy forwarding shims from `tools/src/cli_main.c` and `tools/include/cli_common.h`.
+- **C++ Slicing & Lifetime Hardening**:
+  - Decoupled `Histogram` / `Histogram2D` from `HistogramView` / `Histogram2DView` using composition over inheritance with non-virtual destructors, completely eliminating slicing UB risks.
+  - Removed `const_cast` hacks; updated `BinIterator` to store `const histo_t*` directly, preventing dangling pointer risks on temporary views.
+- **Perl Bindings CPAN Prerequisites**:
+  - Upgraded dependencies: `Math::Histo` now requires `Alien::libhisto` 0.4.0 in build and runtime prerequisites, and `Math::Histo::PDL` requires `Math::Histo` 0.4.0 in runtime and test prerequisites.
+
+### Fixed & Portability
+- **Cross-Platform & Multi-Compiler Matrix**:
+  - **Windows MSVC (`/W4 /WX`) & MinGW**: Fixed variable shadowing (`C4456`/`C4457`), `size_t` casts (`C4267`), Windows console virtual terminal mode, POSIX shims (`unistd.h`, `usleep`, `ssize_t`, `strcasecmp`), sanitized shared memory names, and `QueryPerformanceCounter` high-resolution monotonic time.
+  - **FreeBSD 14.0 & macOS (Clang / BSD libc)**: Added BSD feature test macros, `sa_sigaction` prototype compliance, and resolved C++17 `constexpr` union initialization compliance under Clang `-pedantic -Werror`.
+  - **32-Bit Systems & Multilib (`x86_32`, `armv7`)**: Ensured strict pointer alignment, guarded NEON vectorization on 32-bit ARM with scalar fallbacks, and fixed C++ compiler link probing when 32-bit `libstdc++` is absent.
+  - **Documentation Math Rendering**: Standardized all mathematical equations across user manuals (`curve_fitting_guide.md`, `kde_guide.md`, `histo2d_guide.md`, `statistical_formulae.md`, `numerical_behavior.md`, `serialization_format.md`) to standard GitHub Markdown LaTeX math (`$` and `$$`) with an automated Doxygen Markdown filter (`tools/scripts/doxygen_md_filter.py`).
+- **Packaging & Manifests**:
+  - Purged editor swap/temp files and added exclusion patterns to `.gitignore` and CPAN `MANIFEST.SKIP` across all Perl distributions.
+  - Updated Python `pyproject.toml` license specification to PEP 621 table format.
 
 ---
 
