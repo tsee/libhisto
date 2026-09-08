@@ -40,6 +40,13 @@ int main(void) {
     mkdir_p("tests/fuzz/corpus/binary_2d");
     mkdir_p("tests/fuzz/corpus/json_2d");
     mkdir_p("tests/fuzz/corpus/fit");
+    mkdir_p("tests/fuzz/corpus/bpftrace");
+    mkdir_p("tests/fuzz/corpus/cli_opt");
+    mkdir_p("tests/fuzz/corpus/tui_command");
+    mkdir_p("tests/fuzz/corpus/kde");
+    mkdir_p("tests/fuzz/corpus/auto_bin");
+    mkdir_p("tests/fuzz/corpus/simd_diff");
+    mkdir_p("tests/fuzz/corpus/roundtrip");
 
     /* ===================================================================== */
     /* Binary Corpus                                                         */
@@ -186,6 +193,107 @@ int main(void) {
     fit_seed[0] = 0; // type 0
     for(int i=1; i<256; i++) fit_seed[i] = (uint8_t)i;
     write_file("tests/fuzz/corpus/fit/seed1.bin", fit_seed, sizeof(fit_seed));
+
+    /* ===================================================================== */
+    /* bpftrace Corpus                                                       */
+    /* ===================================================================== */
+    const char *bpf_pow2 =
+        "@vfs_read_latency:\n"
+        "[0]                    2 |@@@@@@                                  |\n"
+        "[1]                    1 |@@@                                     |\n"
+        "[2, 4)                 4 |@@@@@@@@@@@@                            |\n"
+        "[4, 8)                12 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@    |\n"
+        "[8, 16)                7 |@@@@@@@@@@@@@@@@@@@                     |\n";
+    write_file("tests/fuzz/corpus/bpftrace/power2.txt", bpf_pow2, strlen(bpf_pow2));
+
+    const char *bpf_linear =
+        "@bytes:\n"
+        "[0, 10) 100\n"
+        "[10, 20) 250\n"
+        "[20, 30) 75\n";
+    write_file("tests/fuzz/corpus/bpftrace/linear.txt", bpf_linear, strlen(bpf_linear));
+
+    const char *bpf_bcc =
+        "0 -> 1 : 10 |***|\n"
+        "2 -> 3 : 25 |*******|\n"
+        "4 -> 5 : 5  |*|\n";
+    write_file("tests/fuzz/corpus/bpftrace/bcc.txt", bpf_bcc, strlen(bpf_bcc));
+
+    /* ===================================================================== */
+    /* CLI Options Corpus                                                    */
+    /* ===================================================================== */
+    const char *cli_basic = "--bins 100 --min -10.5 --max 50.0 -v";
+    write_file("tests/fuzz/corpus/cli_opt/basic.txt", cli_basic, strlen(cli_basic));
+
+    const char *cli_bundled = "-b 200 -ve -f json";
+    write_file("tests/fuzz/corpus/cli_opt/bundled.txt", cli_bundled, strlen(cli_bundled));
+
+    const char *cli_equals = "--bins=50 --min=0.0 --max=100.0 --exact";
+    write_file("tests/fuzz/corpus/cli_opt/equals.txt", cli_equals, strlen(cli_equals));
+
+    /* ===================================================================== */
+    /* TUI Command Corpus                                                    */
+    /* ===================================================================== */
+    const char *tui_cmd1 = ":bins 100\n";
+    write_file("tests/fuzz/corpus/tui_command/bins.txt", tui_cmd1, strlen(tui_cmd1));
+
+    const char *tui_cmd2 = ":range -20.0 80.0\n";
+    write_file("tests/fuzz/corpus/tui_command/range.txt", tui_cmd2, strlen(tui_cmd2));
+
+    const char *tui_cmd3 = ":window 500\n:decay 0.05\n:col 2\n:palette plasma\n";
+    write_file("tests/fuzz/corpus/tui_command/multi.txt", tui_cmd3, strlen(tui_cmd3));
+
+    /* ===================================================================== */
+    /* KDE Corpus                                                            */
+    /* ===================================================================== */
+    uint8_t kde_buf1[10 + 32 * sizeof(double)];
+    kde_buf1[0] = 0; // Gaussian
+    kde_buf1[1] = 0; // Silverman
+    double kde_bw = 1.0;
+    memcpy(kde_buf1 + 2, &kde_bw, sizeof(double));
+    for (int i = 0; i < 32; i++) {
+        double val = -3.0 + (double)i * 0.2;
+        memcpy(kde_buf1 + 10 + i * sizeof(double), &val, sizeof(double));
+    }
+    write_file("tests/fuzz/corpus/kde/seed_gaussian.bin", kde_buf1, sizeof(kde_buf1));
+
+    /* ===================================================================== */
+    /* Auto-Bin Corpus                                                       */
+    /* ===================================================================== */
+    double auto_samples[64];
+    for (int i = 0; i < 64; i++) {
+        auto_samples[i] = sin((double)i) * 10.0 + 20.0;
+    }
+    write_file("tests/fuzz/corpus/auto_bin/seed_normal.bin", auto_samples, sizeof(auto_samples));
+
+    /* ===================================================================== */
+    /* SIMD Diff Corpus                                                      */
+    /* ===================================================================== */
+    uint8_t simd_buf[18 + 64 * sizeof(double)];
+    simd_buf[0] = 0; // offset 0
+    simd_buf[1] = 32; // 32 bins
+    double s_rmin = -50.0, s_rmax = 50.0;
+    memcpy(simd_buf + 2, &s_rmin, sizeof(double));
+    memcpy(simd_buf + 10, &s_rmax, sizeof(double));
+    for (int i = 0; i < 64; i++) {
+        double val = -40.0 + (double)i * 1.25;
+        memcpy(simd_buf + 18 + i * sizeof(double), &val, sizeof(double));
+    }
+    write_file("tests/fuzz/corpus/simd_diff/seed_aligned.bin", simd_buf, sizeof(simd_buf));
+
+    simd_buf[0] = 3; // offset 3 (unaligned)
+    write_file("tests/fuzz/corpus/simd_diff/seed_unaligned.bin", simd_buf, sizeof(simd_buf));
+
+    /* ===================================================================== */
+    /* Roundtrip Corpus                                                      */
+    /* ===================================================================== */
+    void *rt_1d = NULL;
+    size_t rt_1d_sz = 0;
+    histo_serialize_binary(h_unif, &rt_1d, &rt_1d_sz);
+    if (rt_1d) {
+        write_file("tests/fuzz/corpus/roundtrip/seed_1d.bin", rt_1d, rt_1d_sz);
+        histo_free_buffer(rt_1d);
+    }
 
     histo_destroy(h_unif);
     histo_destroy(h_var);

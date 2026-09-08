@@ -1,0 +1,4 @@
+:window 500
+:decay 0.05
+:col 2
+:palette plasma
