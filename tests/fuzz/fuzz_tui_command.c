@@ -10,7 +10,14 @@
 #include <string.h>
 #include <ctype.h>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+#else
 #include <strings.h>
 #endif
 

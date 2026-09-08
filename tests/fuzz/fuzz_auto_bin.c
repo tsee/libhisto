@@ -11,6 +11,8 @@
 
 #define MAX_SAMPLES 512
 
+typedef histo_status_t (*estimator_fn)(size_t, const double *, uint32_t *, double *, double *);
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     size_t n = size / sizeof(double);
     if (n < 2) {
@@ -22,7 +24,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
     const double *values = (const double *)data;
 
-    typedef histo_status_t (*estimator_fn)(size_t, const double *, uint32_t *, double *, double *);
     estimator_fn estimators[] = {
         histo_estimate_bins_fd,
         histo_estimate_bins_scott,

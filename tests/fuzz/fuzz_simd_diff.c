@@ -16,8 +16,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         return 0;
     }
 
-    uint8_t align_offset = data[0] % 8;
-    uint32_t nbins = (data[1] % 64) + 1;
+    uint8_t align_offset = (uint8_t)(data[0] % 8);
+    uint32_t nbins = (uint32_t)((data[1] % 64) + 1);
 
     double rmin = -50.0;
     double rmax = 50.0;

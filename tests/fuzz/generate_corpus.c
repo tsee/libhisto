@@ -246,7 +246,8 @@ int main(void) {
     /* ===================================================================== */
     /* KDE Corpus                                                            */
     /* ===================================================================== */
-    uint8_t kde_buf1[10 + 32 * sizeof(double)];
+#define KDE_SEED_BUF_SZ (10 + 32 * sizeof(double))
+    uint8_t kde_buf1[KDE_SEED_BUF_SZ];
     kde_buf1[0] = 0; // Gaussian
     kde_buf1[1] = 0; // Silverman
     double kde_bw = 1.0;
@@ -269,7 +270,8 @@ int main(void) {
     /* ===================================================================== */
     /* SIMD Diff Corpus                                                      */
     /* ===================================================================== */
-    uint8_t simd_buf[18 + 64 * sizeof(double)];
+#define SIMD_SEED_BUF_SZ (18 + 64 * sizeof(double))
+    uint8_t simd_buf[SIMD_SEED_BUF_SZ];
     simd_buf[0] = 0; // offset 0
     simd_buf[1] = 32; // 32 bins
     double s_rmin = -50.0, s_rmax = 50.0;

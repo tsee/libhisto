@@ -28,7 +28,7 @@ set(FUZZ_TARGETS
 add_executable(generate_fuzz_corpus
     generate_corpus.c
 )
-target_link_libraries(generate_fuzz_corpus PRIVATE histo histocli)
+target_link_libraries(generate_fuzz_corpus PRIVATE histo)
 if(UNIX AND NOT APPLE)
     target_link_libraries(generate_fuzz_corpus PRIVATE m)
 endif()
