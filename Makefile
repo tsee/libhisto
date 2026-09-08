@@ -1,10 +1,12 @@
 .PHONY: all build test test-cpp test-all test-doc-examples \
-        bindings bindings-test bindings-dist \
+        bindings bindings-test bindings-dist bindings-clean \
         build-perl-alien build-perl-histo build-perl-pdl build-perl \
         test-perl-alien test-perl-histo test-perl-pdl test-perl \
         perl-alien-dist perl-histo-dist perl-pdl-dist perl-dist test-perl-dist \
-        build-python test-python python-dist test-python-dist \
-        build-node test-node \
+        clean-perl-alien clean-perl-histo clean-perl-pdl clean-perl \
+        build-python test-python python-dist test-python-dist clean-python \
+        build-node test-node clean-node \
+        clean-bindings \
         test-asan test-fuzz test-tsan test-msan test-valgrind memcheck clean format docs \
         test-hermetic test-musl test-big-endian test-32bit test-32bit-native test-arm64 test-armv7 test-riscv64 \
         test-matrix-local portability test-portability
@@ -45,6 +47,8 @@ bindings-test: test-python test-perl test-node
 
 bindings-dist: python-dist perl-dist
 
+clean-bindings bindings-clean: clean-perl clean-python clean-node
+
 # ======================================================================
 # Perl Bindings (Alien-libhisto, Math-Histo, Math-Histo-PDL)
 # ======================================================================
@@ -83,6 +87,49 @@ test-perl-dist:
 	perl tests/scripts/test_perl_dist.pl
 
 perl-dist: perl-alien-dist perl-histo-dist perl-pdl-dist
+ 
+clean-perl-alien:
+	-if [ -f bindings/perl/Alien-libhisto/Makefile ]; then $(MAKE) -C bindings/perl/Alien-libhisto realclean 2>/dev/null || true; fi
+	-rm -rf bindings/perl/Alien-libhisto/blib \
+	        bindings/perl/Alien-libhisto/_alien \
+	        bindings/perl/Alien-libhisto/_build \
+	        bindings/perl/Alien-libhisto/Build \
+	        bindings/perl/Alien-libhisto/bundled \
+	        bindings/perl/Alien-libhisto/Makefile \
+	        bindings/perl/Alien-libhisto/Makefile.old \
+	        bindings/perl/Alien-libhisto/MYMETA.* \
+	        bindings/perl/Alien-libhisto/pm_to_blib \
+	        bindings/perl/Alien-libhisto/MANIFEST.bak \
+	        bindings/perl/Alien-libhisto/Alien-libhisto-*.tar.gz \
+	        bindings/perl/Alien-libhisto/Alien-libhisto-*/ 2>/dev/null || true
+
+clean-perl-histo:
+	-if [ -f bindings/perl/Math-Histo/Makefile ]; then $(MAKE) -C bindings/perl/Math-Histo realclean 2>/dev/null || true; fi
+	-rm -rf bindings/perl/Math-Histo/blib \
+	        bindings/perl/Math-Histo/Makefile \
+	        bindings/perl/Math-Histo/Makefile.old \
+	        bindings/perl/Math-Histo/MYMETA.* \
+	        bindings/perl/Math-Histo/pm_to_blib \
+	        bindings/perl/Math-Histo/Histo.c \
+	        bindings/perl/Math-Histo/Histo.o \
+	        bindings/perl/Math-Histo/Histo.bs \
+	        bindings/perl/Math-Histo/*.so \
+	        bindings/perl/Math-Histo/MANIFEST.bak \
+	        bindings/perl/Math-Histo/Math-Histo-*.tar.gz \
+	        bindings/perl/Math-Histo/Math-Histo-*/ 2>/dev/null || true
+
+clean-perl-pdl:
+	-if [ -f bindings/perl/Math-Histo-PDL/Makefile ]; then $(MAKE) -C bindings/perl/Math-Histo-PDL realclean 2>/dev/null || true; fi
+	-rm -rf bindings/perl/Math-Histo-PDL/blib \
+	        bindings/perl/Math-Histo-PDL/Makefile \
+	        bindings/perl/Math-Histo-PDL/Makefile.old \
+	        bindings/perl/Math-Histo-PDL/MYMETA.* \
+	        bindings/perl/Math-Histo-PDL/pm_to_blib \
+	        bindings/perl/Math-Histo-PDL/MANIFEST.bak \
+	        bindings/perl/Math-Histo-PDL/Math-Histo-PDL-*.tar.gz \
+	        bindings/perl/Math-Histo-PDL/Math-Histo-PDL-*/ 2>/dev/null || true
+
+clean-perl: clean-perl-alien clean-perl-histo clean-perl-pdl
 
 # ======================================================================
 # Python Bindings (histo C-extension, UHI, SciPy & Boost converters)
@@ -99,6 +146,18 @@ python-dist:
 test-python-dist:
 	python3 tests/scripts/test_python_dist.py
 
+clean-python:
+	-rm -rf bindings/python/build \
+	        bindings/python/dist \
+	        bindings/python/*.egg-info \
+	        bindings/python/.pytest_cache \
+	        bindings/python/bundled \
+	        bindings/python/*.so \
+	        bindings/python/histo/*.so \
+	        bindings/python/__pycache__ \
+	        bindings/python/*/__pycache__ \
+	        bindings/python/*/*/__pycache__ 2>/dev/null || true
+
 # ======================================================================
 # Node.js / TypeScript Native Addon (N-API)
 # ======================================================================
@@ -107,6 +166,10 @@ build-node:
 
 test-node: build-node
 	cd bindings/node && npm test
+
+clean-node:
+	-if command -v node-gyp >/dev/null 2>&1; then cd bindings/node && node-gyp clean 2>/dev/null || true; fi
+	-rm -rf bindings/node/build 2>/dev/null || true
 
 
 
@@ -185,7 +248,8 @@ portability test-portability: test-all
 	@echo "======================================================================"
 	python3 tools/scripts/test_container.py --target all --full -j $(JOBS)
 
-clean:
-	-rm -rf $(BUILD_DIR) $(BUILD_DIR)-* 2>/dev/null
+clean: clean-bindings
+	-rm -rf $(BUILD_DIR) $(BUILD_DIR)-* docs/html 2>/dev/null
+	-rm -f -- *.o -.o 2>/dev/null || true
 	python3 tools/scripts/test_container.py --clean 2>/dev/null || true
 
