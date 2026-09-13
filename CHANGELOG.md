@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.1] - 2026-09-13
+
+### Fixed
+- **Perl Bindings (`bindings/perl/Math-Histo`)**:
+  - Fixed compilation failure on Windows Strawberry Perl with `PERL_IMPLICIT_SYS` by supplying Perl interpreter thread context (`pTHX_` / `aTHX_`) in `histo_xs_cli_capture`.
+  - Enforced `Alien::libhisto` 0.4.0+ in `CONFIGURE_REQUIRES` after `Alien::Base::Wrapper->mm_args2` to prevent CPAN smokers from compiling against outdated Alien installations lacking `histo/kde.h`.
+  - Added pre-configure version guard in `Makefile.PL`.
+- **Perl Bindings (`bindings/perl/Math-Histo-PDL`)**:
+  - Updated prerequisites to mandate `Math::Histo >= 0.4.1`.
+- **Perl Bindings (`bindings/perl/Alien-libhisto`)**:
+  - Synchronized bundled C tree and versioning with 0.4.1.
+
+---
+
 ## [0.4.0] - 2026-09-08
 
 ### Added
